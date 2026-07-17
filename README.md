@@ -1,13 +1,20 @@
 <div align="center">
 
-[![Sponsor](https://img.shields.io/badge/💖_Sponsor-ea4aaa?style=for-the-badge&logo=github-sponsors&logoColor=white&labelColor=2d3748)](https://ko-fi.com/arrowar)
+[![PyPI version](https://img.shields.io/pypi/v/StreamingCommunity-download-stream?style=for-the-badge&logo=pypi&logoColor=white&labelColor=2d3748&color=ea4aaa)](https://pypi.org/project/StreamingCommunity-download-stream/)
+[![GitHub release](https://img.shields.io/github/v/release/Liutprando08/StreamingCommunity-downloader-streamer?style=for-the-badge&logo=github&logoColor=white&labelColor=2d3748)](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest)
+[![Windows](https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white&labelColor=2d3748)](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_win_x64.exe)
+[![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white&labelColor=2d3748)](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_macos_x64)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black&labelColor=2d3748)](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_linux_x64)
 
-*⚡ **Quick Start:** `git clone https://github.com/Liutprando08/StreamingCommunity-downloader-streamer.git && pip install -r requirements.txt && python -m StreamingCommunity`*
+*⚡ **Quick Start:** `pip install StreamingCommunity-download-stream && streamingcommunity`*
 
 </div>
 
 ## 📖 Table of Contents
 - [Installation](#installation)
+  - [PyPI](#pypi-recommended)
+  - [Pre-built Binaries](#pre-built-binaries)
+  - [Manual Clone](#manual-clone)
 - [Quick Start](#quick-start)
 - [DNS Configuration](#dns-configuration)
 - [Downloaders](#downloaders)
@@ -22,6 +29,27 @@
 ---
 
 ## Installation
+
+### PyPI (Recommended)
+```bash
+pip install StreamingCommunity-download-stream
+streamingcommunity
+```
+
+### Pre-built Binaries
+Download the latest binary for your platform from [GitHub Releases](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest):
+
+| Platform | Download |
+|----------|----------|
+| **Windows** | [StreamingCommunity_win_x64.exe](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_win_x64.exe) |
+| **macOS** | [StreamingCommunity_macos_x64](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_macos_x64) |
+| **Linux** | [StreamingCommunity_linux_x64](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_linux_x64) |
+
+On Linux/macOS, make the binary executable:
+```bash
+chmod +x StreamingCommunity_linux_x64
+./StreamingCommunity_linux_x64
+```
 
 ### Manual Clone
 ```bash

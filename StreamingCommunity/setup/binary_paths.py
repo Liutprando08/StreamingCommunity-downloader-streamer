@@ -23,7 +23,7 @@ class BinaryPaths:
         self.system = self._detect_system()
         self.arch = self._detect_arch()
         self.home_dir = os.path.expanduser('~')
-        self.github_repo = "https://raw.githubusercontent.com/Arrowar/SC_Binary/main"
+        self.github_repo = "https://raw.githubusercontent.com/Liutprando08/Binary/main"
         self.paths_cache = None
     
     def _detect_system(self) -> str:
