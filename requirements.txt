@@ -10,3 +10,7 @@ ua-generator
 pywidevine
 pyplayready
 pycryptodomex
+
+# Torrent module
+requests
+libtorrent
