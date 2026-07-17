@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "StreamingCommunity"
+dynamic = ["version"]
+description = "Download content from streaming platforms"
+readme = "README.md"
+license = "GPL-3.0-only"
+requires-python = ">=3.8"
+authors = [
+    { name = "Arrowar" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "httpx",
+    "bs4",
+    "rich",
+    "ttconv",
+    "unidecode",
+    "curl_cffi",
+    "jsbeautifier",
+    "pathvalidate",
+    "ua-generator",
+    "pywidevine",
+    "pyplayready",
+    "pycryptodomex",
+]
+
+[project.urls]
+Homepage = "https://github.com/Arrowar/StreamingCommunity"
+"Bug Reports" = "https://github.com/Arrowar/StreamingCommunity/issues"
+Source = "https://github.com/Arrowar/StreamingCommunity"
+
+[project.scripts]
+streamingcommunity = "StreamingCommunity.cli.run:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "StreamingCommunity.upload.version.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["StreamingCommunity*"]
+exclude = ["Test*", "tests*", "docs*", "GUI*"]
+
+[tool.setuptools.package-data]
+StreamingCommunity = [
+    "**/*.txt",
+    "**/*.json",
+    "**/*.yaml",
+    "cli/**/*.py",
+    "core/**/*.py",
+    "player/**/*.py",
+    "services/**/*.py",
+    "services/**/util/*.py",
+    "setup/**/*.py",
+    "source/**/*.py",
+    "streaming/**/*.py",
+    "upload/**/*.py",
+    "utils/**/*.py",
+]

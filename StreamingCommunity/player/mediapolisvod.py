@@ -1,0 +1,69 @@
+# 11.04.25
+
+import json
+
+
+# Internal utilities
+from StreamingCommunity.utils.http_client import create_client, get_headers
+
+
+class VideoSource:
+    @staticmethod
+    def extract_m3u8_url(video_url: str) -> str:
+        """Extract the m3u8 streaming URL from a RaiPlay video URL."""
+        if not video_url.endswith('.json'):
+            if '/video/' in video_url:
+                video_id = video_url.split('/')[-1].split('.')[0]
+                video_path = '/'.join(video_url.split('/')[:-1])
+                video_url = f"{video_path}/{video_id}.json"
+
+            else:
+                return "Error: Unable to determine video JSON URL"
+                        
+        try:
+            response = create_client(headers=get_headers()).get(video_url)
+            if response.status_code != 200:
+                return f"Error: Failed to fetch video data (Status: {response.status_code})"
+                
+            video_data = response.json()
+            video_obj = video_data.get("video") if isinstance(video_data, dict) else None
+            if not video_obj:
+                return "Error: 'video' key missing in response"
+            content_url = video_obj.get("content_url")
+            
+            if not content_url:
+                return "Error: No content URL found in video data"
+                
+            # Extract the element key
+            if "=" in content_url:
+                element_key = content_url.split("=")[1]
+            else:
+                return "Error: Unable to extract element key"
+                
+            # Request the stream URL
+            params = {
+                'cont': element_key,
+                'output': '62',
+            }
+
+            stream_response = create_client(headers=get_headers()).get('https://mediapolisvod.rai.it/relinker/relinkerServlet.htm', params=params)
+            if stream_response.status_code != 200:
+                return f"Error: Failed to fetch stream URL (Status: {stream_response.status_code})"
+                
+            try:
+                stream_data = stream_response.json()
+                video_list = stream_data.get("video", []) if isinstance(stream_data, dict) else []
+                m3u8_url = video_list[0] if isinstance(video_list, list) and video_list else None
+            except Exception:
+                try:
+                    response_text = stream_response.content.decode('latin-1')
+                    stream_data = json.loads(response_text)
+                    video_list = stream_data.get("video", []) if isinstance(stream_data, dict) else []
+                    m3u8_url = video_list[0] if isinstance(video_list, list) and video_list else None
+                except Exception as decode_error:
+                    return f"Error: Failed to decode response - {str(decode_error)}"
+                
+            return m3u8_url
+            
+        except Exception as e:
+            return f"Error: {str(e)}"

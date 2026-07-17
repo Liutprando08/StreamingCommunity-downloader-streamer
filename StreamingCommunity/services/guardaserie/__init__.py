@@ -1,0 +1,104 @@
+# 09.06.24
+
+
+# External library
+from bs4 import BeautifulSoup
+from rich.console import Console
+from rich.prompt import Prompt
+
+
+# Internal utilities
+from StreamingCommunity.utils import TVShowManager
+from StreamingCommunity.utils.http_client import create_client_curl, get_userAgent
+from StreamingCommunity.services._base import site_constants, EntriesManager, Entries
+from StreamingCommunity.services._base.site_search_manager import base_process_search_result, base_search
+
+
+# Logic
+from .downloader import download_series
+
+
+# Variable
+indice = 4
+_useFor = "Serie"
+
+
+msg = Prompt()
+console = Console()
+entries_manager = EntriesManager()
+table_show_manager = TVShowManager()
+
+
+def title_search(query: str) -> int:
+    """
+    Search for titles based on a search query.
+
+    Parameters:
+        - query (str): The query to search for.
+
+    Returns:
+        - int: The number of titles found.
+    """
+    entries_manager.clear()
+    table_show_manager.clear()
+
+    search_url = f"{site_constants.FULL_URL}/?story={query}&do=search&subaction=search"
+    console.print(f"[cyan]Search url: [yellow]{search_url}")
+
+    try:
+        response = create_client_curl(headers={'user-agent': get_userAgent()}).get(search_url)
+        response.raise_for_status()
+    except Exception as e:
+        console.print(f"[red]Site: {site_constants.SITE_NAME}, request search error: {e}")
+        return 0
+
+    # Create soup and find table
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    for serie_div in soup.find_all('div', class_='mlnew'):
+        try:
+            entries_manager.add(Entries(
+                name=serie_div.find('a').get("title").replace("streaming guardaserie", ""),
+                type='tv',
+                url=serie_div.find('a').get("href"),
+                image=f"{site_constants.FULL_URL}/{serie_div.find('img').get('src')}"
+            ))
+
+        except Exception as e:
+            print(f"Error parsing a film entry: {e}")
+
+    return len(entries_manager)
+
+
+
+# WRAPPING FUNCTIONS
+def process_search_result(select_title, selections=None, scrape_serie=None):
+    """
+    Wrapper for the generalized process_search_result function.
+    """
+    return base_process_search_result(
+        select_title=select_title,
+        download_film_func=None,
+        download_series_func=download_series,
+        media_search_manager=entries_manager,
+        table_show_manager=table_show_manager,
+        selections=selections,
+        scrape_serie=scrape_serie
+    )
+
+def search(string_to_search: str = None, get_onlyDatabase: bool = False, direct_item: dict = None, selections: dict = None, scrape_serie=None):
+    """
+    Wrapper for the generalized search function.
+    """
+    return base_search(
+        title_search_func=title_search,
+        process_result_func=process_search_result,
+        media_search_manager=entries_manager,
+        table_show_manager=table_show_manager,
+        site_name=site_constants.SITE_NAME,
+        string_to_search=string_to_search,
+        get_onlyDatabase=get_onlyDatabase,
+        direct_item=direct_item,
+        selections=selections,
+        scrape_serie=scrape_serie
+    )

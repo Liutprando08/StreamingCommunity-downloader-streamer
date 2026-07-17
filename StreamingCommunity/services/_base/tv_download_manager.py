@@ -1,0 +1,180 @@
+# 19.06.24
+
+from typing import Callable, Any, Optional
+
+
+# External library
+from rich.console import Console
+from rich.prompt import Prompt
+
+
+# Internal utilities
+from StreamingCommunity.services._base.tv_display_manager import manage_selection, validate_selection, display_episodes_list, display_seasons_list
+
+
+# Variable
+console = Console()
+
+
+def process_season_selection(scrape_serie: Any, seasons_count: int, season_selection: Optional[str], episode_selection: Optional[str], download_episode_callback: Callable) -> None:
+    """
+    Process season selection and trigger episode downloads.
+    
+    Parameters:
+        - scrape_serie: Scraper object with series information
+        - seasons_count (int): Total number of seasons
+        - season_selection (str, optional): Pre-defined season selection
+        - episode_selection (str, optional): Pre-defined episode selection
+        - download_episode_callback (Callable): Function to call for downloading episodes
+    """
+    if seasons_count == 0:
+        console.print("[red]No seasons found for this series")
+        return
+
+    # If season_selection is provided, use it instead of asking for input
+    if season_selection is None:
+        index_season_selected = display_seasons_list(scrape_serie.seasons_manager)
+        is_manual_input = True
+    else:
+        index_season_selected = season_selection
+        is_manual_input = False
+        console.print(f"\n[cyan]Using provided season selection: [yellow]{season_selection}")
+    
+    # Get available season numbers
+    seasons_list = scrape_serie.seasons_manager.seasons
+    available_numbers = [s.number for s in seasons_list]
+    
+    # Determine the maximum "index" or "number" to allow in manage_selection
+    max_count = len(seasons_list) if is_manual_input else (max(available_numbers) if available_numbers else seasons_count)
+    list_selection = manage_selection(index_season_selected, max_count)
+    
+    # Map the selection to actual season numbers
+    list_season_select = []
+    available_numbers = [s.number for s in seasons_list]
+    
+    for val in list_selection:
+        
+        # First check if it's a valid index (1-based)
+        if 1 <= val <= len(seasons_list):
+            list_season_select.append(seasons_list[val-1].number)
+
+        # If not a valid index, check if it's a valid season number
+        elif val in available_numbers:
+            list_season_select.append(val)
+        else:
+            console.print(f"[yellow]Warning: Selection {val} is neither a valid index nor a valid season number.")
+
+    if not list_season_select:
+        console.print(f"[red]No valid seasons selected. Available indices: 1-{len(seasons_list)}, Available numbers: {available_numbers}")
+        if is_manual_input:
+            list_season_select = validate_selection(list_selection, available_numbers)
+        else:
+            return
+    
+    # Loop through the selected seasons and download episodes
+    for season_number in list_season_select:
+        season = scrape_serie.seasons_manager.get_season_by_number(season_number)
+        
+        if not season:
+            console.print(f"[red]Season {season_number} not found! Available seasons: {available_numbers}")
+            continue
+        
+        # Determine if we should download all episodes
+        download_all = len(list_season_select) > 1 or index_season_selected == "*"
+        
+        # Call the download callback with appropriate parameters
+        download_episode_callback(
+            season_number=season_number,
+            download_all=download_all,
+            episode_selection=episode_selection if not download_all else None
+        )
+
+
+def process_episode_download(index_season_selected: int, scrape_serie: Any, download_video_callback: Callable, download_all: bool = False, episode_selection: Optional[str] = None) -> None:
+    """
+    Handle downloading episodes for a specific season.
+    
+    Parameters:
+        - index_season_selected (int): Season number
+        - scrape_serie: Scraper object with series information
+        - download_video_callback (Callable): Function to call for downloading individual videos
+        - download_all (bool): Whether to download all episodes
+        - episode_selection (str, optional): Pre-defined episode selection
+    """
+    # Get episodes for the selected season
+    episodes = scrape_serie.getEpisodeSeasons(index_season_selected)
+    episodes_count = len(episodes)
+    
+    if episodes_count == 0:
+        console.print(f"[red]No episodes found for season {index_season_selected}")
+        return
+    
+    if download_all:
+        for i_episode in range(1, episodes_count + 1):
+            path, stopped = download_video_callback(episodes[i_episode-1], index_season_selected, i_episode)
+            
+            if stopped:
+                break
+        
+        console.print(f"\n[red]End downloaded [yellow]season: [red]{index_season_selected}.")
+    
+    else:
+        # Display episodes list and manage user selection
+        if episode_selection is None:
+            last_command = display_episodes_list(episodes)
+        else:
+            last_command = episode_selection
+            console.print(f"\n[cyan]Using provided episode selection: [yellow]{episode_selection}")
+        
+        # Get available episode numbers
+        available_episode_numbers = [
+            ep.get('number') if isinstance(ep, dict) else getattr(ep, 'number', idx)
+            for idx, ep in enumerate(episodes, 1)
+        ]
+        
+        # Determine the maximum "index" or "number" to allow in manage_selection
+        m_count = max(len(episodes), max([n for n in available_episode_numbers if isinstance(n, (int, float))] or [0]))
+        
+        while True:
+            list_selection = manage_selection(last_command, m_count)
+            
+            # Map selection to indices
+            list_episode_select = []
+            for val in list_selection:
+
+                # 1. Check if it's a valid index (1-based)
+                if 1 <= val <= len(episodes):
+                    list_episode_select.append(val)
+                
+                # 2. Check if it's a valid episode number
+                else:
+                    print("Failed index check, trying episode number check...")
+                    found = False
+                    for idx, ep in enumerate(episodes, 1):
+                        ep_num = ep.get('number') if isinstance(ep, dict) else getattr(ep, 'number', None)
+                        
+                        # Compare as strings to handle numeric-like strings from API GUI
+                        if str(ep_num) == str(val):
+                            list_episode_select.append(idx)
+                            found = True
+                            break
+                        
+                    if not found:
+                        console.print(f"[yellow]Warning: Episode selection {val} is neither a valid index nor a valid episode number.")
+
+            if list_episode_select:
+                break
+
+            console.print(f"[red]No valid episodes selected. Available indices: 1-{len(episodes)}, Available numbers: {available_episode_numbers}")
+            
+            if episode_selection is not None:
+                return
+
+            last_command = Prompt.ask("[red]Enter valid episode numbers or indices")
+
+        # Download selected episodes if not stopped
+        for i_episode in list_episode_select:
+            path, stopped = download_video_callback(episodes[i_episode-1], index_season_selected, i_episode)
+            
+            if stopped:
+                break
