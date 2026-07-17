@@ -10,8 +10,8 @@ from StreamingCommunity.utils.http_client import create_client, get_userAgent, g
 
 
 # Variable
-tubi_email = config_manager.login.get('tubi', 'email')
-tubi_password = config_manager.login.get('tubi', 'password')
+tubi_email = config_manager.login.get('tubi', 'email', default=None)
+tubi_password = config_manager.login.get('tubi', 'password', default=None)
 
 
 def generate_device_id():

@@ -56,6 +56,5 @@ working_proxies.json
 start.sh
 .DS_Store
 console.log
-/Conf/login.json
 /.cache
 PLAN.md

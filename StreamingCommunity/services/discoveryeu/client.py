@@ -11,7 +11,7 @@ from StreamingCommunity.utils.http_client import create_client_curl
 
 # Variable
 _discovery_client = None
-cookie_st = config_manager.login.get("discoveryeu", "st")
+cookie_st = config_manager.login.get("discoveryeu", "st", default=None)
 
 
 class DiscoveryPlus:

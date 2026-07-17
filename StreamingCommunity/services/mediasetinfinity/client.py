@@ -29,7 +29,7 @@ class MediasetAPI:
         # Check for token in login config
         self.beToken = None
         self.is_anonymous = True
-        login_token = config_manager.login.get("mediasetinfinity", "beToken")
+        login_token = config_manager.login.get("mediasetinfinity", "beToken", default=None)
 
         if login_token is not None and login_token != "":
             self.beToken = login_token

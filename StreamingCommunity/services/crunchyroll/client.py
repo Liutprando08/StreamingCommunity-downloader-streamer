@@ -22,8 +22,8 @@ PLAY_SERVICE_URL = "https://cr-play-service.prd.crunchyrollsvc.com"
 
 class CrunchyrollClient:
     def __init__(self, locale: str = "it-IT", **kwargs) -> None:
-        self.device_id = config_manager.login.get('crunchyroll', 'device_id')
-        self.etp_rt = config_manager.login.get('crunchyroll', 'etp_rt')
+        self.device_id = config_manager.login.get('crunchyroll', 'device_id', default=None)
+        self.etp_rt = config_manager.login.get('crunchyroll', 'etp_rt', default=None)
         self.locale = locale
 
         self.web_base_url = BASE_URL

@@ -10,7 +10,7 @@ from StreamingCommunity.utils import config_manager, tmdb_client
 
 
 # Variable
-TMDB_KEY = config_manager.login.get('TMDB', 'api_key')
+TMDB_KEY = config_manager.login.get('TMDB', 'api_key', default="")
 
 
 class Episode:
