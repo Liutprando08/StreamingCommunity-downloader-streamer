@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import json
+import shutil
 import logging
 from typing import Any, List, Dict
 
@@ -21,10 +22,10 @@ DOMAINS_FILENAME = 'domains.json'
 GITHUB_DOMAINS_PATH = '.github/script/domains.json'
 REMOTE_CDM_PATH = 'remote_cdm.json'
 
-CONFIG_DOWNLOAD_URL = 'https://raw.githubusercontent.com/Arrowar/StreamingCommunity/refs/heads/main/Conf/config.json'
-CONFIG_LOGIN_DOWNLOAD_URL = 'https://raw.githubusercontent.com/Arrowar/StreamingCommunity/refs/heads/main/Conf/login.json'
-DOMAINS_DOWNLOAD_URL = 'https://raw.githubusercontent.com/Arrowar/SC_Domains/refs/heads/main/domains.json'
-REMOTE_CDM_DOWNLOAD_URL = 'https://raw.githubusercontent.com/Arrowar/StreamingCommunity/refs/heads/main/Conf/remote_cdm.json'
+CONFIG_DOWNLOAD_URL = 'https://raw.githubusercontent.com/Liutprando08/StreamingCommunity-downloader-streamer/refs/heads/main/Conf/config.json'
+CONFIG_LOGIN_DOWNLOAD_URL = 'https://raw.githubusercontent.com/Liutprando08/StreamingCommunity-downloader-streamer/refs/heads/main/Conf/login.json'
+DOMAINS_DOWNLOAD_URL = 'https://raw.githubusercontent.com/Liutprando08/StreamingCommunity-downloader-streamer/refs/heads/main/Conf/domains.json'
+REMOTE_CDM_DOWNLOAD_URL = 'https://raw.githubusercontent.com/Liutprando08/StreamingCommunity-downloader-streamer/refs/heads/main/Conf/remote_cdm.json'
 
 
 class ConfigAccessor:
@@ -172,7 +173,14 @@ class ConfigManager:
         
         self.base_path = None
         if getattr(sys, 'frozen', False):
-            self.base_path = os.path.dirname(sys.executable)  # PyInstaller
+            self.base_path = os.path.dirname(sys.executable)
+            bundled_conf = os.path.join(sys._MEIPASS, 'Conf')
+            user_conf = os.path.join(self.base_path, 'Conf')
+            if os.path.exists(bundled_conf) and not os.path.exists(os.path.join(user_conf, 'config.json')):
+                if os.path.exists(user_conf):
+                    shutil.rmtree(user_conf)
+                shutil.copytree(bundled_conf, user_conf)
+                console.print(f"[green]Bundled configs copied to: {self.base_path}")
         else:
             self.base_path = os.getcwd()
             

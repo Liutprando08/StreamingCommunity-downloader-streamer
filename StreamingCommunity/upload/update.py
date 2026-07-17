@@ -32,7 +32,7 @@ def fetch_github_releases():
     """Fetch releases data from GitHub API (sync)"""
     try:
         response = httpx.get(
-            f"https://api.github.com/repos/{__author__}/{__title__}/releases",
+            "https://api.github.com/repos/Liutprando08/StreamingCommunity-downloader-streamer/releases",
             headers={'user-agent': get_userAgent()},
             timeout=config_manager.config.get_int("REQUESTS", "timeout"),
             follow_redirects=True
@@ -195,7 +195,7 @@ def update():
 
     if str(current_version).lower().replace("v.", "").replace("v", "") != str(last_version).lower().replace("v.", "").replace("v", ""):
         console.print(f"\n[red]New version available: [yellow]{last_version}")
-        console.print(f"[green]Download it from: [yellow]https://github.com/Arrowar/StreamingCommunity/releases/tag/v{last_version}")
+        console.print(f"[green]Download it from: [yellow]https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/tag/v{last_version}")
         
         if get_execution_mode() == "installer":
             console.print("[cyan]Run with [yellow]-UP [cyan]to auto-update")

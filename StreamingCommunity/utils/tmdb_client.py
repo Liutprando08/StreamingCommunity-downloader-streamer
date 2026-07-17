@@ -17,7 +17,7 @@ from StreamingCommunity.utils.http_client import create_client_curl, get_userAge
 
 # Variable
 console = Console()
-api_key = config_manager.login.get("TMDB", "api_key")
+api_key = config_manager.login.get("TMDB", "api_key", default="")
 
 
 class TMDBClient:

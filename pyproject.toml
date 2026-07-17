@@ -39,9 +39,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Arrowar/StreamingCommunity"
-"Bug Reports" = "https://github.com/Arrowar/StreamingCommunity/issues"
-Source = "https://github.com/Arrowar/StreamingCommunity"
+Homepage = "https://github.com/Liutprando08/StreamingCommunity-downloader-streamer"
+"Bug Reports" = "https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/issues"
+Source = "https://github.com/Liutprando08/StreamingCommunity-downloader-streamer"
 
 [project.scripts]
 streamingcommunity = "StreamingCommunity.cli.run:main"

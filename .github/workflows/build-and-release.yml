@@ -1,0 +1,103 @@
+name: Build and Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pyinstaller -r requirements.txt
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: >
+          pyinstaller --onefile --name StreamingCommunity
+          --add-data "Conf;Conf"
+          --hidden-import curl_cffi
+          --hidden-import _cffi_backend
+          --collect-all StreamingCommunity
+          run.py
+
+      - name: Build (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: >
+          pyinstaller --onefile --name StreamingCommunity
+          --add-data "Conf:Conf"
+          --hidden-import curl_cffi
+          --hidden-import _cffi_backend
+          --collect-all StreamingCommunity
+          run.py
+
+      - name: Rename binary (Linux)
+        if: runner.os == 'Linux'
+        run: mv dist/StreamingCommunity dist/StreamingCommunity_linux_x64
+
+      - name: Rename binary (macOS)
+        if: runner.os == 'macOS'
+        run: mv dist/StreamingCommunity dist/StreamingCommunity_macos_x64
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        run: mv dist/StreamingCommunity.exe dist/StreamingCommunity_win_x64.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StreamingCommunity-${{ runner.os }}
+          path: dist/StreamingCommunity*
+
+  attach-binaries:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Attach binaries to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+
+  publish-pypi:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build package
+        run: |
+          pip install build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
