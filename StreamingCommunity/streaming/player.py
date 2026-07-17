@@ -24,7 +24,11 @@ PLAYER_CANDIDATES = [
         "build_cmd": lambda url, headers: [
             "vlc",
             "--network-caching=3000",
-            *( ["--http-referrer", headers["referer"]] if headers.get("referer") else [] ),
+            *(
+                ["--http-referrer", headers["referer"]]
+                if headers.get("referer")
+                else []
+            ),
             url,
         ],
     },
