@@ -7,7 +7,7 @@
 [![macOS](https://img.shields.io/badge/🍎_macOS-000000?style=for-the-badge&logo=apple&logoColor=white&labelColor=2d3748)](https://github.com/Arrowar/StreamingCommunity/releases/latest/download/StreamingCommunity_mac_15_x64)
 [![Linux](https://img.shields.io/badge/🐧_Linux_latest-FCC624?style=for-the-badge&logo=linux&logoColor=black&labelColor=2d3748)](https://github.com/Arrowar/StreamingCommunity/releases/latest/download/StreamingCommunity_linux_24_04_x64)
 
-*⚡ **Quick Start:** `pip install StreamingCommunity && StreamingCommunity`*
+*⚡ **Quick Start:** `pip install streamingcommunity && streamingcommunity`*
 
 </div>
 
@@ -20,7 +20,7 @@
 - [Usage Examples](#usage-examples)
 - [Global Search](#global-search)
 - [Advanced Features](#advanced-features)
-- [Docker](#docker)
+- [Streaming](#streaming)
 - [TO DO](#todo)
 - [Related Projects](#related-projects)
 
@@ -33,16 +33,17 @@
 git clone https://github.com/Arrowar/StreamingCommunity.git
 cd StreamingCommunity
 pip install -r requirements.txt
-python test_run.py
+python -m StreamingCommunity
 ```
 
 ### Update
 ```bash
-python update.py
-```
+# If installed via pip
+pip install --upgrade streamingcommunity
 
-### Additional Documentation
-- 📝 [Login Guide](.github/doc/login.md) - Authentication for supported services
+# If using binary, use the built-in updater
+streamingcommunity -UP
+```
 
 ---
 
@@ -50,10 +51,10 @@ python update.py
 
 ```bash
 # If installed via PyPI
-StreamingCommunity
+streamingcommunity
 
 # If cloned manually
-python test_run.py
+python -m StreamingCommunity
 ```
 
 ---
@@ -77,6 +78,7 @@ Use one of these DNS providers:
 | **MP4** | Direct MP4 download | [View example](./Test/Downloads/MP4.py) |
 | **DASH** | MPEG-DASH with DRM bypass* | [View example](./Test/Downloads/DASH.py) |
 | **MEGA** | MEGA.nz downloads | [View example](./Test/Downloads/MEGA.py) |
+| **ISM** | Microsoft Smooth Streaming (PlayReady DRM) | [View example](./Test/Downloads/ISM.py) |
 
 **\*DASH with DRM bypass:** Requires a valid L3 CDM (Content Decryption Module). This project does not provide or facilitate obtaining CDMs. Users must ensure compliance with applicable laws.
 
@@ -121,15 +123,16 @@ Key configuration parameters in `config.json`:
 ```json
 {
     "DOWNLOAD": {
-        "auto_select": true,
-        "thread_count": 12,
-        "retry_count": 40,
+        "skip_download": false,
+        "thread_count": 8,
+        "retry_count": 30,
         "concurrent_download": true,
-        "max_speed": "30MB",
+        "max_speed": "",
+        "real_time_decryption": false,
         "check_segments_count": true,
-        "select_video": "res=.*1080.*:for=best",
-        "select_audio": "lang='ita|Ita':for=all",
-        "select_subtitle": "lang='ita|eng|Ita|Eng':for=all",
+        "select_video": "best",
+        "select_audio": "lang='ita|Ita|it':for=best",
+        "select_subtitle": "lang='ita|eng|Ita|Eng|it|en':for=all",
         "cleanup_tmp_folder": true
     }
 }
@@ -137,10 +140,10 @@ Key configuration parameters in `config.json`:
 
 #### Performance Settings
 - **`skip_download`**: Skip the download step and process existing files (default: `false`)
-- **`thread_count`**: Number of parallel download threads (default: `12`)
-- **`retry_count`**: Maximum retry attempts for failed segments (default: `40`)
+- **`thread_count`**: Number of parallel download threads (default: `8`)
+- **`retry_count`**: Maximum retry attempts for failed segments (default: `30`)
 - **`concurrent_download`**: Download video and audio simultaneously (default: `true`)
-- **`max_speed`**: Speed limit per stream (e.g., `"30MB"`, `"10MB"`)
+- **`max_speed`**: Speed limit per stream (e.g., `"30MB"`, `"10MB"`), empty string for no limit
 - **`real_time_decryption`**: Decrypt segments in real-time during download instead of post-processing (default: `false`)
 - **`check_segments_count`**: Verify segment count matches manifest (default: `true`)
 - **`cleanup_tmp_folder`**: Remove temporary files after download (default: `true`)
@@ -191,11 +194,11 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
         "param_video": ["-c:v", "libx265", "-crf", "28", "-preset", "medium"],
         "param_audio": ["-c:a", "libopus", "-b:a", "128k"],
         "param_final": ["-c", "copy"],
-        "audio_order": ["ita", "eng"],
-        "subtitle_order": ["ita", "eng"],
+        "audio_order": [],
+        "subtitle_order": [],
         "merge_audio": true,
         "merge_subtitle": true,
-        "subtitle_disposition": true,
+        "subtitle_disposition": false,
         "subtitle_disposition_language": ["forced-ita", "ita-forced"],
         "extension": "mkv"
     }
@@ -213,7 +216,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 - **`subtitle_order`**: List of strings to order subtitle tracks (e.g., `["ita", "eng"]`)
 - **`merge_audio`**: Merge all audio tracks into a single output file (default: `true`)
 - **`merge_subtitle`**: Merge all subtitle tracks into a single output file (default: `true`)
-- **`subtitle_disposition`**: Automatically set default subtitle track (default: `true`)
+- **`subtitle_disposition`**: Automatically set default subtitle track (default: `false`)
 - **`subtitle_disposition_language`**: Languages to mark as default/forced
   - Example: `["forced-ita", "ita-forced"]` for Italian forced subtitles
 - **`extension`**: Output file format (`"mkv"` or `"mp4"`)
@@ -222,9 +225,9 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 ```json
 {
     "REQUESTS": {
-        "verify": false,
+        "verify": true,
         "timeout": 30,
-        "max_retry": 10,
+        "max_retry": 8,
         "use_proxy": false,
         "proxy": {
             "http": "http://localhost:8888",
@@ -234,9 +237,9 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 }
 ```
 
-- **`verify`**: Enable SSL certificate verification (default: `false`)
+- **`verify`**: Enable SSL certificate verification (default: `true`)
 - **`timeout`**: Request timeout in seconds (default: `30`)
-- **`max_retry`**: Maximum retry attempts for failed requests (default: `10`)
+- **`max_retry`**: Maximum retry attempts for failed requests (default: `8`)
 - **`use_proxy`**: Enable proxy support for HTTP requests (default: `false`)
 - **`proxy`**: Proxy configuration for HTTP and HTTPS connections
   - **`http`**: HTTP proxy URL (e.g., `"http://localhost:8888"`)
@@ -247,16 +250,16 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 {
     "DEFAULT": {
         "close_console": true,
-        "show_message": false,
-        "show_device_info": false,
+        "show_message": true,
+        "show_device_info": true,
         "fetch_domain_online": true
     }
 }
 ```
 
 - **`close_console`**: Automatically close console after download completion (default: `true`)
-- **`show_message`**: Display debug messages (default: `false`)
-- **`show_device_info`**: Display device information (default: `false`)
+- **`show_message`**: Display debug messages (default: `true`)
+- **`show_device_info`**: Display device information (default: `true`)
 - **`fetch_domain_online`**: Automatically fetch latest domains from GitHub (default: `true`)
 
 ---
@@ -266,22 +269,39 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 ### Basic Commands
 ```bash
 # Show help and available sites
-python test_run.py -h
+python -m StreamingCommunity -h
 
-# Search and download
-python test_run.py --site streamingcommunity --search "interstellar"
+# Search and download from a specific site
+python -m StreamingCommunity --site streamingcommunity --search "interstellar"
 
 # Auto-download first result
-python test_run.py --site streamingcommunity --search "interstellar" --auto-first
+python -m StreamingCommunity --site streamingcommunity --search "interstellar" --auto-first
 
 # Use site by index
-python test_run.py --site 0 --search "interstellar"
+python -m StreamingCommunity --site 0 --search "interstellar"
 ```
 
 ### Advanced Options
 ```bash
 # Keep console open
-python test_run.py --not_close true
+python -m StreamingCommunity --not_close true
+
+# Override stream selection from CLI
+python -m StreamingCommunity -sv "res=3840*:codecs=hvc1:for=best"  # 4K HEVC
+python -m StreamingCommunity -sa "lang=en:for=best"                 # Best English audio
+python -m StreamingCommunity -ss "lang=en:for=best"                 # Best English subtitle
+
+# Override output extension
+python -m StreamingCommunity --extension mp4
+
+# Enable proxy
+python -m StreamingCommunity --use_proxy
+
+# Check for updates (binary only)
+python -m StreamingCommunity -UP
+
+# Show version
+python -m StreamingCommunity --version
 ```
 
 ---
@@ -292,15 +312,15 @@ Search across multiple streaming sites simultaneously:
 
 ```bash
 # Global search
-python test_run.py --global -s "cars"
-
-# Search by category
-python test_run.py --category 1    # Anime
-python test_run.py --category 2    # Movies & Series
-python test_run.py --category 3    # Series only
+python -m StreamingCommunity --global -s "cars"
 ```
 
-Results display title, media type, and source site in a consolidated table.
+When using `--global`, you will be prompted to:
+1. Search all sites
+2. Search by category (anime, film & series, series)
+3. Select specific sites to search
+
+Results display title, media type, year, and source site in a consolidated table. You can select any result to download directly.
 
 ---
 
@@ -359,46 +379,30 @@ Execute custom scripts before/after downloads. Configure in `config.json`:
 - **Bat/cmd hooks**: Execute via `cmd /c` on Windows
 - **Inline commands**: Use `command` instead of `path` for simple one-liners
 
-Hooks are automatically executed by `run.py` before (`pre_run`) and after (`post_run`) the main execution flow.
+Hooks are automatically executed before (`pre_run`) and after (`post_run`) the main execution flow.
 
 ---
 
-## Docker
+## Streaming
 
-### Basic Setup
+Stream content in real-time using a local proxy server instead of downloading.
+
+### Basic Usage
 ```bash
-# Build image
-docker build -t streaming-community-api .
+# Stream with auto-detected player
+python -m StreamingCommunity --stream --site streamingcommunity --search "interstellar"
 
-# Run with Cloudflare DNS
-docker run -d --name streaming-community --dns 1.1.1.1 -p 8000:8000 streaming-community-api
+# Stream with a specific player
+python -m StreamingCommunity --stream --player mpv --site streamingcommunity --search "interstellar"
+
+# Stream on a specific port
+python -m StreamingCommunity --stream --player vlc --stream-port 8080
 ```
 
-### Volumes and Permissions
-When mounting a local folder as a volume, you might encounter permission issues. Using `-u root` ensures the container has the necessary rights to write to your host machine:
-
-```bash
-docker run -d --name streaming-community --dns 1.1.1.1 -p 8000:8000 -u root -v D:\Download:/app/Video streaming-community-api
-```
-
-### Docker Compose Example
-Recommended for stability and easy DNS configuration:
-
-```yaml
-services:
-  streaming-community:
-    build: .
-    container_name: streaming-community
-    user: root
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./Video:/app/Video
-    restart: unless-stopped
-```
+### Supported Players
+- **mpv** (recommended) - High-quality playback with hardware decoding support
+- **vlc** - Network caching for smoother streams
+- **ffplay** - Lightweight fallback from FFmpeg
 
 ---
 
