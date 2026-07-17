@@ -3,14 +3,14 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "StreamingCommunity"
+name = "StreamingCommunity-download-stream"
 dynamic = ["version"]
 description = "Download content from streaming platforms"
 readme = "README.md"
 license = "GPL-3.0-only"
 requires-python = ">=3.8"
 authors = [
-    { name = "Arrowar" },
+    { name = "Liutprando08" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
