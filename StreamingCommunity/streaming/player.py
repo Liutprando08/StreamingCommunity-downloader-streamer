@@ -75,6 +75,10 @@ class PlayerLauncher:
 
     def launch(self, url: str, preferred_player: Optional[str] = None) -> bool:
         """Launch the player with the given URL. Returns True on success."""
+        if not url.startswith(("http://", "https://")):
+            logger.error("Invalid URL scheme for player: %s", url[:40])
+            return False
+
         self._player = detect_player(preferred_player)
         if not self._player:
             logger.error("No media player found (install mpv, vlc, or ffplay)")

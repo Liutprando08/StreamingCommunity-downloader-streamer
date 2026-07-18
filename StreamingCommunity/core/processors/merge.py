@@ -113,6 +113,9 @@ def join_video(video_path: str, out_path: str, log_path: Optional[str] = None):
         ffmpeg_cmd.extend(['-f', 'mpegts'])
 
     # Insert input video path
+    if not os.path.isfile(video_path):
+        console.print(f"[red]Input video file not found: {video_path}")
+        return out_path, {}
     ffmpeg_cmd.extend(['-i', video_path])
 
     # Add encoding parameters (prima dell'output)
@@ -181,15 +184,22 @@ def join_audios(video_path: str, audio_tracks: List[Dict[str, str]], out_path: s
         ffmpeg_cmd.extend(['-hwaccel', detect_gpu_device_type()])
 
     # Insert input video path with TS format
+    if not os.path.isfile(video_path):
+        console.print(f"[red]Input video file not found: {video_path}")
+        return out_path, use_shortest, {}
     if video_path.lower().endswith('.ts'):
         ffmpeg_cmd.extend(['-f', 'mpegts'])
     ffmpeg_cmd.extend(['-i', video_path])
 
     # Add audio tracks as input with TS format
     for i, audio_track in enumerate(audio_tracks):
-        if audio_track.get('path', '').lower().endswith('.ts'):
+        audio_track_path = audio_track.get('path')
+        if not os.path.isfile(audio_track_path):
+            console.print(f"[red]Input audio file not found: {audio_track_path}")
+            return out_path, use_shortest, {}
+        if audio_track_path.lower().endswith('.ts'):
             ffmpeg_cmd.extend(['-f', 'mpegts'])
-        ffmpeg_cmd.extend(['-i', audio_track.get('path')])
+        ffmpeg_cmd.extend(['-i', audio_track_path])
 
     # Map the video and audio streams
     ffmpeg_cmd.extend(['-map', '0:v'])
@@ -263,6 +273,9 @@ def join_subtitles(video_path: str, subtitles_list: List[Dict[str, str]], out_pa
         
         subtitle['path'] = corrected_path
     
+    if not os.path.isfile(video_path):
+        console.print(f"[red]Input video file not found: {video_path}")
+        return out_path, {}
     ffmpeg_cmd = [get_ffmpeg_path(), "-i", video_path]
     output_ext = os.path.splitext(out_path)[1].lower()
     
@@ -277,7 +290,11 @@ def join_subtitles(video_path: str, subtitles_list: List[Dict[str, str]], out_pa
     
     # Add subtitle input files first
     for subtitle in subtitles_list:
-        ffmpeg_cmd += ["-i", subtitle['path']]
+        sub_path = subtitle['path']
+        if not os.path.isfile(sub_path):
+            console.print(f"[red]Input subtitle file not found: {sub_path}")
+            return out_path, {}
+        ffmpeg_cmd += ["-i", sub_path]
     
     # Add maps for video and audio streams
     ffmpeg_cmd += ["-map", "0:v"]

@@ -444,17 +444,6 @@ python -m StreamingCommunity --stream --player vlc --stream-port 8080
 
 ---
 
-## TODO
-
-- [ ] Improve the GUI; Enhance the graphical user interface and display images for all episodes.
-- [ ] Add images to search results: Show a thumbnail/image for each title in the search results.
-- [ ] Add images for each episode: Display a dedicated image or thumbnail for every episode.
-- [ ] Improve season selection: Populate the season selector using the actual extracted seasons (real data), instead of assuming a range from 1 to N.
-- [ ] Add login for discovery, dmax ...
-- [ ] Use asyncio for manual downloader
-
----
-
 ## Related Projects
 
 - **[MammaMia](https://github.com/UrloMythus/MammaMia)** - Stremio addon for Italian streaming

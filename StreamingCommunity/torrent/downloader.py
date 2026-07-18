@@ -5,6 +5,8 @@ import os
 import subprocess
 from typing import Optional
 
+from StreamingCommunity.torrent.title_parser import TorrentResult
+
 
 log = logging.getLogger(__name__)
 
@@ -17,6 +19,10 @@ class TorrentDownloader:
         self.download_path = download_path
 
     def download_magnet(self, magnet_url: str, timeout: int = 3600) -> Optional[str]:
+        if not magnet_url.startswith("magnet:?xt=urn:btih:"):
+            log.warning("Invalid magnet URL format, rejecting")
+            return None
+
         os.makedirs(self.download_path, exist_ok=True)
 
         cmd = [
@@ -27,7 +33,7 @@ class TorrentDownloader:
             "--file-allocation=none",
             "--console-log-level=warn",
             "--summary-interval=0",
-            magnet_url,
+            TorrentResult.safe_arg(magnet_url),
         ]
 
         log.info("Downloading torrent via aria2c: %s", magnet_url[:60] + "...")
@@ -58,6 +64,10 @@ class TorrentDownloader:
             return None
 
     def download_torrent_file(self, torrent_url: str, timeout: int = 3600) -> Optional[str]:
+        if not torrent_url.startswith(("http://", "https://")):
+            log.warning("Invalid torrent URL format, rejecting")
+            return None
+
         os.makedirs(self.download_path, exist_ok=True)
 
         cmd = [
@@ -68,7 +78,7 @@ class TorrentDownloader:
             "--file-allocation=none",
             "--console-log-level=warn",
             "--summary-interval=0",
-            torrent_url,
+            TorrentResult.safe_arg(torrent_url),
         ]
 
         log.info("Downloading .torrent file via aria2c: %s", torrent_url[:60] + "...")

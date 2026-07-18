@@ -20,3 +20,10 @@ class TorrentResult:
     tmdb_id: Optional[int] = None
     year: Optional[int] = None
     scraped_at: datetime = field(default_factory=datetime.now)
+
+    @staticmethod
+    def safe_arg(value: str) -> str:
+        """Prefix values starting with '-' to prevent argument injection in subprocess."""
+        if value.startswith("-"):
+            return "./" + value
+        return value

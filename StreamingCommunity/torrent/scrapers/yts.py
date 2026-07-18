@@ -1,6 +1,7 @@
 # 2026
 
 import logging
+import re
 from typing import List, Optional
 from urllib.parse import quote_plus
 
@@ -23,6 +24,8 @@ TRACKERS = [
     "https://tracker.zhuqiy.com:443/announce",
     "https://tracker.pmman.tech:443/announce",
 ]
+
+_HASH_RE = re.compile(r'^[a-fA-F0-9]{40}$|^[a-zA-Z2-7]{32}$')
 
 
 class YtsScraper(BaseScraper):
@@ -55,7 +58,7 @@ class YtsScraper(BaseScraper):
 
         for torrent in movie.get("torrents", []):
             info_hash = torrent.get("hash", "")
-            if not info_hash:
+            if not info_hash or not _HASH_RE.match(info_hash):
                 continue
 
             quality = torrent.get("quality", "")

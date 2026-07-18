@@ -22,6 +22,7 @@ from StreamingCommunity.source.utils.tracker import download_tracker, context_tr
 from StreamingCommunity.utils.http_client import create_async_client
 from StreamingCommunity.source.utils.trans_codec import get_subtitle_codec_name
 from StreamingCommunity.source.Manual.decrypt.decrypt import Decryptor
+from StreamingCommunity.torrent.title_parser import TorrentResult
 
 
 # Logic
@@ -146,14 +147,14 @@ class MediaDownloader:
             "--no-log", 
             "--save-dir", str(analysis_path), 
             "--tmp-dir", str(analysis_path),
-            "--save-name", "temp_analysis", 
-            "--select-video", norm_v, 
-            "--select-audio", norm_a, 
-            "--select-subtitle", norm_s, 
+            "--save-name", TorrentResult.safe_arg("temp_analysis"), 
+            "--select-video", TorrentResult.safe_arg(norm_v), 
+            "--select-audio", TorrentResult.safe_arg(norm_a), 
+            "--select-subtitle", TorrentResult.safe_arg(norm_s), 
             "--skip-download"
         ]
         cmd.extend(self._get_common_args())
-        cmd.append(self.url)
+        cmd.append(TorrentResult.safe_arg(self.url))
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors='replace', bufsize=1, universal_newlines=True)
         
         # Save parsing log
@@ -287,7 +288,7 @@ class MediaDownloader:
         # Build command
         cmd = [
             get_n_m3u8dl_re_path(), 
-            "--save-name", self.filename, 
+            "--save-name", TorrentResult.safe_arg(self.filename), 
             "--save-dir", str(self.output_dir), 
             "--tmp-dir", str(self.output_dir),
             "--ffmpeg-binary-path", get_ffmpeg_path(), 
@@ -296,19 +297,19 @@ class MediaDownloader:
             "--write-meta-json", "false", 
             "--binary-merge",
             "--del-after-done",
-            "--select-video", norm_v,
+            "--select-video", TorrentResult.safe_arg(norm_v),
             "--auto-subtitle-fix", "false",
             "--check-segments-count", "true" if _cfg_bool("DOWNLOAD", "check_segments_count") else "false",
             "--mp4-real-time-decryption", "true" if _cfg_bool("DOWNLOAD", "real_time_decryption") else "false"
         ]
         
         if norm_a:
-            cmd.extend(["--select-audio", norm_a])
+            cmd.extend(["--select-audio", TorrentResult.safe_arg(norm_a)])
         sub_filter_val = _cfg("DOWNLOAD", "select_subtitle")
         if sub_filter_val == "false":
             cmd.extend(["--drop-subtitle", "all"])
         elif norm_s:
-            cmd.extend(["--select-subtitle", norm_s])
+            cmd.extend(["--select-subtitle", TorrentResult.safe_arg(norm_s)])
         cmd.extend(self._get_common_args())
 
         # Add optional parameters
@@ -331,7 +332,7 @@ class MediaDownloader:
             for single_key in keys_list:
                 cmd.extend(["--key", single_key])
         
-        cmd.append(self.url)
+        cmd.append(TorrentResult.safe_arg(self.url))
         
         # Download external subtitles
         loop = asyncio.new_event_loop()
