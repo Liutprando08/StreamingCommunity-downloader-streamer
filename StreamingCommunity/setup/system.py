@@ -4,7 +4,7 @@ import sys
 
 
 # Logic
-from .checker import check_bento4, check_mp4dump, check_ffmpeg, check_megatools, check_n_m3u8dl_re, check_shaka_packager
+from .checker import check_bento4, check_mp4dump, check_ffmpeg, check_megatools, check_n_m3u8dl_re, check_shaka_packager, check_aria2c
 from .device_install import check_device_wvd_path, check_device_prd_path
 
 
@@ -18,6 +18,7 @@ prd_path = check_device_prd_path()
 megatools_path = check_megatools()
 n_m3u8dl_re_path = check_n_m3u8dl_re()
 shaka_packager = check_shaka_packager()
+aria2c_path = check_aria2c()
 
 
 def get_is_binary_installation() -> bool:
@@ -49,6 +50,9 @@ def get_n_m3u8dl_re_path() -> str:
 
 def get_shaka_packager_path() -> str:
     return shaka_packager
+
+def get_aria2c_path() -> str:
+    return aria2c_path
 
 def get_info_wvd(cdm_device_path):
     if cdm_device_path is not None:

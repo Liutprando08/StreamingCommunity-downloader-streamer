@@ -192,3 +192,31 @@ def check_shaka_packager() -> Tuple[Optional[str], Optional[str]]:
     
     console.print("Failed to download Shaka Packager", style="red")
     return None, None
+
+
+def check_aria2c() -> Optional[str]:
+    """
+    Check for aria2c binary and download if not found.
+    Order: system PATH -> binary directory -> download from GitHub
+    """
+    system_platform = binary_paths.system
+    binary_exec = "aria2c.exe" if system_platform == "windows" else "aria2c"
+    
+    # STEP 1: Check system PATH
+    binary_path = shutil.which(binary_exec)
+    
+    if binary_path:
+        return binary_path
+    
+    # STEP 2: Check local binary directory
+    binary_local = binary_paths.get_binary_path("aria2c", binary_exec)
+    if binary_local and os.path.isfile(binary_local):
+        return binary_local
+    
+    # STEP 3: Download
+    binary_downloaded = binary_paths.download_binary("aria2c", binary_exec)
+    if binary_downloaded:
+        return binary_downloaded
+    
+    console.print(f"Failed to download {binary_exec}", style="red")
+    return None

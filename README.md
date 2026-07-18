@@ -15,6 +15,7 @@
   - [PyPI](#pypi-recommended)
   - [Pre-built Binaries](#pre-built-binaries)
   - [Manual Clone](#manual-clone)
+  - [System Dependencies](#system-dependencies-linux--macos)
 - [Quick Start](#quick-start)
 - [DNS Configuration](#dns-configuration)
 - [Downloaders](#downloaders)
@@ -58,6 +59,24 @@ cd StreamingCommunity
 pip install -r requirements.txt
 python -m StreamingCommunity
 ```
+
+### System Dependencies (Linux & macOS)
+
+Some tools are **not bundled** in the Binary repo and must be installed manually.
+
+#### Critical
+| Package | Purpose | Arch Linux | Debian/Ubuntu | macOS |
+|---------|---------|------------|---------------|-------|
+| ffmpeg | Video/audio merging | `pacman -S ffmpeg` | `apt install ffmpeg` | `brew install ffmpeg` |
+| N_m3u8DL-RE | HLS/DASH downloader | [AUR](https://aur.archlinux.org/packages/n_m3u8dl-re) | [GitHub Releases](https://github.com/nicordev/N_m3u8DL-RE/releases) | [GitHub Releases](https://github.com/nicordev/N_m3u8DL-RE/releases) |
+
+#### Optional
+| Package | Purpose | Arch Linux | Debian/Ubuntu | macOS |
+|---------|---------|------------|---------------|-------|
+| megatools | MEGA.nz downloads | `pacman -S megatools` | `apt install megatools` | `brew install megatools` |
+| mpv | Streaming player | `pacman -S mpv` | `apt install mpv` | `brew install mpv` |
+
+> **Note:** On Windows, all tools are auto-downloaded from the Binary repo.
 
 ### Update
 ```bash
