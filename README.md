@@ -11,6 +11,7 @@
 </div>
 
 ## 📖 Table of Contents
+
 - [Installation](#installation)
   - [PyPI](#pypi-recommended)
   - [Pre-built Binaries](#pre-built-binaries)
@@ -32,12 +33,14 @@
 ## Installation
 
 ### PyPI (Recommended)
+
 ```bash
 pip install StreamingCommunity-download-stream
 streamingcommunity
 ```
 
 ### Pre-built Binaries
+
 Download the latest binary for your platform from [GitHub Releases](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest):
 
 | Platform | Download |
@@ -47,12 +50,14 @@ Download the latest binary for your platform from [GitHub Releases](https://gith
 | **Linux** | [StreamingCommunity_linux_x64](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_linux_x64) |
 
 On Linux/macOS, make the binary executable:
+
 ```bash
 chmod +x StreamingCommunity_linux_x64
 ./StreamingCommunity_linux_x64
 ```
 
 ### Manual Clone
+
 ```bash
 git clone https://github.com/Liutprando08/StreamingCommunity-downloader-streamer.git
 cd StreamingCommunity
@@ -60,25 +65,8 @@ pip install -r requirements.txt
 python -m StreamingCommunity
 ```
 
-### System Dependencies (Linux & macOS)
-
-Some tools are **not bundled** in the Binary repo and must be installed manually.
-
-#### Critical
-| Package | Purpose | Arch Linux | Debian/Ubuntu | macOS |
-|---------|---------|------------|---------------|-------|
-| ffmpeg | Video/audio merging | `pacman -S ffmpeg` | `apt install ffmpeg` | `brew install ffmpeg` |
-| N_m3u8DL-RE | HLS/DASH downloader | [AUR](https://aur.archlinux.org/packages/n_m3u8dl-re) | [GitHub Releases](https://github.com/nicordev/N_m3u8DL-RE/releases) | [GitHub Releases](https://github.com/nicordev/N_m3u8DL-RE/releases) |
-
-#### Optional
-| Package | Purpose | Arch Linux | Debian/Ubuntu | macOS |
-|---------|---------|------------|---------------|-------|
-| megatools | MEGA.nz downloads | `pacman -S megatools` | `apt install megatools` | `brew install megatools` |
-| mpv | Streaming player | `pacman -S mpv` | `apt install mpv` | `brew install mpv` |
-
-> **Note:** On Windows, all tools are auto-downloaded from the Binary repo.
-
 ### Update
+
 ```bash
 # If using binary, use the built-in updater
 streamingcommunity -UP
@@ -124,6 +112,7 @@ Use one of these DNS providers:
 Key configuration parameters in `config.json`:
 
 ### Output Directories
+
 ```json
 {
     "OUTPUT": {
@@ -155,6 +144,7 @@ Key configuration parameters in `config.json`:
 - **`add_siteName`**: Append site name to root path (default: `false`)
 
 ### Download Settings
+
 ```json
 {
     "DOWNLOAD": {
@@ -174,6 +164,7 @@ Key configuration parameters in `config.json`:
 ```
 
 #### Performance Settings
+
 - **`skip_download`**: Skip the download step and process existing files (default: `false`)
 - **`thread_count`**: Number of parallel download threads (default: `8`)
 - **`retry_count`**: Maximum retry attempts for failed segments (default: `30`)
@@ -186,6 +177,7 @@ Key configuration parameters in `config.json`:
 #### Stream Selection
 
 **- `select_video`**
+
 ```
 OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
          segsMin=number:segsMax=number:ch=REGEX:range=REGEX:url=REGEX:
@@ -193,6 +185,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 
     for=FOR: Selection type - best (default), best[number], worst[number], all
 ```
+
 ```json
 "select_video": "for=best"                                // Select best video
 "select_video": "res=3840*:codecs=hvc1:for=best"          // Select 4K HEVC video
@@ -202,7 +195,8 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 "select_video": "bwMin=800:bwMax=1000:for=best"           // Bandwidth 800-1000 Kbps
 ```
 
-**- `select_audio`** 
+**- `select_audio`**
+
 ```json
 "select_audio": "for=all"                                 // Select all audio tracks
 "select_audio": "lang=en:for=best"                        // Select best English audio
@@ -211,7 +205,8 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 "select_audio": "role=main:for=best"                      // Main audio role
 ```
 
-**- `select_subtitle`** 
+**- `select_subtitle`**
+
 ```json
 "select_subtitle": "for=all"                              // Select all subtitles
 "select_subtitle": "name=English:for=all"                 // All subtitles containing "English"
@@ -221,6 +216,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 ```
 
 ### Processing Settings
+
 ```json
 {
     "PROCESS": {
@@ -257,6 +253,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 - **`extension`**: Output file format (`"mkv"` or `"mp4"`)
 
 ### Request Settings
+
 ```json
 {
     "REQUESTS": {
@@ -281,6 +278,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
   - **`https`**: HTTPS proxy URL (e.g., `"http://localhost:8888"`)
 
 ### Default Settings
+
 ```json
 {
     "DEFAULT": {
@@ -302,6 +300,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 ## Usage Examples
 
 ### Basic Commands
+
 ```bash
 # Show help and available sites
 python -m StreamingCommunity -h
@@ -317,6 +316,7 @@ python -m StreamingCommunity --site 0 --search "interstellar"
 ```
 
 ### Advanced Options
+
 ```bash
 # Keep console open
 python -m StreamingCommunity --not_close true
@@ -351,6 +351,7 @@ python -m StreamingCommunity --global -s "cars"
 ```
 
 When using `--global`, you will be prompted to:
+
 1. Search all sites
 2. Search by category (anime, film & series, series)
 3. Select specific sites to search
@@ -423,6 +424,7 @@ Hooks are automatically executed before (`pre_run`) and after (`post_run`) the m
 Stream content in real-time using a local proxy server instead of downloading.
 
 ### Basic Usage
+
 ```bash
 # Stream with auto-detected player
 python -m StreamingCommunity --stream --site streamingcommunity --search "interstellar"
@@ -435,6 +437,7 @@ python -m StreamingCommunity --stream --player vlc --stream-port 8080
 ```
 
 ### Supported Players
+
 - **mpv** (recommended) - High-quality playback with hardware decoding support
 - **vlc** - Network caching for smoother streams
 - **ffplay** - Lightweight fallback from FFmpeg
