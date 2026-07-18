@@ -1,6 +1,7 @@
 # 13.02.26
 
 import os
+import time
 import shutil
 import logging
 from typing import Dict
@@ -258,12 +259,21 @@ class ISM_Downloader:
     def _move_to_final_location(self, final_file):
         """Move file to final output path."""
         if os.path.abspath(final_file) != os.path.abspath(self.output_path):
-            try:
-                if os.path.exists(self.output_path):
-                    os.remove(self.output_path)
-                os.rename(final_file, self.output_path)
-            except Exception as e:
-                console.print(f"[yellow]Warning: Could not move file: {e}")
+            last_exc = None
+            for attempt in range(10):
+                try:
+                    os.replace(final_file, self.output_path)
+                    last_exc = None
+                    break
+                except (PermissionError, OSError) as e:
+                    last_exc = e
+                    console.log(f"[yellow]Rename attempt {attempt+1}/10 failed: {e}")
+                    time.sleep(0.5)
+                    import gc
+                    gc.collect()
+            
+            if last_exc:
+                console.print(f"[yellow]Warning: Could not move file: {last_exc}")
                 self.output_path = final_file
     
     def _merge_files(self, status):

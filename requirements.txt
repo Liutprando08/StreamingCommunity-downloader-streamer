@@ -11,3 +11,4 @@ pywidevine
 pyplayready
 pycryptodomex
 requests
+lxml
