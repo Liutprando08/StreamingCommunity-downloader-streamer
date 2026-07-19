@@ -27,26 +27,27 @@ jobs:
         run: pip install pyinstaller -r requirements.txt
 
       - name: Generate sites manifest
-        run: python -c "
-          import os, json, glob
-          sites = {}
+        run: |
+          python -c "
+          import os, json, glob;
+          sites = {};
           for f in sorted(glob.glob('StreamingCommunity/services/*/__init__.py')):
-              name = os.path.basename(os.path.dirname(f))
-              if name.startswith('_'): continue
-              indice = use_for = None
+              name = os.path.basename(os.path.dirname(f));
+              if name.startswith('_'): continue;
+              indice = use_for = None;
               for line in open(f):
-                  s = line.strip()
+                  s = line.strip();
                   if s.startswith('indice =') or s.startswith('indice='):
-                      try: indice = int(s.split('=')[1].strip())
-                      except: pass
+                      try: indice = int(s.split('=')[1].strip());
+                      except: pass;
                   elif s.startswith('_useFor =') or s.startswith('_useFor='):
-                      use_for = s.split('=')[1].strip().strip('\"').strip(\"'\")
+                      use_for = s.split('=')[1].strip().strip(chr(34)).strip(chr(39));
               if indice is not None:
-                  sites[name] = {'indice': indice, 'use_for': use_for}
-          os.makedirs('Conf', exist_ok=True)
+                  sites[name] = {'indice': indice, 'use_for': use_for};
+          os.makedirs('Conf', exist_ok=True);
           with open('Conf/sites.json', 'w') as fp:
-              json.dump(sites, fp, indent=2)
-          print(f'Generated sites.json with {len(sites)} sites')
+              json.dump(sites, fp, indent=2);
+          print('Generated sites.json with %d sites' % len(sites));
           "
 
       - name: Build (Windows)
