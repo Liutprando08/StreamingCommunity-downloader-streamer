@@ -1,8 +1,13 @@
 <div align="center">
 
+**Version & Status**
+
 [![PyPI version](https://img.shields.io/pypi/v/StreamingCommunity-download-stream?style=for-the-badge&logo=pypi&logoColor=white&labelColor=2d3748&color=ea4aaa)](https://pypi.org/project/StreamingCommunity-download-stream/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/streamingcommunity-download-stream?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/streamingcommunity-download-stream)
 [![GitHub release](https://img.shields.io/github/v/release/Liutprando08/StreamingCommunity-downloader-streamer?style=for-the-badge&logo=github&logoColor=white&labelColor=2d3748)](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest)
+
+**Available On**
+
 [![Windows](https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white&labelColor=2d3748)](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_win_x64.exe)
 [![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white&labelColor=2d3748)](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_macos_x64)
 [![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black&labelColor=2d3748)](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_linux_x64)
