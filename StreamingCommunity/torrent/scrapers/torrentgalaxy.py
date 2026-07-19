@@ -13,7 +13,7 @@ from typing import Tuple
 log = logging.getLogger(__name__)
 
 _QUALITY_RE = re.compile(
-    r"(2160p|1080p|720p|480p|4K|WEB(?:-?DL|Rip)?|HDRip|BluRay|BRRip|DVDRip|HDTV|TELESYNC|CAM|TS|TC)",
+    r"(2160p|1080p|720p|480p|4K|WEB(?:-?DL|Rip)?|HDRip|BluRay|BRRip|DVDRip|HDTV|TELESYNC|CAM|\bTS\b|\bTC\b)",
     re.IGNORECASE,
 )
 
