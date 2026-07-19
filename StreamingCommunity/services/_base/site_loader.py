@@ -91,30 +91,47 @@ class LazySearchModule:
         raise IndexError("LazySearchModule only supports indices 0 and 1")
 
 
-def load_search_functions() -> Dict[str, LazySearchModule]:
-    """Load and return all available search functions from site modules.
+def _load_sites_from_manifest() -> Dict[str, tuple]:
+    """Load site metadata from Conf/sites.json (generated at build time for frozen builds).
     
     Returns:
-        Dictionary mapping '{module_name}_search' to LazySearchModule instances
+        Dictionary mapping module_name to (indice, use_for) tuple
     """
-    loaded_functions = {}
-    
-    # Determine base path
+    import json
+
     if get_is_binary_installation():
-        base_path = os.path.join(sys._MEIPASS, "StreamingCommunity", folder_name)
+        manifest_path = os.path.join(os.path.dirname(sys.executable), 'Conf', 'sites.json')
     else:
-        base_path = os.path.dirname(os.path.dirname(__file__))
+        manifest_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '..', 'Conf', 'sites.json')
+
+    if not os.path.exists(manifest_path):
+        return None
+
+    try:
+        with open(manifest_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return {name: (info['indice'], info.get('use_for')) for name, info in data.items()}
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not read sites manifest: {str(e)}")
+        return None
+
+
+def _discover_sites_from_files(base_path: str) -> list:
+    """Discover sites by reading __init__.py files (development mode).
     
+    Returns:
+        List of (module_name, indice, use_for) tuples
+    """
     modules_metadata = []
     for init_file in glob.glob(os.path.join(base_path, '*', '__init__.py')):
         module_name = os.path.basename(os.path.dirname(init_file))
+        if module_name.startswith('_'):
+            continue
         
         try:
-            # Read only the __init__.py file to extract metadata (no import)
             with open(init_file, 'r', encoding='utf-8') as f:
                 content = f.read()
                 
-            # Extract indice and _useFor using simple string search (faster than regex)
             indice = None
             use_for = None
             for line in content.split('\n'):
@@ -139,6 +156,28 @@ def load_search_functions() -> Dict[str, LazySearchModule]:
         except Exception as e:
             console.print(f"[yellow]Warning: Could not read metadata from {module_name}: {str(e)}")
     
+    return modules_metadata
+
+
+def load_search_functions() -> Dict[str, LazySearchModule]:
+    """Load and return all available search functions from site modules.
+    
+    Returns:
+        Dictionary mapping '{module_name}_search' to LazySearchModule instances
+    """
+    loaded_functions = {}
+    
+    # Try manifest first (works in both frozen and dev mode)
+    manifest = _load_sites_from_manifest()
+    
+    if manifest is not None:
+        # Use manifest data
+        modules_metadata = [(name, info[0], info[1]) for name, info in manifest.items()]
+    else:
+        # Fall back to file discovery (development mode)
+        base_path = os.path.dirname(os.path.dirname(__file__))
+        modules_metadata = _discover_sites_from_files(base_path)
+    
     # Sort by index and create lazy loaders with consecutive indices
     sorted_modules = sorted(modules_metadata, key=lambda x: x[1])
     for new_indice, (module_name, old_indice, use_for) in enumerate(sorted_modules):
@@ -152,6 +191,7 @@ def load_search_functions() -> Dict[str, LazySearchModule]:
         if new_indice == old_indice:
             continue
 
+        base_path = os.path.dirname(os.path.dirname(__file__))
         init_file = os.path.join(base_path, module_name, '__init__.py')
         try:
             with open(init_file, 'r', encoding='utf-8') as f:

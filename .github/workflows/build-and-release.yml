@@ -26,6 +26,29 @@ jobs:
       - name: Install dependencies
         run: pip install pyinstaller -r requirements.txt
 
+      - name: Generate sites manifest
+        run: python -c "
+          import os, json, glob
+          sites = {}
+          for f in sorted(glob.glob('StreamingCommunity/services/*/__init__.py')):
+              name = os.path.basename(os.path.dirname(f))
+              if name.startswith('_'): continue
+              indice = use_for = None
+              for line in open(f):
+                  s = line.strip()
+                  if s.startswith('indice =') or s.startswith('indice='):
+                      try: indice = int(s.split('=')[1].strip())
+                      except: pass
+                  elif s.startswith('_useFor =') or s.startswith('_useFor='):
+                      use_for = s.split('=')[1].strip().strip('\"').strip(\"'\")
+              if indice is not None:
+                  sites[name] = {'indice': indice, 'use_for': use_for}
+          os.makedirs('Conf', exist_ok=True)
+          with open('Conf/sites.json', 'w') as fp:
+              json.dump(sites, fp, indent=2)
+          print(f'Generated sites.json with {len(sites)} sites')
+          "
+
       - name: Build (Windows)
         if: runner.os == 'Windows'
         run: >
