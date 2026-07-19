@@ -26,13 +26,12 @@ jobs:
       - name: Install dependencies
         run: pip install pyinstaller -r requirements.txt
 
-      - name: Generate sites manifest + hidden imports
+      - name: Generate sites manifest
         shell: bash
         run: |
           python -c "
           import os, json, glob
           sites = {}
-          hidden = []
           for f in sorted(glob.glob('StreamingCommunity/services/*/__init__.py')):
               name = os.path.basename(os.path.dirname(f))
               if name.startswith('_'): continue
@@ -46,56 +45,41 @@ jobs:
                       use_for = s.split('=')[1].strip().strip(chr(34)).strip(chr(39))
               if indice is not None:
                   sites[name] = {'indice': indice, 'use_for': use_for}
-              # Collect all .py files in this service as hidden imports
-              svc_dir = os.path.dirname(f)
-              for py in glob.glob(os.path.join(svc_dir, '*.py')):
-                  mod = 'StreamingCommunity.services.' + name + '.' + os.path.splitext(os.path.basename(py))[0]
-                  hidden.append(mod)
           os.makedirs('Conf', exist_ok=True)
           with open('Conf/sites.json', 'w') as fp:
               json.dump(sites, fp, indent=2)
-          with open('Conf/hiddenimports.txt', 'w') as fp:
-              fp.write('\n'.join(hidden))
-          print(f'Generated sites.json with {len(sites)} sites, {len(hidden)} hidden imports')
+          print(f'Generated sites.json with {len(sites)} sites')
           "
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          HIDDEN=$(tr '\n' ' ' < Conf/hiddenimports.txt)
-          pyinstaller --onefile --name StreamingCommunity \
-            --add-data "Conf;Conf" \
-            --hidden-import curl_cffi \
-            --hidden-import _cffi_backend \
-            --hidden-import StreamingCommunity.services._base.site_loader \
-            --hidden-import StreamingCommunity.services._base.site_search_manager \
-            --hidden-import StreamingCommunity.services._base.tv_download_manager \
-            --hidden-import StreamingCommunity.services._base.tv_display_manager \
-            --hidden-import StreamingCommunity.services._base.site_costant \
-            --hidden-import StreamingCommunity.services._base.object \
-            $HIDDEN \
-            --collect-all StreamingCommunity \
-            run.py
+        run: >
+          pyinstaller --onefile --name StreamingCommunity
+          --add-data "Conf;Conf"
+          --hidden-import curl_cffi
+          --hidden-import _cffi_backend
+          --collect-submodules StreamingCommunity.services
+          --collect-submodules StreamingCommunity.player
+          --collect-submodules StreamingCommunity.source
+          --collect-submodules StreamingCommunity.streaming
+          --collect-submodules StreamingCommunity.torrent
+          --collect-all StreamingCommunity
+          run.py
 
       - name: Build (macOS / Linux)
         if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          HIDDEN=$(tr '\n' ' ' < Conf/hiddenimports.txt)
-          pyinstaller --onefile --name StreamingCommunity \
-            --add-data "Conf:Conf" \
-            --hidden-import curl_cffi \
-            --hidden-import _cffi_backend \
-            --hidden-import StreamingCommunity.services._base.site_loader \
-            --hidden-import StreamingCommunity.services._base.site_search_manager \
-            --hidden-import StreamingCommunity.services._base.tv_download_manager \
-            --hidden-import StreamingCommunity.services._base.tv_display_manager \
-            --hidden-import StreamingCommunity.services._base.site_costant \
-            --hidden-import StreamingCommunity.services._base.object \
-            $HIDDEN \
-            --collect-all StreamingCommunity \
-            run.py
+        run: >
+          pyinstaller --onefile --name StreamingCommunity
+          --add-data "Conf:Conf"
+          --hidden-import curl_cffi
+          --hidden-import _cffi_backend
+          --collect-submodules StreamingCommunity.services
+          --collect-submodules StreamingCommunity.player
+          --collect-submodules StreamingCommunity.source
+          --collect-submodules StreamingCommunity.streaming
+          --collect-submodules StreamingCommunity.torrent
+          --collect-all StreamingCommunity
+          run.py
 
       - name: Rename binary (Linux)
         if: runner.os == 'Linux'
