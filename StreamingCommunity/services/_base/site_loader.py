@@ -100,7 +100,11 @@ def _load_sites_from_manifest() -> Dict[str, tuple]:
     import json
 
     if get_is_binary_installation():
+        # Try exe directory first (first-run copy from ConfigManager)
         manifest_path = os.path.join(os.path.dirname(sys.executable), 'Conf', 'sites.json')
+        # Fall back to bundled temp directory (always available)
+        if not os.path.exists(manifest_path):
+            manifest_path = os.path.join(sys._MEIPASS, 'Conf', 'sites.json')
     else:
         manifest_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', '..', 'Conf', 'sites.json')
 
