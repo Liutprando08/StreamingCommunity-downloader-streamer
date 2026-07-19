@@ -26,25 +26,8 @@ jobs:
       - name: Install dependencies
         run: pip install pyinstaller -r requirements.txt
 
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
-        run: >
-          pyinstaller --onefile --name StreamingCommunity
-          --add-data "Conf;Conf"
-          --hidden-import curl_cffi
-          --hidden-import _cffi_backend
-          --collect-all StreamingCommunity
-          run.py
-
-      - name: Build (macOS / Linux)
-        if: runner.os != 'Windows'
-        run: >
-          pyinstaller --onefile --name StreamingCommunity
-          --add-data "Conf:Conf"
-          --hidden-import curl_cffi
-          --hidden-import _cffi_backend
-          --collect-all StreamingCommunity
-          run.py
+      - name: Build
+        run: pyinstaller StreamingCommunity.spec --clean --noconfirm
 
       - name: Rename binary (Linux)
         if: runner.os == 'Linux'
