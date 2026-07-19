@@ -144,6 +144,10 @@ def load_search_functions() -> Dict[str, LazySearchModule]:
     for new_indice, (module_name, old_indice, use_for) in enumerate(sorted_modules):
         loaded_functions[f'{module_name}_search'] = LazySearchModule(module_name, new_indice, use_for)
 
+        # Skip writing indices in frozen mode (sys._MEIPASS is read-only)
+        if get_is_binary_installation():
+            continue
+
         # Update indice in __init__.py for each module only if changed
         if new_indice == old_indice:
             continue
