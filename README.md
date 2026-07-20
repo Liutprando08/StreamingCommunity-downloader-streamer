@@ -16,6 +16,9 @@
 
 </div>
 
+> **⚠️ If a streaming service doesn't work**, the site URL may have changed.
+> Open `Conf/domains.json` and update the `full_url` for that service, then restart.
+
 ## 📖 Table of Contents
 
 - [Installation](#installation)
