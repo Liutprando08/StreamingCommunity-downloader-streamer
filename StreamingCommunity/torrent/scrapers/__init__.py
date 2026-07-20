@@ -7,7 +7,10 @@ from StreamingCommunity.torrent.scrapers.nyaa import NyaaScraper
 from StreamingCommunity.torrent.scrapers.limetorrent import LimeTorrentScraper
 from StreamingCommunity.torrent.scrapers.rutracker import RutrackerScraper
 from StreamingCommunity.torrent.scrapers.torrentgalaxy import TorrentGalaxyScraper
-from StreamingCommunity.torrent.scrapers.jackett import JackettScraper
+try:
+    from StreamingCommunity.torrent.scrapers.jackett import JackettScraper
+except ImportError:
+    JackettScraper = None  # type: ignore[assignment,misc]
 
 SCRAPERS = {
     "yts": YtsScraper,
@@ -16,5 +19,6 @@ SCRAPERS = {
     "limetorrent": LimeTorrentScraper,
     "rutracker": RutrackerScraper,
     "torrentgalaxy": TorrentGalaxyScraper,
-    "jackett": JackettScraper,
 }
+if JackettScraper is not None:
+    SCRAPERS["jackett"] = JackettScraper

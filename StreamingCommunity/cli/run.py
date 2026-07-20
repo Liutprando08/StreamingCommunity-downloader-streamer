@@ -31,7 +31,7 @@ from StreamingCommunity.upload.version import __version__, __title__
 # Config
 console = Console()
 msg = Prompt()
-COLOR_MAP = {"anime": "red", "film_serie": "yellow", "serie": "blue", "film": "green"}
+COLOR_MAP = {"anime": "red", "film_serie": "yellow", "serie": "blue", "film": "green", "torrent": "magenta"}
 CATEGORY_MAP = {1: "anime", 2: "Film_serie", 3: "serie"}
 SHOW_DEVICE_INFO = config_manager.config.get_bool("DEFAULT", "show_device_info")
 NOT_CLOSE = config_manager.config.get_bool("DEFAULT", "close_console")
