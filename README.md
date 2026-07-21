@@ -48,6 +48,8 @@ pip install StreamingCommunity-download-stream
 streamingcommunity
 ```
 
+<!-- UPLOAD pipusage.mp4 HERE -->
+
 ### Pre-built Binaries
 
 Download the latest binary for your platform from [GitHub Releases](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest):
@@ -64,6 +66,8 @@ On Linux/macOS, make the binary executable:
 chmod +x StreamingCommunity_linux_x64
 ./StreamingCommunity_linux_x64
 ```
+
+<!-- UPLOAD releaseusage.mp4 HERE -->
 
 ### Manual Clone
 
@@ -444,6 +448,8 @@ python -m StreamingCommunity --stream --player mpv --site streamingcommunity --s
 # Stream on a specific port
 python -m StreamingCommunity --stream --player vlc --stream-port 8080
 ```
+
+<!-- UPLOAD streamfunction.mp4 HERE -->
 
 ### Supported Players
 
