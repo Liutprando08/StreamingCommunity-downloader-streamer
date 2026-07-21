@@ -48,7 +48,11 @@ pip install StreamingCommunity-download-stream
 streamingcommunity
 ```
 
-<!-- UPLOAD pipusage.mp4 HERE -->
+
+
+https://github.com/user-attachments/assets/f3741f9f-79c2-4315-8578-73fad33c151a
+
+
 
 ### Pre-built Binaries
 
@@ -67,7 +71,11 @@ chmod +x StreamingCommunity_linux_x64
 ./StreamingCommunity_linux_x64
 ```
 
-<!-- UPLOAD releaseusage.mp4 HERE -->
+
+
+https://github.com/user-attachments/assets/a90a312a-72a4-4cce-a856-031805b4e019
+
+
 
 ### Manual Clone
 
