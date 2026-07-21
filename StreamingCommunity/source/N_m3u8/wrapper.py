@@ -50,7 +50,7 @@ def _cfg_dict(section, key, default=None):
 
 
 class MediaDownloader:
-    def __init__(self, url: str, output_dir: str, filename: str, headers: Optional[Dict] = None, key: Optional[str] = None, cookies: Optional[Dict] = None, decrypt_preference: str = "shaka", download_id: str = None, site_name: str = None):
+    def __init__(self, url: str, output_dir: str, filename: str, headers: Optional[Dict] = None, key: Optional[str] = None, cookies: Optional[Dict] = None, decrypt_preference: str = "shaka", download_id: str = None, site_name: str = None, audio_only: bool = False):
         self.url = url
         self.output_dir = Path(output_dir)
         self.filename = filename
@@ -63,6 +63,7 @@ class MediaDownloader:
         self.streams = []
         self.external_subtitles = []
         self.force_best_video = False
+        self.audio_only = audio_only
         self.meta_json_path, self.meta_selected_path, self.raw_m3u8, self.raw_mpd, self.raw_ism = None, None, None, None, None 
         self.status = None
         self.manifest_type = "Unknown"
@@ -182,15 +183,16 @@ class MediaDownloader:
         if self.meta_json_path.exists():
             self.streams = parse_meta_json(str(self.meta_json_path), str(self.meta_selected_path))
 
-            # Check if video needs to be forced
-            try:
-                has_video = any(s.type == "Video" for s in self.streams)
-                video_selected = any(s.type == "Video" and s.selected for s in self.streams)
-                if has_video and not video_selected:
-                    console.print("[yellow]No video matched select_video filter; forcing 'best' for download[/yellow]")
-                    self.force_best_video = True
-            except Exception:
-                self.force_best_video = False
+            # Check if video needs to be forced (skip for audio-only downloads)
+            if not self.audio_only:
+                try:
+                    has_video = any(s.type == "Video" for s in self.streams)
+                    video_selected = any(s.type == "Video" and s.selected for s in self.streams)
+                    if has_video and not video_selected:
+                        console.print("[yellow]No video matched select_video filter; forcing 'best' for download[/yellow]")
+                        self.force_best_video = True
+                except Exception:
+                    self.force_best_video = False
 
             # Add external subtitles to stream list
             for ext_sub in self.external_subtitles:
@@ -297,19 +299,26 @@ class MediaDownloader:
             "--write-meta-json", "false", 
             "--binary-merge",
             "--del-after-done",
-            "--select-video", TorrentResult.safe_arg(norm_v),
             "--auto-subtitle-fix", "false",
             "--check-segments-count", "true" if _cfg_bool("DOWNLOAD", "check_segments_count") else "false",
             "--mp4-real-time-decryption", "true" if _cfg_bool("DOWNLOAD", "real_time_decryption") else "false"
         ]
+
+        if self.audio_only:
+            # Drop all video streams — download audio only
+            cmd.extend(["--drop-video", "all"])
+        else:
+            cmd.extend(["--select-video", TorrentResult.safe_arg(norm_v)])
         
         if norm_a:
             cmd.extend(["--select-audio", TorrentResult.safe_arg(norm_a)])
-        sub_filter_val = _cfg("DOWNLOAD", "select_subtitle")
-        if sub_filter_val == "false":
-            cmd.extend(["--drop-subtitle", "all"])
-        elif norm_s:
-            cmd.extend(["--select-subtitle", TorrentResult.safe_arg(norm_s)])
+        
+        if not self.audio_only:
+            sub_filter_val = _cfg("DOWNLOAD", "select_subtitle")
+            if sub_filter_val == "false":
+                cmd.extend(["--drop-subtitle", "all"])
+            elif norm_s:
+                cmd.extend(["--select-subtitle", TorrentResult.safe_arg(norm_s)])
         cmd.extend(self._get_common_args())
 
         # Add optional parameters

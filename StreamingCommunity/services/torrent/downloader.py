@@ -1,6 +1,7 @@
 # 2026
 
 import os
+import glob
 import logging
 from typing import Optional
 
@@ -19,6 +20,8 @@ from StreamingCommunity.torrent.downloader import TorrentDownloader
 console = Console()
 log = logging.getLogger(__name__)
 
+VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".ts", ".m4v"}
+
 
 def _get_downloader(is_movie: bool = True) -> Optional[TorrentDownloader]:
     """Create a TorrentDownloader with the correct output path."""
@@ -34,6 +37,29 @@ def _get_downloader(is_movie: bool = True) -> Optional[TorrentDownloader]:
 
     os.makedirs(download_path, exist_ok=True)
     return TorrentDownloader(aria2c, download_path)
+
+
+def _find_video_file(download_dir: str) -> Optional[str]:
+    """
+    Find the largest video file in the download directory.
+    Handles both flat downloads and subdirectory structures (series packs).
+    """
+    if not os.path.isdir(download_dir):
+        return None
+
+    candidates = []
+    for root, _dirs, files in os.walk(download_dir):
+        for f in files:
+            ext = os.path.splitext(f)[1].lower()
+            if ext in VIDEO_EXTENSIONS:
+                full_path = os.path.join(root, f)
+                candidates.append(full_path)
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda p: os.path.getsize(p), reverse=True)
+    return candidates[0]
 
 
 def download_film(select_title) -> Optional[str]:
@@ -64,6 +90,13 @@ def download_film(select_title) -> Optional[str]:
 
     if result:
         console.print(f"[green]Download completed: {result}")
+
+        video_file = _find_video_file(result)
+        if video_file:
+            from StreamingCommunity.services.torrent.audio_dub import prompt_audio_dub
+            dubbed = prompt_audio_dub(select_title, video_file)
+            if dubbed:
+                console.print(f"[green]Dubbed version: {dubbed}")
     else:
         console.print("[red]Download failed or timed out.")
 
@@ -106,6 +139,13 @@ def download_series(
 
     if result:
         console.print(f"[green]Download completed: {result}")
+
+        video_file = _find_video_file(result)
+        if video_file:
+            from StreamingCommunity.services.torrent.audio_dub import prompt_audio_dub
+            dubbed = prompt_audio_dub(select_title, video_file)
+            if dubbed:
+                console.print(f"[green]Dubbed version: {dubbed}")
     else:
         console.print("[red]Download failed or timed out.")
 

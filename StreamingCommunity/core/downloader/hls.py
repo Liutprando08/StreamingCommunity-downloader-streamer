@@ -35,17 +35,20 @@ MERGE_AUDIO = config_manager.config.get_bool('PROCESS', 'merge_audio', default=T
 
 
 class HLS_Downloader:
-    def __init__(self, m3u8_url: str, output_path: Optional[str] = None, headers: Optional[Dict[str, str]] = None):
+    def __init__(self, m3u8_url: str, output_path: Optional[str] = None, headers: Optional[Dict[str, str]] = None, audio_only: bool = False):
         """
         Args:
             m3u8_url: Source M3U8 playlist URL
             output_path: Full path including filename and extension (e.g., /path/to/video.mp4)
             headers: Custom headers for requests
+            audio_only: If True, download only the audio track (no video)
         """
         self.m3u8_url = str(m3u8_url).strip()
         self.custom_headers = headers
         if self.custom_headers is None:
             self.custom_headers = get_headers()
+
+        self.audio_only = audio_only
 
         # Sanitize and validate output path
         if not output_path:
@@ -84,7 +87,8 @@ class HLS_Downloader:
             filename=self.filename_base,
             headers=self.custom_headers,
             download_id=self.download_id,
-            site_name=self.site_name
+            site_name=self.site_name,
+            audio_only=self.audio_only
         )
         console.print("[dim]Parsing HLS ...")
         self.media_downloader.parser_stream()
@@ -181,6 +185,19 @@ class HLS_Downloader:
     def _merge_files(self, status) -> Optional[str]:
         """Merge downloaded files using FFmpeg"""
         if status['video'] is None:
+            # Audio-only mode: no video, but audio tracks exist
+            if self.audio_only and status.get('audios'):
+                audio_file = status['audios'][0].get('path') if isinstance(status['audios'][0], dict) else None
+                if not audio_file:
+                    # Fallback: search for the largest audio file in the output dir
+                    for f in os.listdir(self.output_dir):
+                        if f.endswith(('.m4a', '.aac', '.mp4', '.ts')):
+                            audio_file = os.path.join(self.output_dir, f)
+                            break
+                if audio_file and os.path.exists(audio_file):
+                    console.print(f"[cyan]Audio-only mode: using {os.path.basename(audio_file)}")
+                    shutil.copy2(audio_file, self.output_path)
+                    return self.output_path
             return None
         
         video_path = status['video'].get('path')
