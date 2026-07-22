@@ -28,6 +28,7 @@
     },
     "PROCESS": {
         "generate_nfo": false,
+        "kodi_nfo": false,
         "use_gpu": false,
         "param_video": ["-c:v","libx265","-crf","28","-preset","medium"],
         "param_audio": ["-c:a","libopus","-b:a","128k"],

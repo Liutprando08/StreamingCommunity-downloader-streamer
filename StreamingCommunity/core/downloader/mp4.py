@@ -19,6 +19,7 @@ from StreamingCommunity.utils.http_client import create_client, get_userAgent
 from StreamingCommunity.utils import config_manager, os_manager, internet_manager
 from StreamingCommunity.source.N_m3u8 import CustomBarColumn
 from StreamingCommunity.core.processors.helper.nfo import create_nfo
+from StreamingCommunity.core.processors.helper.kodi_nfo import generate_kodi_metadata, KODI_NFO_FILES
 from StreamingCommunity.source.utils.tracker import download_tracker, context_tracker
 
 
@@ -308,6 +309,9 @@ def MP4_Downloader(url: str, path: str, referer: str = None, headers_: dict = No
 
         if CREATE_NFO_FILES:
             create_nfo(path)
+
+        if KODI_NFO_FILES:
+            generate_kodi_metadata(path, media_type=context_tracker.media_type)
 
         if download_id:
             abs_path = os.path.abspath(path)

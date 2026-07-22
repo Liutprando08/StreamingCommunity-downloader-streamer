@@ -16,6 +16,7 @@ from StreamingCommunity.utils import config_manager, os_manager, internet_manage
 from StreamingCommunity.utils.http_client import get_headers
 from StreamingCommunity.core.processors import join_video, join_audios, join_subtitles
 from StreamingCommunity.core.processors.helper.nfo import create_nfo
+from StreamingCommunity.core.processors.helper.kodi_nfo import generate_kodi_metadata, KODI_NFO_FILES
 from StreamingCommunity.source.utils.tracker import download_tracker, context_tracker
 from StreamingCommunity.source.utils.media_players import MediaPlayers
 
@@ -171,6 +172,8 @@ class HLS_Downloader:
 
         if CREATE_NFO_FILES:
             create_nfo(self.output_path)
+        if KODI_NFO_FILES:
+            generate_kodi_metadata(self.output_path, media_type=context_tracker.media_type)
         if self.download_id:
             download_tracker.complete_download(self.download_id, success=True, path=os.path.abspath(self.output_path))
             

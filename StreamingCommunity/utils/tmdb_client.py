@@ -1,5 +1,6 @@
 # 24.08.24
 
+import os
 import re
 import time
 import unicodedata
@@ -218,6 +219,135 @@ class TMDBClient:
             'title': details.get('title'),
             'imdb_id': details.get('imdb_id')
         }
+
+    def get_full_details(self, media_type: str, tmdb_id: int, language: str = "it"):
+        """
+        Fetch full movie or TV show details from TMDB including credits and ratings.
+
+        Args:
+            media_type: 'movie' or 'tv'
+            tmdb_id: TMDB ID
+            language: Language code for results
+
+        Returns:
+            dict with title, original_title, plot, year, rating, votes, mpaa,
+            genres, director, cast, imdb_id, poster_path, backdrop_path
+        """
+        details = self._make_request(f"{media_type}/{tmdb_id}", {
+            "language": language,
+            "append_to_response": "credits,external_ids,content_ratings,release_dates"
+        })
+        if not details:
+            return None
+
+        result = {
+            'title': details.get('title') or details.get('name'),
+            'original_title': details.get('original_title') or details.get('original_name'),
+            'plot': details.get('overview', ''),
+            'year': None,
+            'rating': details.get('vote_average'),
+            'votes': details.get('vote_count'),
+            'mpaa': None,
+            'genres': [g['name'] for g in details.get('genres', []) if g.get('name')],
+            'director': None,
+            'cast': [],
+            'imdb_id': None,
+            'poster_path': details.get('poster_path'),
+            'backdrop_path': details.get('backdrop_path'),
+            'runtime': details.get('runtime'),
+        }
+
+        if media_type == 'movie':
+            release_date = details.get('release_date')
+            if release_date:
+                result['year'] = int(release_date[:4])
+            # MPAA from release_dates
+            for rd in details.get('release_dates', {}).get('results', []):
+                if rd.get('iso_3166_1') == 'US':
+                    for cert in rd.get('release_dates', []):
+                        if cert.get('certification'):
+                            result['mpaa'] = cert['certification']
+                            break
+        elif media_type == 'tv':
+            first_air = details.get('first_air_date')
+            if first_air:
+                result['year'] = int(first_air[:4])
+
+        # Content ratings (fallback for TV)
+        if not result['mpaa']:
+            for cr in details.get('content_ratings', {}).get('results', []):
+                if cr.get('iso_3166_1') == 'US':
+                    result['mpaa'] = cr.get('rating')
+                    break
+
+        # Credits
+        credits = details.get('credits', {})
+        for crew in credits.get('crew', []):
+            if crew.get('job') == 'Director':
+                result['director'] = crew['name']
+                break
+        for actor in credits.get('cast', [])[:10]:
+            result['cast'].append({
+                'name': actor.get('name'),
+                'role': actor.get('character'),
+                'order': actor.get('order'),
+            })
+
+        # External IDs
+        ext_ids = details.get('external_ids', {})
+        result['imdb_id'] = ext_ids.get('imdb_id')
+
+        return result
+
+    def get_images(self, media_type: str, tmdb_id: int):
+        """
+        Fetch poster and backdrop image URLs for a movie or TV show.
+
+        Args:
+            media_type: 'movie' or 'tv'
+            tmdb_id: TMDB ID
+
+        Returns:
+            dict with 'posters' and 'backdrops' lists of URL strings
+        """
+        data = self._make_request(f"{media_type}/{tmdb_id}/images", {})
+        if not data:
+            return {'posters': [], 'backdrops': []}
+
+        base = "https://image.tmdb.org/t/p"
+        posters = []
+        for p in data.get('posters', []):
+            if p.get('file_path'):
+                posters.append(f"{base}/w500{p['file_path']}")
+
+        backdrops = []
+        for b in data.get('backdrops', []):
+            if b.get('file_path'):
+                backdrops.append(f"{base}/w1280{b['file_path']}")
+
+        return {'posters': posters, 'backdrops': backdrops}
+
+    def download_image(self, url: str, output_path: str) -> bool:
+        """
+        Download an image from a URL to a local file path.
+
+        Args:
+            url: Image URL to download
+            output_path: Local filesystem path to save the image
+
+        Returns:
+            True if download succeeded, False otherwise
+        """
+        try:
+            response = create_client_curl(headers={"User-Agent": get_userAgent()}).get(url)
+            response.raise_for_status()
+            os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
+            with open(output_path, 'wb') as f:
+                f.write(response.content)
+            return True
+        except Exception as e:
+            console.log(f"[yellow]Failed to download image {url}: {e}[/yellow]")
+            return False
 
 
 tmdb_client = TMDBClient(api_key)
