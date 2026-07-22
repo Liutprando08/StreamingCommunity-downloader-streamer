@@ -66,8 +66,7 @@ class GetSerieInfo:
             for element in data.get('included', []):
                 if element.get('type') == 'collection':
                     self.collection_id = element.get('id')
-                    #print(f"Collection ID: {self.collection_id}")
-                    #break
+                    break
                     
             return True
             
@@ -82,6 +81,10 @@ class GetSerieInfo:
         Args:
             season_number (int): Season number
         """
+        if self.collection_id is None:
+            logging.error("Cannot fetch episodes: collection_id is None")
+            return []
+
         try:
             response = create_client(headers=self.api.get_request_headers()).get(
                 f'https://us1-prod-direct.go.discovery.com/cms/collections/{self.collection_id}',

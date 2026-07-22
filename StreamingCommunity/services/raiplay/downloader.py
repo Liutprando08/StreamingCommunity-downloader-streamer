@@ -3,6 +3,7 @@
 import os
 import re
 from typing import Tuple
+from urllib.parse import urlparse, parse_qs
 
 
 # External library
@@ -65,8 +66,30 @@ def download_film(select_title: Entries) -> Tuple[str, bool]:
 
     # Extract m3u8 URL from the film's URL
     response = create_client(headers=get_headers()).get(select_title.url + ".json")
-    first_item_path = "https://www.raiplay.it" + response.json().get("first_item_path")
+
+    raw_path = response.json().get("first_item_path")
+    if not raw_path:
+        console.print("[red]Error: 'first_item_path' not found in film data")
+        return False
+    first_item_path = "https://www.raiplay.it" + raw_path
+
+    # Extract mpd_id from the content JSON for DRM license
+    mpd_id = ""
+    try:
+        content_response = create_client(headers=get_headers()).get(first_item_path)
+        content_data = content_response.json()
+        video_obj = content_data.get("video", {}) if isinstance(content_data, dict) else {}
+        content_url = video_obj.get("content_url", "")
+        if content_url and "=" in content_url:
+            mpd_id = content_url.split("=")[1].strip()
+    except Exception:
+        pass
+
     master_playlist = VideoSource.extract_m3u8_url(first_item_path)
+
+    if not master_playlist or master_playlist.startswith("Error"):
+        console.print(f"[red]Error: Could not extract streaming URL: {master_playlist}")
+        return False
 
     # Define the filename and path for the downloaded film
     mp4_name = f"{os_manager.get_sanitize_file(select_title.name, select_title.year)}.{extension_output}"
@@ -81,11 +104,20 @@ def download_film(select_title: Entries) -> Tuple[str, bool]:
 
     # MPD
     else:
-        license_url = generate_license_url(select_title.mpd_id)
+        if not mpd_id:
+            console.print("[red]Error: Could not extract MPD ID for DRM license")
+            return False
+
+        full_license_url = generate_license_url(mpd_id)
+        license_headers = {
+            'nv-authorizations': parse_qs(urlparse(full_license_url).query).get('nv-authorizations', [''])[0],
+            'user-agent': get_userAgent(),
+        }
 
         return DASH_Downloader(
             mpd_url=master_playlist,
-            license_url=license_url,
+            license_url=full_license_url.split("?")[0] if "?" in full_license_url else full_license_url,
+            license_headers=license_headers,
             output_path=os.path.join(mp4_path, mp4_name),
         ).start()
     
@@ -104,8 +136,8 @@ def download_episode(obj_episode, index_season_selected, index_episode_selected,
     # Get streaming URL
     master_playlist = VideoSource.extract_m3u8_url(obj_episode.url)
 
-    if not master_playlist:
-        console.print(f"[red]Error: Could not extract streaming URL for {obj_episode.name}")
+    if not master_playlist or master_playlist.startswith("Error"):
+        console.print(f"[red]Error: Could not extract streaming URL for {obj_episode.name}: {master_playlist}")
         return False
 
     # HLS
@@ -118,14 +150,15 @@ def download_episode(obj_episode, index_season_selected, index_episode_selected,
     # MPD
     else:
         full_license_url = generate_license_url(obj_episode.mpd_id)
+        parsed = urlparse(full_license_url)
         license_headers = {
-            'nv-authorizations': full_license_url.split("?")[1].split("=")[1],
+            'nv-authorizations': parse_qs(parsed.query).get('nv-authorizations', [''])[0],
             'user-agent': get_userAgent(),
         }
 
         return DASH_Downloader(
             mpd_url=master_playlist,
-            license_url=full_license_url.split("?")[0],
+            license_url=parsed._replace(query=None, fragment=None).geturl(),
             license_headers=license_headers,
             output_path=os.path.join(mp4_path, mp4_name),
         ).start()

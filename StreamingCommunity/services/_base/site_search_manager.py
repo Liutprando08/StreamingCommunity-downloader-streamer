@@ -130,7 +130,7 @@ def base_process_search_result(select_title: Optional[Entries], download_film_fu
             if not scrape_serie:
                 scrape_serie = selections.get('scrape_serie')
         
-        download_series_func(select_title, season_selection, episode_selection, scrape_serie)
+        result = download_series_func(select_title, season_selection, episode_selection, scrape_serie)
         
         # Clear managers if provided
         if media_search_manager:
@@ -138,6 +138,9 @@ def base_process_search_result(select_title: Optional[Entries], download_film_fu
         if table_show_manager:
             table_show_manager.clear()
         
+        if result is None:
+            console.print("[red]Series download failed.")
+            return False
         return True
     
     # Handle films
@@ -146,12 +149,15 @@ def base_process_search_result(select_title: Optional[Entries], download_film_fu
             console.print("[red]Error: download_film_func not provided for films")
             return False
             
-        download_film_func(select_title)
+        result = download_film_func(select_title)
         
         # Clear managers if provided
         if table_show_manager:
             table_show_manager.clear()
         
+        if result is None:
+            console.print("[red]Film download failed.")
+            return False
         return True
     
     else:

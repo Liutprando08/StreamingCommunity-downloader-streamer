@@ -33,8 +33,7 @@ SITE_REGISTRY = {
     'foodnetwork':       {'indice': 15, 'use_for': 'Serie'},
     'homegardentv':      {'indice': 16, 'use_for': 'Serie'},
     'plutotv':           {'indice': 17, 'use_for': 'Serie'},
-    'plex':              {'indice': 18, 'use_for': 'Film_Serie'},
-    'torrent':           {'indice': 19, 'use_for': 'Film_Serie'},
+    'torrent':           {'indice': 18, 'use_for': 'Film_Serie'},
 }
 
 

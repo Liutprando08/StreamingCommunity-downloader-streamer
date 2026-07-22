@@ -160,11 +160,6 @@ The `util/` subdirectory exists but contains no files, suggesting incomplete ref
 mp4_name = f"{os_manager.get_sanitize_file(select_title.name)}.{extension_output}"
 ```
 
-Compare with plex `downloader.py:42` which passes `select_title.year`:
-```python
-mp4_name = f"{os_manager.get_sanitize_file(select_title.name, select_title.year)}.{extension_output}"
-```
-
 This is inconsistent with other services and means film filenames will not include the year.
 
 ### 5. `_extract_imdb_id` Depends on Specific Image Path Patterns
@@ -184,7 +179,7 @@ None of the HTTP requests have retry logic. The `create_client` returns a plain 
 return None, False
 ```
 
-Compare with plex `downloader.py:49` which returns `("", False)`. While the caller only checks the second element (`stopped`), returning `None` as the path is inconsistent and could confuse downstream code that expects a string path.
+Compare with other services which return `("", False)`. While the caller only checks the second element (`stopped`), returning `None` as the path is inconsistent and could confuse downstream code that expects a string path.
 
 ### 8. `download_film` Returns `None` on Error Instead of Consistent Tuple
 **File:** `downloader.py:70, 75`

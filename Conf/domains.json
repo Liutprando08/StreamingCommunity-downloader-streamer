@@ -10,5 +10,20 @@
   },
   "guardaserie": {
     "full_url": "https://guardaserie.meme"
+  },
+  "crunchyroll": {
+    "full_url": "https://www.crunchyroll.com"
+  },
+  "mostraguarda": {
+    "full_url": "https://mostraguarda.stream"
+  },
+  "torrent": {
+    "full_url": ""
+  },
+  "foodnetwork": {
+    "full_url": "https://www.foodnetwork.it"
+  },
+  "plutotv": {
+    "full_url": "https://pluto.tv"
   }
 }

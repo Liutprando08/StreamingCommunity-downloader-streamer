@@ -51,6 +51,10 @@ def title_search(query: str) -> int:
     if movie_id is not None:
         movie_details = tmdb.get_movie_details(tmdb_id=movie_id)
 
+        if not movie_details.get('imdb_id'):
+            console.print(f"[yellow]No IMDB ID found for TMDB ID {movie_id}, skipping.")
+            return len(entries_manager)
+
         # Create Entries object
         media_item = Entries(
             id=movie_id,

@@ -31,4 +31,11 @@ def get_session_and_csrf() -> dict:
         if input_tag:
             csrf_token = input_tag.get('value')
 
+    if not session_id or not csrf_token:
+        raise Exception(
+            f"Failed to obtain session credentials — "
+            f"sessionId={'found' if session_id else 'MISSING'}, "
+            f"csrf-token={'found' if csrf_token else 'MISSING'}"
+        )
+
     return session_id, csrf_token

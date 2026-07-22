@@ -42,7 +42,7 @@ def download_episode(obj_episode, index_season_selected, index_episode_selected,
     mp4_path = os.path.join(site_constants.SERIES_FOLDER, scrape_serie.series_name, f"S{index_season_selected}")
 
     # Get m3u8 playlist
-    bearer_token = get_bearer_token()
+    bearer_token = get_bearer_token(environment='foodnetwork')
     master_playlist = get_playback_url(obj_episode.id, bearer_token, False, obj_episode.channel)
 
     # Download the episode

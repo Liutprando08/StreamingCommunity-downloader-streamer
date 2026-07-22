@@ -97,6 +97,11 @@ def title_search(query: str) -> int:
             if url and not url.startswith('http'):
                 url = f"https://www.raiplay.it{url}"
 
+            try:
+                year = image.split("/")[-4] if image and image.count('/') >= 4 else ""
+            except (IndexError, AttributeError):
+                year = ""
+
             entries_manager.add(Entries(
                 id=item.get('id', ''),
                 path_id=path_id,
@@ -104,7 +109,7 @@ def title_search(query: str) -> int:
                 type='tv',
                 url=url,
                 image=image,
-                year=image.split("/")[-4]
+                year=year
             ))
     
         except Exception as e:

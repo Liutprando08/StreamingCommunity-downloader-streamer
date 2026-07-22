@@ -176,7 +176,9 @@ class CrunchyrollClient:
 
     def _get_cookies(self) -> Dict:
         """Generate cookies for API requests including device_id and etp_rt."""
-        cookies = {'device_id': self.device_id}
+        cookies = {}
+        if self.device_id:
+            cookies['device_id'] = self.device_id
         if self.etp_rt:
             cookies['etp_rt'] = self.etp_rt
         return cookies

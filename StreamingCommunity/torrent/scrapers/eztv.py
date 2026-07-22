@@ -7,6 +7,7 @@ from typing import List
 from StreamingCommunity.torrent.scrapers.base import BaseScraper
 from StreamingCommunity.torrent.title_parser import TorrentResult
 from StreamingCommunity.utils.http_client import create_client_curl
+from StreamingCommunity.utils import tmdb_client
 
 
 log = logging.getLogger(__name__)
@@ -89,11 +90,25 @@ class EztvScraper(BaseScraper):
         limit: int = 20,
         **kwargs,
     ) -> List[TorrentResult]:
-        params = {
-            "limit": min(limit, 100),
-            "page": page,
-        }
-        return self._fetch_torrents(params)
+        if not query or not query.strip():
+            return []
+
+        imdb_match = _IMDB_RE.match(query.strip())
+        if imdb_match:
+            return self.get_by_imdb(query.strip(), page=page, limit=limit)
+
+        try:
+            tmdb_id = tmdb_client.search_movie(query.strip())
+            if tmdb_id:
+                details = tmdb_client.get_movie_details(tmdb_id)
+                imdb_id = details.get('imdb_id') if details else None
+                if imdb_id:
+                    return self.get_by_imdb(imdb_id, page=page, limit=limit)
+        except Exception as e:
+            log.warning("EZTV: TMDB lookup failed for '%s': %s", query, e)
+
+        log.warning("EZTV: could not resolve '%s' to an IMDB ID via TMDB", query)
+        return []
 
     def get_by_imdb(
         self,

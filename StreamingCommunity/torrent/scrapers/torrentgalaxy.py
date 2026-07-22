@@ -22,10 +22,8 @@ class TorrentGalaxyScraper(BaseScraper):
     """TorrentGalaxy scraper — Cloudflare bypassed via curl_cffi impersonation, HTML parsing."""
 
     name = "torrentgalaxy"
-    BASE_URL = "https://torrentgalaxy.to"
+    BASE_URL = "https://torrentgalaxy.is"
     MIRRORS = [
-        "https://torrentgalaxy.to",
-        "https://torrentgalaxy.one",
         "https://torrentgalaxy.is",
         "https://torrentgalaxy.cc",
     ]

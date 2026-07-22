@@ -48,7 +48,11 @@ def download_episode(obj_episode, index_season_selected, index_episode_selected,
     if str(playback_info['type']).strip().lower() != 'dash' or playback_info['license_url'] is None:
         console.print(f"[red]Unsupported streaming type. Playback info: {playback_info}")
         return None, False
-    
+
+    if playback_info['license_token'] is None:
+        console.print(f"[red]No license token available for this content.")
+        return None, False
+
     # Generate license headers
     license_headers = generate_license_headers(playback_info['license_token'])
     

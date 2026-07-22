@@ -28,7 +28,7 @@ console = Console()
 extension_output = config_manager.config.get("PROCESS", "extension")
 
 
-def download_film(select_title: Entries) -> str:
+def download_film(select_title: Entries) -> tuple:
     """
     Downloads a film using the provided Entries information.
 
@@ -44,7 +44,7 @@ def download_film(select_title: Entries) -> str:
     imdb_id = select_title.imdb_id
     if not imdb_id:
         logging.error(f"No IMDB ID found for {select_title.name}")
-        return None
+        return None, False
 
     try:
         url = f"https://mostraguarda.stream/set-movie-a/{imdb_id}"
@@ -57,14 +57,18 @@ def download_film(select_title: Entries) -> str:
 
     if "not found" in str(response.text):
         logging.error(f"Can't find in the server: {select_title.name}.")
-        return None
+        return None, False
 
     # Extract supervideo url
     soup = BeautifulSoup(response.text, "html.parser")
-    player_links = soup.find("ul", class_="_player-mirrors").find_all("li")
+    player_ul = soup.find("ul", class_="_player-mirrors")
+    if not player_ul:
+        logging.error(f"No player mirrors element found for {select_title.name}")
+        return None, False
+    player_links = player_ul.find_all("li")
     if not player_links:
         logging.error(f"No player links found for {select_title.name}")
-        return None
+        return None, False
     
     supervideo_url = None
     for li in player_links:
@@ -75,7 +79,7 @@ def download_film(select_title: Entries) -> str:
     
     if not supervideo_url:
         logging.error(f"No supervideo link found for {select_title.name}")
-        return None
+        return None, False
 
     # Set domain and media ID for the video source
     video_source = VideoSource(supervideo_url)

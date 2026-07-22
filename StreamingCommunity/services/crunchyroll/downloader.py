@@ -2,6 +2,7 @@
 
 import os
 import time
+from typing import Tuple
 from urllib.parse import urlparse, parse_qs
 
 
@@ -32,7 +33,7 @@ msg = Prompt()
 extension_output = config_manager.config.get("PROCESS", "extension")
 
 
-def download_film(select_title: Entries) -> str:
+def download_film(select_title: Entries) -> Tuple[str, bool]:
     """
     Downloads a film using the provided Entries information.
     """
@@ -47,7 +48,7 @@ def download_film(select_title: Entries) -> str:
     mp4_path = os.path.join(site_constants.MOVIE_FOLDER, mp4_name.replace(f".{extension_output}", ""))
 
     # Extract media ID
-    url_id = select_title.get('url').split('/')[-1]
+    url_id = select_title.url.split('/')[-1]
     
     # Get playback session
     mpd_url, mpd_headers, mpd_list_sub, token, audio_locale = get_playback_session(client, url_id, None)

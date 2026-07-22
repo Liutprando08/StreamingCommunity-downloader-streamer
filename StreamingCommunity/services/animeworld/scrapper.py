@@ -37,7 +37,10 @@ class ScrapSerie:
     def get_name(self):
         """Extract and return the name of the anime series."""
         soup = BeautifulSoup(self.response.content, "html.parser")
-        return os_manager.get_sanitize_file(soup.find("h1", {"id": "anime-title"}).get_text(strip=True))
+        title_tag = soup.find("h1", {"id": "anime-title"})
+        if not title_tag:
+            raise Exception(f"Could not find anime title on page: {self.url}")
+        return os_manager.get_sanitize_file(title_tag.get_text(strip=True))
     
     def get_episodes(self, nums=None):
         """Fetch and return the list of episodes, optionally filtering by specific episode numbers."""

@@ -34,9 +34,8 @@ class LimeTorrentScraper(BaseScraper):
     """LimeTorrents scraper — curl_cffi Cloudflare bypass, HTML parsing."""
 
     name = "limetorrent"
-    BASE_URL = "https://limetorrents.fun"
+    BASE_URL = "https://www.limetorrents.pro"
     MIRRORS = [
-        "https://limetorrents.fun",
         "https://www.limetorrents.pro",
         "https://limetorrents.cc",
     ]

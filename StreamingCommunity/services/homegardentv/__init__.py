@@ -62,17 +62,26 @@ def title_search(query: str) -> int:
         console.log(f"Error parsing JSON response: {e}")
         return 0
 
+    if not data:
+        return 0
+
     for dict_title in data:
         try:
             # Skip non-showpage entries
             if dict_title.get('type') != 'showpage':
                 continue
-            
+
+            date_modified = dict_title.get('dateLastModified')
+            image_data = dict_title.get('image')
+
+            if not date_modified or not image_data:
+                continue
+
             entries_manager.add(Entries(
                 name=dict_title.get('title'),
                 type='tv',
-                year=dict_title.get('dateLastModified').split('-')[0],
-                image=dict_title.get('image').get('url'),
+                year=date_modified.split('-')[0],
+                image=image_data.get('url'),
                 url=f'https://public.aurora.enhanced.live/site/page/{str(dict_title.get("slug")).lower().replace(" ", "-")}/?include=default&filter[environment]=hgtvit&v=2&parent_slug={dict_title.get("parentSlug")}',
             ))
             

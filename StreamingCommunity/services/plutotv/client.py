@@ -80,7 +80,7 @@ class PlutoAPI:
         if "episode_id" in content_ids:
             params["episodeSlugs"] = content_ids["episode_id"]
         if "movie_id" in content_ids:
-            params["episodeSlugs"] = content_ids["movie_id"]
+            params["movieSlugs"] = content_ids["movie_id"]
         
         try:
             response = create_client(headers=get_headers()).get(BOOT_URL, params=params)
@@ -110,18 +110,20 @@ class PlutoAPI:
         except Exception as e:
             raise RuntimeError(f"Failed to get session for content: {e}")
     
-    def _extract_from_data(self, key, data):
-        """Extract value from nested dict/list"""
+    def _extract_from_data(self, key, data, _depth=0, _max_depth=5):
+        """Extract value from nested dict/list, limited to _max_depth levels."""
+        if _depth >= _max_depth:
+            return None
         if isinstance(data, dict):
             if key in data:
                 return data[key]
             for v in data.values():
-                r = self._extract_from_data(key, v)
+                r = self._extract_from_data(key, v, _depth + 1, _max_depth)
                 if r is not None:
                     return r
         elif isinstance(data, list):
             for item in data:
-                r = self._extract_from_data(key, item)
+                r = self._extract_from_data(key, item, _depth + 1, _max_depth)
                 if r is not None:
                     return r
         return None

@@ -63,19 +63,41 @@ def title_search(query: str) -> int:
         return 0
 
     # Collect json data
-    if "data" in response.json().keys():
-        data = response.json().get('data')
+    try:
+        json_data = response.json()
+    except Exception as e:
+        console.print(f"[red]Error parsing JSON response: {e}")
+        return 0
+
+    if "data" in json_data:
+        data = json_data.get('data')
     else:
-        data = response.json()
+        data = json_data
+
+    if not isinstance(data, list):
+        console.print(f"[red]Unexpected response format from site: {site_constants.SITE_NAME}")
+        return 0
 
     for dict_title in data:
-        entries_manager.add(Entries(
-            name=dict_title.get('title'),
-            type='tv',
-            year=dict_title.get('dateLastModified').split('-')[0],
-            image=dict_title.get('image').get('url'),
-            url=f'https://public.aurora.enhanced.live/site/page/{str(dict_title.get("slug")).lower().replace(" ", "-")}/?include=default&filter[environment]=foodnetwork&v=2&parent_slug={dict_title.get("parentSlug")}',
-        ))
+        try:
+            if dict_title.get('type') != 'showpage':
+                continue
+
+            year_str = dict_title.get('dateLastModified')
+            year = year_str.split('-')[0] if year_str else ""
+
+            image_obj = dict_title.get('image')
+            image = image_obj.get('url') if image_obj else ""
+
+            entries_manager.add(Entries(
+                name=dict_title.get('title'),
+                type='tv',
+                year=year,
+                image=image,
+                url=f'https://public.aurora.enhanced.live/site/page/{str(dict_title.get("slug")).lower().replace(" ", "-")}/?include=default&filter[environment]=foodnetwork&v=2&parent_slug={dict_title.get("parentSlug")}',
+            ))
+        except Exception as e:
+            print(f"Error parsing a film entry: {e}")
 	
     return len(entries_manager)
 

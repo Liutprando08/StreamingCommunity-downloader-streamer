@@ -38,7 +38,11 @@ def download_film(select_title: Entries):
     """
     start_message()
     scrape_serie = ScrapSerie(select_title.url, site_constants.FULL_URL)
-    episodes = scrape_serie.get_episodes() 
+    episodes = scrape_serie.get_episodes()
+
+    if not episodes:
+        console.print(f"[red]No episodes found for {select_title.name}")
+        return None, True
 
     # Get episode information
     episode_data = episodes[0]
@@ -55,6 +59,10 @@ def download_film(select_title: Entries):
     # Get video source for the episode
     video_source = VideoSource(site_constants.FULL_URL, episode_data, scrape_serie.session_id, scrape_serie.csrf_token)
     mp4_link = video_source.get_playlist()
+
+    if not mp4_link:
+        console.print(f"[red]Failed to get playlist URL for {scrape_serie.get_name()}")
+        return None, True
 
     # Start downloading
     path, kill_handler = MP4_Downloader(
@@ -82,6 +90,10 @@ def download_episode(episode_data, index_select, scrape_serie):
     # Get video source for the episode
     video_source = VideoSource(site_constants.FULL_URL, episode_data, scrape_serie.session_id, scrape_serie.csrf_token)
     mp4_link = video_source.get_playlist()
+
+    if not mp4_link:
+        console.print(f"[red]Failed to get playlist URL for {scrape_serie.get_name()} EP{index_select+1}")
+        return None, True
 
     # Start downloading
     path, kill_handler = MP4_Downloader(

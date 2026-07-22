@@ -67,19 +67,19 @@ def title_search(query: str) -> int:
             if status_div:
                 if status_div.find('div', class_='dub'):
                     is_dubbed = True
-                
+
                 if status_div.find('div', class_='movie'):
                     anime_type = 'Movie'
                 elif status_div.find('div', class_='ona'):
                     anime_type = 'ONA'
 
-                entries_manager.add(Entries(
-                    name=title,
-                    type=anime_type,
-                    DUB=is_dubbed,
-                    url=url,
-                    image=element.find('img').get('src')
-                ))
+            entries_manager.add(Entries(
+                name=title,
+                type=anime_type,
+                DUB=is_dubbed,
+                url=url,
+                image=element.find('img').get('src')
+            ))
 
         except Exception as e:
             print(f"Error parsing a film entry: {e}")

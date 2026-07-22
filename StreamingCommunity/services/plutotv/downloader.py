@@ -21,7 +21,7 @@ from StreamingCommunity.core.downloader import HLS_Downloader
 
 # Logic
 from .scrapper import GetSerieInfo
-from .client import get_playback_url_episode
+from .client import get_api, get_playback_url_episode
 
 
 # Variables
@@ -53,6 +53,7 @@ def download_episode(obj_episode, index_season_selected, index_episode_selected,
     return HLS_Downloader(
         m3u8_url=m3u8_url,
         output_path=os.path.join(mp4_path, mp4_name),
+        headers=get_api().get_request_headers(),
     ).start()
 
 

@@ -1,6 +1,9 @@
 # 26.11.2025
 
 
+from urllib.parse import quote
+
+
 # External library
 from rich.console import Console
 from rich.prompt import Prompt
@@ -8,7 +11,7 @@ from rich.prompt import Prompt
 
 # Internal utilities
 from StreamingCommunity.utils import TVShowManager
-from StreamingCommunity.utils.http_client import create_client
+from StreamingCommunity.utils.http_client import create_client, check_region_availability
 from StreamingCommunity.services._base import site_constants, EntriesManager, Entries
 from StreamingCommunity.services._base.site_search_manager import base_process_search_result, base_search
 
@@ -42,7 +45,10 @@ def title_search(query: str) -> int:
     entries_manager.clear()
     table_show_manager.clear()
 
-    search_url = f"https://service-media-search.clusters.pluto.tv/v1/search?q={query}&limit=10"
+    if not check_region_availability(_region, site_constants.SITE_NAME):
+        return 0
+
+    search_url = f"https://service-media-search.clusters.pluto.tv/v1/search?q={quote(query)}&limit=10"
     console.print(f"[cyan]Search url: [yellow]{search_url}")
 
     try:

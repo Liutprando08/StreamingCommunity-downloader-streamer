@@ -9,7 +9,7 @@ Analysis of `StreamingCommunity/services/plutotv` — errors, warnings, and issu
 ### 1. No `[plutotv]` section in `domains.json`
 **File:** `site_costant.py:37`
 
-`site_constants.FULL_URL` does `config_manager.domain.get("plutotv", "full_url")`, which would raise a `NoSectionError` if accessed. `domains.json` only contains `streamingcommunity`, `animeunity`, `animeworld`, and `guardaserie`. The PlutoTV service doesn't currently use `FULL_URL` directly, but any error message, logging, or future code that references `site_constants.FULL_URL` will crash. Other services (plex, tubitv, etc.) have the same gap, but it remains a landmine.
+`site_constants.FULL_URL` does `config_manager.domain.get("plutotv", "full_url")`, which would raise a `NoSectionError` if accessed. `domains.json` only contains `streamingcommunity`, `animeunity`, `animeworld`, and `guardaserie`. The PlutoTV service doesn't currently use `FULL_URL` directly, but any error message, logging, or future code that references `site_constants.FULL_URL` will crash. Other services (tubitv, etc.) have the same gap, but it remains a landmine.
 
 ### 2. Search query is not URL-encoded
 **File:** `__init__.py:45`
