@@ -19,7 +19,7 @@ except Exception:
         from Crypto.Cipher import AES
         from Crypto.Util.Padding import unpad
     except Exception: 
-        logging.warning("PyCryptodome not found, HLS segment decryption will not work. Install with 'pip install pycryptodome' for AES-128-CBC support.")
+        logging.warning("PyCryptodome not found, HLS segment decryption will not work. Install with 'pip install pycryptodomex' for AES-128-CBC support.")
 
 
 # Internal import

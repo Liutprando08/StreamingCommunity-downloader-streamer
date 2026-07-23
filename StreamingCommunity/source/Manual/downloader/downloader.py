@@ -18,7 +18,7 @@ from StreamingCommunity.utils.http_client import create_client, get_headers
 
 
 # Logic
-from .segmnets import SegmentDownloader
+from .segments import SegmentDownloader
 from ..decrypt.decrypt import Decryptor
 from ..utils.object import Stream
 from ..utils.merger import FileMerger

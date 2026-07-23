@@ -66,8 +66,8 @@ def initialize():
         subprocess.run(["mode", "120, 40"], check=False)
 
     # Python version check
-    if sys.version_info < (3, 7):
-        console.log("[red]Install python version > 3.7.16")
+    if sys.version_info < (3, 8):
+        console.log("[red]Install python version >= 3.8")
         sys.exit(0)
 
     # Attempt GitHub update
