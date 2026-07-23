@@ -20,6 +20,31 @@
   "torrent": {
     "full_url": ""
   },
+  "limetorrent": {
+    "full_url": "https://limetorrents.cc",
+    "mirrors": [
+      "https://limetorrents.cc",
+      "https://limetorrents.lol",
+      "https://limetorrents.so",
+      "https://limetorrent.net"
+    ]
+  },
+  "torrentgalaxy": {
+    "full_url": "https://torrentgalaxy.info",
+    "mirrors": [
+      "https://torrentgalaxy.info",
+      "https://torrentgalaxy-official.is",
+      "https://tgx.rs",
+      "https://torrentgalaxy.mx",
+      "https://torrentgalaxy.hair"
+    ]
+  },
+  "eztv": {
+    "full_url": "https://eztvx.to/api"
+  },
+  "nyaa": {
+    "full_url": "https://nyaa.si"
+  },
   "foodnetwork": {
     "full_url": "https://www.foodnetwork.it"
   },

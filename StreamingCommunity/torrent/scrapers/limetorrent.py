@@ -31,17 +31,17 @@ _CATEGORY_MAP = {
 
 
 class LimeTorrentScraper(BaseScraper):
-    """LimeTorrents scraper — curl_cffi Cloudflare bypass, HTML parsing."""
+    """LimeTorrents scraper — curl_cffi Cloudflare bypass, HTML parsing. Base URL from Conf/domains.json."""
 
     name = "limetorrent"
-    BASE_URL = "https://www.limetorrents.pro"
-    MIRRORS = [
-        "https://www.limetorrents.pro",
-        "https://limetorrents.cc",
-    ]
 
     def __init__(self, config_manager):
         super().__init__(config_manager)
+        self.BASE_URL = config_manager.domain.get("limetorrent", "full_url", default="https://www.limetorrents.pro")
+        self.MIRRORS = config_manager.domain.get(
+            "limetorrent", "mirrors",
+            default=["https://www.limetorrents.pro", "https://limetorrents.cc"]
+        )
         self.torrent_config = None
         try:
             from StreamingCommunity.torrent.config import TorrentConfig

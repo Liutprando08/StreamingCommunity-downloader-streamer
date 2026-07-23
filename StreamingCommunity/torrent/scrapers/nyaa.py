@@ -31,13 +31,13 @@ _TRACKERS = [
 
 
 class NyaaScraper(BaseScraper):
-    """Nyaa.si RSS scraper — XML parsing, no Cloudflare."""
+    """Nyaa RSS scraper — XML parsing, no Cloudflare. Base URL from Conf/domains.json."""
 
     name = "nyaa"
-    BASE_URL = "https://nyaa.si"
 
     def __init__(self, config_manager):
         super().__init__(config_manager)
+        self.BASE_URL = config_manager.domain.get("nyaa", "full_url", default="https://nyaa.si")
         self.torrent_config = None
         try:
             from StreamingCommunity.torrent.config import TorrentConfig

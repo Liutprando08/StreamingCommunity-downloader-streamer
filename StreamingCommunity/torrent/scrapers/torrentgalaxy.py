@@ -19,17 +19,17 @@ _QUALITY_RE = re.compile(
 
 
 class TorrentGalaxyScraper(BaseScraper):
-    """TorrentGalaxy scraper — Cloudflare bypassed via curl_cffi impersonation, HTML parsing."""
+    """TorrentGalaxy scraper — Cloudflare bypassed via curl_cffi impersonation, HTML parsing. Base URL from Conf/domains.json."""
 
     name = "torrentgalaxy"
-    BASE_URL = "https://torrentgalaxy.is"
-    MIRRORS = [
-        "https://torrentgalaxy.is",
-        "https://torrentgalaxy.cc",
-    ]
 
     def __init__(self, config_manager):
         super().__init__(config_manager)
+        self.BASE_URL = config_manager.domain.get("torrentgalaxy", "full_url", default="https://torrentgalaxy.is")
+        self.MIRRORS = config_manager.domain.get(
+            "torrentgalaxy", "mirrors",
+            default=["https://torrentgalaxy.is", "https://torrentgalaxy.cc"]
+        )
         self.torrent_config = None
         try:
             from StreamingCommunity.torrent.config import TorrentConfig

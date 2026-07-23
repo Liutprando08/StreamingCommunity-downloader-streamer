@@ -21,14 +21,14 @@ class EztvScraper(BaseScraper):
     EZTV API scraper — direct JSON, no Cloudflare, TV-only.
 
     Docs: StreamingCommunity/torrent/scrapers/index.html
-    Base URL: https://eztvx.to/api
+    Base URL read from Conf/domains.json
     """
 
     name = "eztv"
-    BASE_URL = "https://eztvx.to/api"
 
     def __init__(self, config_manager):
         super().__init__(config_manager)
+        self.BASE_URL = config_manager.domain.get("eztv", "full_url", default="https://eztvx.to/api")
         self.torrent_config = None
         try:
             from StreamingCommunity.torrent.config import TorrentConfig
