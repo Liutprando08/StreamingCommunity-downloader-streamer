@@ -224,13 +224,13 @@ def process_selected_item(selected_item, search_functions):
     item_id = None
     for id_field in ['id', 'media_id', 'ID', 'item_id', 'url']:
         item_id = selected_item.get(id_field)
-        if item_id:
+        if item_id is not None:
             break
             
     item_type = selected_item.get('type', selected_item.get('media_type', 'unknown'))
     item_title = selected_item.get('title', selected_item.get('name', 'Unknown'))
     
-    if item_id:
+    if item_id is not None:
         console.print(f"[green]Selected item: {item_title} (ID: {item_id}, Type: {item_type})")
         
         try:
