@@ -36,6 +36,36 @@ from .ui import build_table
 # Variable
 console = Console(force_terminal=True if platform.system().lower() != 'windows' else None)
 
+_STREAM_MARKERS = re.compile(r'(?<![a-zA-Z])(Vid|Aud|Sub) ')
+_LOG_LINE_RE = re.compile(r'^\d{2}:\d{2}:\d{2}\.\d{3}')
+
+def _scan_progress(buf):
+    """Find all Vid/Aud/Sub progress entries, skipping log lines."""
+    entries = {}
+    for segment in buf.split('\n'):
+        if _LOG_LINE_RE.match(segment):
+            continue
+        for m in _STREAM_MARKERS.finditer(segment):
+            stream_type = m.group(1)
+            start = m.start()
+            next_m = _STREAM_MARKERS.search(segment, m.end())
+            end = next_m.start() if next_m else len(segment)
+            text = segment[start:end].strip()
+
+            if stream_type == "Vid":
+                vid_m = VIDEO_LINE_RE.search(text)
+                key = f"video_{vid_m.group(1)}" if vid_m else f"video_{m.start()}"
+            elif stream_type == "Aud":
+                aud_m = AUDIO_LINE_RE.search(text)
+                key = f"audio_{aud_m.group(2)}_{aud_m.group(1)}" if aud_m else f"audio_{m.start()}"
+            else:
+                sub_m = SUBTITLE_LINE_RE.search(text)
+                key = f"sub_{sub_m.group(1)}_{sub_m.group(2)}" if sub_m else f"sub_{m.start()}"
+
+            entries[key] = text
+    return entries
+
+
 def _cfg(section, key, default=None):
     return config_manager.config.get(section, key, default=default) if default is not None else config_manager.config.get(section, key)
 
@@ -163,11 +193,14 @@ class MediaDownloader:
         with open(log_path, 'w', encoding='utf-8', errors='replace') as log_file:
             log_file.write(f"Command: {' '.join(cmd)}\n{'='*80}\n\n")
             log_parser = LogParser()
-            for line in proc.stdout:
-                if line := line.rstrip():
-                    log_parser.parse_line(line)
-                    log_file.write(line + "\n")
-                    log_file.flush()
+            while True:
+                chunk = proc.stdout.read(4096)
+                if not chunk:
+                    break
+                log_file.write(chunk)
+                for line in chunk.split('\n'):
+                    if line.strip():
+                        log_parser.parse_line(line)
             proc.wait()
         
         analysis_dir = analysis_path / "temp_analysis"
@@ -369,22 +402,35 @@ class MediaDownloader:
 
             with progress_ctx as progress:
                 tasks = {}
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors='replace', bufsize=1, universal_newlines=True)
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors='replace', bufsize=0, universal_newlines=True)
                 
                 # Register process for potential termination
                 if self.download_id:
                     download_tracker.register_process(self.download_id, proc)
 
                 with proc:
-                    for line in proc.stdout:
+                    buf = ""
+                    while True:
+                        chunk = proc.stdout.read(4096)
+                        if not chunk:
+                            break
                         if self.download_id and download_tracker.is_stopped(self.download_id):
                             proc.terminate()
                             break
-                        
-                        log_file.write(line)
-                        log_parser.parse_line(line)
-                        
-                        self._parse_progress_line(line, progress, tasks, subtitle_sizes)
+
+                        log_file.write(chunk)
+                        for line in chunk.split('\n'):
+                            if line.strip():
+                                log_parser.parse_line(line)
+
+                        buf += chunk
+                        if len(buf) > 80000:
+                            buf = buf[-40000:]
+
+                        progress_data = _scan_progress(buf)
+                        if progress_data:
+                            for key, text in progress_data.items():
+                                self._parse_progress_line(text, progress, tasks, subtitle_sizes)
                 
                     # Ensure all tasks are complete
                     if progress:
