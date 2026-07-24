@@ -138,7 +138,7 @@ def global_search(search_terms: str = None, selected_sites: list = None):
         console.print(f"\n[red]No results found for: [yellow]{search_terms}")
 
         # Optionally offer to search again or return to main menu
-        if msg.ask("[green]Search again? (y/n)", choices=["y", "n"], default="y") == "y":
+        if msg.ask("[green]Search again?", choices=["y", "n"], default="y") == "y":
             global_search()
     
     return all_results

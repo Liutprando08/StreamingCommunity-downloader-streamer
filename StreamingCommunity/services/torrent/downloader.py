@@ -39,10 +39,38 @@ def _get_downloader(is_movie: bool = True) -> Optional[TorrentDownloader]:
     return TorrentDownloader(aria2c, download_path)
 
 
+def _snapshot_files(download_dir: str) -> set:
+    """Snapshot all file paths in a directory tree."""
+    snapshot = set()
+    if not os.path.isdir(download_dir):
+        return snapshot
+    for root, _dirs, files in os.walk(download_dir):
+        for f in files:
+            snapshot.add(os.path.join(root, f))
+    return snapshot
+
+
+def _find_new_video(before: set, download_dir: str) -> Optional[str]:
+    """Find the largest video file that wasn't present in the before snapshot."""
+    candidates = []
+    for root, _dirs, files in os.walk(download_dir):
+        for f in files:
+            ext = os.path.splitext(f)[1].lower()
+            if ext in VIDEO_EXTENSIONS:
+                full_path = os.path.join(root, f)
+                if full_path not in before:
+                    candidates.append(full_path)
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda p: os.path.getsize(p), reverse=True)
+    return candidates[0]
+
+
 def _find_video_file(download_dir: str) -> Optional[str]:
     """
-    Find the largest video file in the download directory.
-    Handles both flat downloads and subdirectory structures (series packs).
+    Fallback: find the largest video file in the download directory.
     """
     if not os.path.isdir(download_dir):
         return None
@@ -86,12 +114,13 @@ def download_film(select_title) -> Optional[str]:
     console.print(f"[cyan]Downloading: [yellow]{select_title.name}")
     console.print(f"[cyan]Source: [yellow]{torrent.source} [cyan]| Quality: [yellow]{torrent.quality}")
 
+    before = _snapshot_files(downloader.download_path)
     result = downloader.download_magnet(torrent.magnet_url)
 
     if result:
         console.print(f"[green]Download completed: {result}")
 
-        video_file = _find_video_file(result)
+        video_file = _find_new_video(before, result) or _find_video_file(result)
         if video_file:
             from StreamingCommunity.services.torrent.audio_dub import prompt_audio_dub
             dubbed = prompt_audio_dub(select_title, video_file)
@@ -135,12 +164,13 @@ def download_series(
     console.print(f"[cyan]Downloading: [yellow]{select_title.name}")
     console.print(f"[cyan]Source: [yellow]{torrent.source} [cyan]| Quality: [yellow]{torrent.quality}")
 
+    before = _snapshot_files(downloader.download_path)
     result = downloader.download_magnet(torrent.magnet_url)
 
     if result:
         console.print(f"[green]Download completed: {result}")
 
-        video_file = _find_video_file(result)
+        video_file = _find_new_video(before, result) or _find_video_file(result)
         if video_file:
             from StreamingCommunity.services.torrent.audio_dub import prompt_audio_dub
             dubbed = prompt_audio_dub(select_title, video_file)

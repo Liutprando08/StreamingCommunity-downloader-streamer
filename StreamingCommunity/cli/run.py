@@ -485,7 +485,7 @@ def main():
                     run_function(input_to_function[category], search_terms=args.search)
 
                 user_response = msg.ask(
-                    "\n[cyan]Do you want to perform another search? (y/n)",
+                    "\n[cyan]Do you want to perform another search?",
                     choices=["y", "n"],
                     default="n",
                 )

@@ -1,0 +1,89 @@
+
+
+→     ___                                         ______                     _
+→    / _ | ___________ _    _____ _____  __ __   / __/ /________ ___ ___ _  (_)__  ___ _
+→   / __ |/ __/ __/ _ \ |/|/ / _ `/ __/  \ \ /  _\ \/ __/ __/ -_) _ `/  ' \/ / _ \/ _ `/
+→  /_/ |_/_/ /_/  \___/__,__/\_,_/_/    /_\_\  /___/\__/_/  \__/\_,_/_/_/_/_/_//_/\_, /
+→                                                                                /___/
+
+╭───────┬─────────────────────────────────────────────────┬──────┬──────╮
+│ Index │                      Name                       │ Type │ Year │
+├───────┼─────────────────────────────────────────────────┼──────┼──────┤
+│   0   │                   Oppenheimer                   │ film │ None │
+│   1   │ To End All War: Oppenheimer and the Atomic Bomb │ film │ None │
+╰───────┴─────────────────────────────────────────────────┴──────┴──────╯
+
+You've reached the end. Enter for first page, 'q' to quit.
+Insert media index: 0
+Selected: Oppenheimer
+Resolving playlist for: Oppenheimer
+Downloading audio only from StreamingCommunity...
+Parsing HLS ...
+╭───┬──────────┬──────┬─────┬────────────┬───────────┬──────────┬───────┬──────────┬────────────┬──────────────────┬──────────╮
+│ # │ Type     │ Role │ Sel │ Resolution │ FrameRate │ Bitrate  │ Codec │ Channels │ Language   │ Name             │ Duration │
+├───┼──────────┼──────┼─────┼────────────┼───────────┼──────────┼───────┼──────────┼────────────┼──────────────────┼──────────┤
+│ 1 │ Video    │      │ X   │ 1920x1080  │           │ 4.5 Mbps │ H.264 │          │            │                  │ 03:00:22 │
+│ 2 │ Video    │      │     │ 1280x720   │           │ 2.1 Mbps │ H.264 │          │            │                  │ N/A      │
+│ 3 │ Video    │      │     │ 854x480    │           │ 1.2 Mbps │ H.264 │          │            │                  │ N/A      │
+│ 4 │ Audio    │      │ X   │            │           │          │       │          │ ita        │ Italian          │ 03:00:22 │
+│ 5 │ Audio    │      │     │            │           │          │       │          │ eng        │ English          │ N/A      │
+│ 6 │ Subtitle │      │ X   │            │           │          │       │          │ forced-ita │ Italian [Forced] │ 03:00:18 │
+│ 7 │ Subtitle │      │ X   │            │           │          │       │          │ ita        │ Italian          │ 03:00:18 │
+╰───┴──────────┴──────┴─────┴────────────┴───────────┴──────────┴───────┴──────────┴────────────┴──────────────────┴──────────╯
+Starting download ...
+
+Traceback (most recent call last):
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/source/N_m3u8/wrapper.py", line 384, in start_download
+    log_file.write(line)
+    ~~~~~~~~~~~~~~^^^^^^
+OSError: [Errno 28] No space left on device
+
+During handling of the above exception, another exception occurred:
+
+OSError: [Errno 28] No space left on device
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/__main__.py", line 6, in <module>
+    main()
+    ~~~~^^
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/cli/run.py", line 504, in main
+    run_function(input_to_function[category], search_terms=args.search)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/cli/run.py", line 48, in run_function
+    func(search_terms)
+    ~~~~^^^^^^^^^^^^^^
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/services/_base/site_loader.py", line 62, in __call__
+    return self._search_func(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/services/torrent/__init__.py", line 96, in search
+    return base_search(
+        title_search_func=title_search,
+    ...<8 lines>...
+        scrape_serie=scrape_serie,
+    )
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/services/_base/site_search_manager.py", line 220, in base_search
+    result = process_result_func(select_title, selections, scrape_serie)
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/services/torrent/__init__.py", line 78, in process_search_result
+    return base_process_search_result(
+        select_title=select_title,
+    ...<5 lines>...
+        scrape_serie=scrape_serie,
+    )
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/services/_base/site_search_manager.py", line 152, in base_process_search_result
+    result = download_film_func(select_title)
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/services/torrent/downloader.py", line 126, in download_film
+    dubbed = prompt_audio_dub(select_title, video_file)
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/services/torrent/audio_dub.py", line 195, in prompt_audio_dub
+    streaming_path = _download_streaming_content(picked)
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/services/torrent/audio_dub.py", line 115, in _download_streaming_content
+    ).start()
+      ~~~~~^^
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/core/downloader/hls.py", line 115, in start
+    status = self.media_downloader.start_download()
+  File "/home/etsume/StreamingCommunity/StreamingCommunity/source/N_m3u8/wrapper.py", line 358, in start_download
+    with open(log_path, 'w', encoding='utf-8', errors='replace') as log_file:
+         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

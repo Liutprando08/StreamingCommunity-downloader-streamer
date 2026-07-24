@@ -74,7 +74,7 @@ def _display_results(entries_manager: EntriesManager) -> Optional[Entries]:
     return None
 
 
-def _download_streaming_content(entry: Entries) -> Optional[str]:
+def _download_streaming_content(entry: Entries, base_dir: str = None) -> Optional[str]:
     """
     Download content from StreamingCommunity via HLS_Downloader.
     Audio-only mode first, falls back to full download if it fails.
@@ -99,7 +99,7 @@ def _download_streaming_content(entry: Entries) -> Optional[str]:
         console.print("[red]Could not resolve streaming playlist")
         return None
 
-    temp_dir = os.path.join(tempfile.gettempdir(), "sc_audio_dub")
+    temp_dir = os.path.join(base_dir or tempfile.gettempdir(), ".sc_audio_dub")
     os.makedirs(temp_dir, exist_ok=True)
 
     safe_name = os_manager.get_sanitize_file(getattr(entry, "name", "stream"))
@@ -156,7 +156,7 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
         return None
 
     answer = msg.ask(
-        "\n[yellow]Download Italian audio from StreamingCommunity? [cyan](y/n)",
+        "\n[yellow]Download Italian audio from StreamingCommunity?",
         choices=["y", "n"],
         default="n",
     )
@@ -192,7 +192,7 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
 
     console.print(f"[cyan]Selected: [yellow]{getattr(picked, 'name', 'unknown')}")
 
-    streaming_path = _download_streaming_content(picked)
+    streaming_path = _download_streaming_content(picked, base_dir=os.path.dirname(torrent_video_path))
     if not streaming_path:
         return None
 

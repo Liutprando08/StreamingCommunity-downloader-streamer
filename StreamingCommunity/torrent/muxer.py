@@ -97,22 +97,31 @@ class TorrentMuxer:
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
+        # Detect how many audio streams the torrent file has
+        original_audio_count = len(self.detect_streams(video_path).get("audio", []))
+
         ffmpeg_cmd = [self.ffmpeg_path]
 
         ffmpeg_cmd.extend(["-i", video_path])
         ffmpeg_cmd.extend(["-i", audio_source_path])
 
         ffmpeg_cmd.extend(["-map", "0:v"])
+        ffmpeg_cmd.extend(["-map", "0:a?"])
         ffmpeg_cmd.extend(["-map", "1:a"])
 
-        ffmpeg_cmd.extend(["-metadata:s:a:0", "language=ita"])
-        ffmpeg_cmd.extend(["-metadata:s:a:0", "title=Italian"])
+        # Set metadata only on the Italian audio track(s)
+        italian_audio_start = original_audio_count
+        italian_streams = self.detect_streams(audio_source_path).get("audio", [])
+        for i in range(len(italian_streams)):
+            idx = italian_audio_start + i
+            ffmpeg_cmd.extend([f"-metadata:s:a:{idx}", "language=ita"])
+            ffmpeg_cmd.extend([f"-metadata:s:a:{idx}", "title=Italian"])
 
         ffmpeg_cmd.extend(["-c:v", "copy", "-c:a", "copy"])
 
         ffmpeg_cmd.extend([output_path, "-y"])
 
-        console.print("[yellow]FFMPEG [cyan]Muxing torrent video + Italian audio...")
+        console.print(f"[yellow]FFMPEG [cyan]Muxing torrent video + original audio ({original_audio_count} tracks) + Italian audio...")
         result_json = capture_ffmpeg_real_time(
             ffmpeg_cmd,
             "[yellow]FFMPEG [cyan]Audio dub",
