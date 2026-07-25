@@ -212,4 +212,10 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
     except Exception as e:
         log.debug("Cleanup failed: %s", e)
 
+    if result and os.path.isfile(torrent_video_path):
+        try:
+            os.remove(torrent_video_path)
+        except Exception as e:
+            log.debug("Failed to remove original: %s", e)
+
     return result
