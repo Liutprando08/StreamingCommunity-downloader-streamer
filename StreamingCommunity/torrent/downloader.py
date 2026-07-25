@@ -5,10 +5,13 @@ import os
 import subprocess
 from typing import Optional
 
+from rich.console import Console
+
 from StreamingCommunity.torrent.title_parser import TorrentResult
 
 
 log = logging.getLogger(__name__)
+console = Console()
 
 
 class TorrentDownloader:
@@ -27,29 +30,48 @@ class TorrentDownloader:
             "--seed-time=0",
             f"--bt-stop-timeout={timeout}",
             "--file-allocation=none",
-            "--console-log-level=warn",
-            "--summary-interval=0",
+            "--console-log-level=notice",
+            "--summary-interval=5",
             TorrentResult.safe_arg(url),
         ]
 
         log.info("Downloading via aria2c: %s", url[:60] + "...")
 
         try:
-            result = subprocess.run(
+            process = subprocess.Popen(
                 cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
-                timeout=timeout + 30,
+                bufsize=1,
             )
 
-            if result.returncode == 0:
+            last_status = ""
+            for line in iter(process.stdout.readline, ""):
+                line = line.strip()
+                if not line:
+                    continue
+
+                if "Download complete:" in line:
+                    console.print(f"[green]{line}")
+                elif "ETA:" in line or "Speed:" in line:
+                    if line != last_status:
+                        console.print(f"[cyan]{line}", end="\r")
+                        last_status = line
+                elif "error" in line.lower() or "fail" in line.lower():
+                    console.print(f"[red]{line}")
+
+            process.wait(timeout=timeout + 30)
+
+            if process.returncode == 0:
                 log.info("Torrent download completed successfully")
                 return self.download_path
 
-            log.warning("aria2c exited with code %d: %s", result.returncode, result.stderr.strip())
+            log.warning("aria2c exited with code %d", process.returncode)
             return None
 
         except subprocess.TimeoutExpired:
+            process.kill()
             log.error("Torrent download timed out after %ds", timeout)
             return None
         except FileNotFoundError:

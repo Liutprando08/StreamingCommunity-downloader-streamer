@@ -32,6 +32,9 @@ class Searcher:
             except Exception as e:
                 log.debug("Failed to load scraper %s: %s", name, e)
 
+    def is_enabled(self) -> bool:
+        return self.config.enabled
+
     def search_all(
         self,
         query: str,
@@ -54,16 +57,23 @@ class Searcher:
 
         results: List[TorrentResult] = []
         delay = self.config.scrape_delay_seconds
+        retry_count = self.config.scrape_retry_count
+        preferred_quality = self.config.preferred_quality
 
         for name, scraper in self._scrapers.items():
-            try:
-                log.info("Searching %s for: %s", name, query)
-                scraper_results = scraper.search(query, limit=limit)
-                results.extend(scraper_results)
-                log.info("  %s returned %d results", name, len(scraper_results))
-            except Exception as e:
-                log.warning("Scraper %s failed: %s", name, e)
-                continue
+            scraper_results = []
+            for attempt in range(retry_count):
+                try:
+                    log.info("Searching %s for: %s (attempt %d/%d)", name, query, attempt + 1, retry_count)
+                    scraper_results = scraper.search(query, limit=limit)
+                    log.info("  %s returned %d results", name, len(scraper_results))
+                    break
+                except Exception as e:
+                    log.warning("Scraper %s attempt %d failed: %s", name, attempt + 1, e)
+                    if attempt < retry_count - 1:
+                        time.sleep(delay)
+
+            results.extend(scraper_results)
 
             if delay > 0:
                 time.sleep(delay)
@@ -72,5 +82,11 @@ class Searcher:
 
         if max_seeders > 0:
             results = [r for r in results if r.seeders >= max_seeders]
+
+        if preferred_quality and preferred_quality != "best":
+            pq = preferred_quality.upper()
+            preferred = [r for r in results if pq in (r.quality or "").upper()]
+            others = [r for r in results if pq not in (r.quality or "").upper()]
+            results = preferred + others
 
         return results[:limit]

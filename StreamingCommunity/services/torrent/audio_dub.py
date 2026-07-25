@@ -1,6 +1,7 @@
 # 2026
 
 import os
+import re
 import logging
 import tempfile
 from typing import Optional
@@ -22,7 +23,46 @@ console = Console()
 msg = Prompt()
 log = logging.getLogger(__name__)
 
-extension_output = config_manager.config.get("PROCESS", "extension")
+
+def _get_extension_output():
+    return config_manager.config.get("PROCESS", "extension")
+
+
+def _parse_season_episode(title: str) -> tuple:
+    """Parse season and episode numbers from a torrent title.
+
+    Returns (season, episode) tuple. Returns (None, None) if not found.
+    """
+    title_lower = title.lower()
+
+    season = None
+    episode = None
+
+    season_match = re.search(r"s(\d{1,2})", title_lower)
+    if season_match:
+        season = int(season_match.group(1))
+
+    episode_match = re.search(r"e(\d{1,3})", title_lower)
+    if episode_match:
+        episode = int(episode_match.group(1))
+
+    if season is None:
+        season_match = re.search(r"season\s*(\d{1,2})", title_lower)
+        if season_match:
+            season = int(season_match.group(1))
+
+    if episode is None:
+        episode_match = re.search(r"episode\s*(\d{1,3})", title_lower)
+        if episode_match:
+            episode = int(episode_match.group(1))
+
+    if season is None and episode is None:
+        ep_match = re.search(r"(\d{1,3})x(\d{1,3})", title_lower)
+        if ep_match:
+            season = int(ep_match.group(1))
+            episode = int(ep_match.group(2))
+
+    return season, episode
 
 
 def _search_streamingcommunity(query: str) -> int:
@@ -74,7 +114,7 @@ def _display_results(entries_manager: EntriesManager) -> Optional[Entries]:
     return None
 
 
-def _download_streaming_content(entry: Entries, base_dir: str = None) -> Optional[str]:
+def _download_streaming_content(entry: Entries, base_dir: str = None, season: int = None, episode: int = None) -> Optional[str]:
     """
     Download content from StreamingCommunity via HLS_Downloader.
     Audio-only mode first, falls back to full download if it fails.
@@ -89,8 +129,11 @@ def _download_streaming_content(entry: Entries, base_dir: str = None) -> Optiona
         return None
 
     is_series = str(getattr(entry, "type", "")).lower() in ("tv", "serie", "show")
-    season = 1 if is_series else None
-    episode = 1 if is_series else None
+    if is_series:
+        if season is None:
+            season = 1
+        if episode is None:
+            episode = 1
 
     console.print(f"[cyan]Resolving playlist for: [yellow]{getattr(entry, 'name', 'unknown')}")
 
@@ -102,6 +145,7 @@ def _download_streaming_content(entry: Entries, base_dir: str = None) -> Optiona
     temp_dir = os.path.join(base_dir or tempfile.gettempdir(), ".sc_audio_dub")
     os.makedirs(temp_dir, exist_ok=True)
 
+    extension_output = _get_extension_output()
     safe_name = os_manager.get_sanitize_file(getattr(entry, "name", "stream"))
     output_filename = f"{safe_name}_sc.{extension_output}"
     output_path = os.path.join(temp_dir, output_filename)
@@ -136,15 +180,6 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
     """
     After torrent download, prompt user for Italian audio dubbing.
 
-    Flow:
-    1. Ask if user wants Italian audio from StreamingCommunity
-    2. User provides search query (default: torrent title)
-    3. Search StreamingCommunity, display results
-    4. User picks one
-    5. Download from StreamingCommunity
-    6. Mux torrent video + StreamingCommunity Italian audio
-    7. Return path to dubbed file
-
     Parameters:
         select_title: The torrent Entries object (has .name, .type, etc.)
         torrent_video_path: Path to the downloaded torrent video file.
@@ -155,11 +190,18 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
     if not torrent_video_path or not os.path.isfile(torrent_video_path):
         return None
 
-    answer = msg.ask(
-        "\n[yellow]Download Italian audio from StreamingCommunity?",
-        choices=["y", "n"],
-        default="n",
-    )
+    from StreamingCommunity.torrent.config import TorrentConfig
+    torrent_config = TorrentConfig(config_manager)
+
+    if torrent_config.auto_mux:
+        answer = "y"
+    else:
+        answer = msg.ask(
+            "\n[yellow]Download Italian audio from StreamingCommunity?",
+            choices=["y", "n"],
+            default="n",
+        )
+
     if answer.lower() != "y":
         return None
 
@@ -174,7 +216,6 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
 
     console.print(f"\n[cyan]Searching StreamingCommunity for: [yellow]{query}")
 
-    sc_entries = EntriesManager()
     from StreamingCommunity.services.streamingcommunity import entries_manager as _sc_em
     from StreamingCommunity.services.streamingcommunity import title_search as sc_title_search
 
@@ -192,12 +233,21 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
 
     console.print(f"[cyan]Selected: [yellow]{getattr(picked, 'name', 'unknown')}")
 
-    streaming_path = _download_streaming_content(picked, base_dir=os.path.dirname(torrent_video_path))
+    season, episode = _parse_season_episode(str(getattr(select_title, "name", "")))
+    is_series = str(getattr(select_title, "type", "")).lower() in ("tv", "serie", "show")
+
+    streaming_path = _download_streaming_content(
+        picked,
+        base_dir=os.path.dirname(torrent_video_path),
+        season=season if is_series else None,
+        episode=episode if is_series else None,
+    )
     if not streaming_path:
         return None
 
     torrent_dir = os.path.dirname(torrent_video_path)
     torrent_base = os.path.splitext(os.path.basename(torrent_video_path))[0]
+    extension_output = _get_extension_output()
     dubbed_filename = f"{torrent_base}_ita.{extension_output}"
     dubbed_path = os.path.join(torrent_dir, dubbed_filename)
 

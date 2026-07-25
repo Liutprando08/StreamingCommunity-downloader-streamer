@@ -1,6 +1,7 @@
 # 2026
 
 import logging
+import threading
 from typing import Dict, Optional
 
 
@@ -22,7 +23,6 @@ from .downloader import download_film, download_series
 
 
 # Variable
-indice = 19
 _useFor = "Film_Serie"
 
 msg = Prompt()
@@ -31,6 +31,7 @@ entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 
 _torrent_results: Dict[int, TorrentResult] = {}
+_torrent_lock = threading.Lock()
 
 
 def _format_size(size_bytes: int) -> str:
@@ -50,26 +51,33 @@ def title_search(query: str) -> int:
     """Search all torrent scrapers and populate entries_manager."""
     entries_manager.clear()
     table_show_manager.clear()
-    _torrent_results.clear()
+    with _torrent_lock:
+        _torrent_results.clear()
 
     searcher = Searcher(config_manager)
+
+    if not searcher.is_enabled():
+        console.print("[yellow]Torrent search is disabled in config")
+        return 0
+
     results = searcher.search_all(query)
 
-    for i, r in enumerate(results):
-        _torrent_results[i] = r
+    with _torrent_lock:
+        for i, r in enumerate(results):
+            _torrent_results[i] = r
 
-        media_type = "film" if r.category in ("movie", "movies") else "tv"
+            media_type = "film" if r.category in ("movie", "movies") else "tv"
 
-        entries_manager.add(Entries(
-            id=i,
-            name=r.title,
-            type=media_type,
-            quality=r.quality or "N/A",
-            size=_format_size(r.size_bytes),
-            seeders=r.seeders,
-            source=r.source,
-            year=str(r.year) if r.year else "9999",
-        ))
+            entries_manager.add(Entries(
+                id=i,
+                name=r.title,
+                type=media_type,
+                quality=r.quality or "N/A",
+                size=_format_size(r.size_bytes),
+                seeders=r.seeders,
+                source=r.source,
+                year=str(r.year) if r.year else "9999",
+            ))
 
     return len(results)
 

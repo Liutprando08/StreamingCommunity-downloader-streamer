@@ -56,7 +56,7 @@
         "post_run": []
     },
     "TORRENT": {
-        "enabled": false,
+        "enabled": true,
         "sync_interval_hours": 24,
         "jackett_url": "",
         "jackett_api_key": "",

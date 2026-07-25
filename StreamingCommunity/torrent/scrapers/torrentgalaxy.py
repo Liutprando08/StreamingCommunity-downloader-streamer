@@ -12,11 +12,6 @@ from typing import Tuple
 
 log = logging.getLogger(__name__)
 
-_QUALITY_RE = re.compile(
-    r"(2160p|1080p|720p|480p|4K|WEB(?:-?DL|Rip)?|HDRip|BluRay|BRRip|DVDRip|HDTV|TELESYNC|CAM|\bTS\b|\bTC\b)",
-    re.IGNORECASE,
-)
-
 
 class TorrentGalaxyScraper(BaseScraper):
     """TorrentGalaxy scraper — Cloudflare bypassed via curl_cffi impersonation, HTML parsing. Base URL from Conf/domains.json."""
@@ -30,57 +25,10 @@ class TorrentGalaxyScraper(BaseScraper):
             "torrentgalaxy", "mirrors",
             default=["https://torrentgalaxy.is", "https://torrentgalaxy.cc"]
         )
-        self.torrent_config = None
-        try:
-            from StreamingCommunity.torrent.config import TorrentConfig
-
-            self.torrent_config = TorrentConfig(config_manager)
-        except Exception:
-            pass
-
-    def _get_impersonate(self) -> str:
-        if self.torrent_config:
-            return self.torrent_config.scrape_impersonate
-        return "chrome"
-
-    def _parse_size(self, size_str: str) -> int:
-        normalized = size_str.replace("\xa0", " ").replace("\u2009", " ")
-        parts = normalized.strip().split()
-        if len(parts) < 2:
-            return 0
-        try:
-            value = float(parts[0])
-            unit = parts[1].upper()
-            multipliers = {
-                "B": 1,
-                "KB": 1024,
-                "MB": 1024**2,
-                "GB": 1024**3,
-                "TB": 1024**4,
-            }
-            return int(value * multipliers.get(unit, 1))
-        except (ValueError, IndexError):
-            return 0
-
-    def _extract_quality(self, title: str) -> str:
-        matches = _QUALITY_RE.findall(title)
-        return " ".join(dict.fromkeys(m.upper() for m in matches))
 
     def _parse_magnet_hash(self, magnet_url: str) -> str:
         m = re.search(r"urn:btih:([a-fA-F0-9]{40}|[a-zA-Z2-7]{32})", magnet_url)
         return m.group(1) if m else ""
-
-    @staticmethod
-    def _safe_int(text: str) -> int:
-        try:
-            return int(text.replace(",", ""))
-        except (ValueError, TypeError):
-            return 0
-
-    @staticmethod
-    def _extract_year(title: str) -> Optional[int]:
-        m = re.search(r"[\(\[\s]?((?:19|20)\d{2})[\)\]\s]?", title)
-        return int(m.group(1)) if m else None
 
     def _parse_rows(self, html: str, category: str = "") -> List[TorrentResult]:
         soup = BeautifulSoup(html, "html.parser")
@@ -218,23 +166,6 @@ class TorrentGalaxyScraper(BaseScraper):
                 return self._build_magnet(info_hash, dn)
 
         return None
-
-    @staticmethod
-    def _build_magnet(info_hash: str, dn: str = "") -> str:
-        from urllib.parse import quote_plus
-
-        trackers = [
-            "udp://open.stealth.si:80/announce",
-            "udp://tracker.opentrackr.org:1337/announce",
-            "udp://open.demonii.com:1337/announce",
-            "udp://tracker.torrent.eu.org:451/announce",
-        ]
-        parts = [f"magnet:?xt=urn:btih:{info_hash}"]
-        if dn:
-            parts.append(f"dn={quote_plus(dn)}")
-        for tr in trackers:
-            parts.append(f"tr={quote_plus(tr)}")
-        return "&".join(parts)
 
     def _fetch_magnets_batch(
         self, results: List[TorrentResult], post_paths: List[str], max_fetch: int = 10

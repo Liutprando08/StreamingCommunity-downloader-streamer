@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import logging
 import subprocess
 from typing import Optional, List, Dict
@@ -94,6 +95,20 @@ class TorrentMuxer:
         if not os.path.isfile(audio_source_path):
             console.print(f"[red]Audio source file not found: {audio_source_path}")
             return None
+
+        video_size = os.path.getsize(video_path)
+        audio_size = os.path.getsize(audio_source_path)
+        required_bytes = video_size + audio_size + (100 * 1024 * 1024)
+
+        try:
+            usage = shutil.disk_usage(os.path.dirname(output_path) or ".")
+            if usage.free < required_bytes:
+                free_gb = usage.free / (1024 ** 3)
+                need_gb = required_bytes / (1024 ** 3)
+                console.print(f"[red]Insufficient disk space for mux: {free_gb:.1f} GB free, ~{need_gb:.1f} GB required")
+                return None
+        except Exception as e:
+            log.warning("Disk space check failed: %s", e)
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 

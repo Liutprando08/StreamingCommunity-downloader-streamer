@@ -9,19 +9,7 @@ class TorrentConfig:
 
     @property
     def enabled(self) -> bool:
-        return self._cfg.get_bool("TORRENT", "enabled", default=False)
-
-    @property
-    def sync_interval_hours(self) -> int:
-        return self._cfg.get_int("TORRENT", "sync_interval_hours", default=24)
-
-    @property
-    def jackett_url(self) -> str:
-        return self._cfg.get("TORRENT", "jackett_url", default="")
-
-    @property
-    def jackett_api_key(self) -> str:
-        return self._cfg.get("TORRENT", "jackett_api_key", default="")
+        return self._cfg.get_bool("TORRENT", "enabled", default=True)
 
     @property
     def max_seeders(self) -> int:
@@ -32,20 +20,8 @@ class TorrentConfig:
         return self._cfg.get("TORRENT", "preferred_quality", default="best")
 
     @property
-    def download_path(self) -> str:
-        return self._cfg.get("TORRENT", "download_path", default="Torrents")
-
-    @property
     def auto_mux(self) -> bool:
-        return self._cfg.get_bool("TORRENT", "auto_mux", default=True)
-
-    @property
-    def mux_timeout_minutes(self) -> int:
-        return self._cfg.get_int("TORRENT", "mux_timeout_minutes", default=30)
-
-    @property
-    def flaresolverr_url(self) -> str:
-        return self._cfg.get("TORRENT", "flaresolverr_url", default="")
+        return self._cfg.get_bool("TORRENT", "auto_mux", default=False)
 
     @property
     def scrape_impersonate(self) -> str:

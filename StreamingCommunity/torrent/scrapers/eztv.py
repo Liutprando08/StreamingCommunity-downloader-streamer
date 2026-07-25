@@ -29,17 +29,6 @@ class EztvScraper(BaseScraper):
     def __init__(self, config_manager):
         super().__init__(config_manager)
         self.BASE_URL = config_manager.domain.get("eztv", "full_url", default="https://eztvx.to/api")
-        self.torrent_config = None
-        try:
-            from StreamingCommunity.torrent.config import TorrentConfig
-            self.torrent_config = TorrentConfig(config_manager)
-        except Exception:
-            pass
-
-    def _get_impersonate(self) -> str:
-        if self.torrent_config:
-            return self.torrent_config.scrape_impersonate
-        return "chrome"
 
     def _torrent_to_results(self, torrents: list) -> List[TorrentResult]:
         results = []
