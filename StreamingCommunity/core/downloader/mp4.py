@@ -1,30 +1,32 @@
 # 09.06.24
 
-import os
-import time
-import signal
-import logging
-from functools import partial
-import threading
+from __future__ import annotations
 
+import logging
+import os
+import signal
+import threading
+import time
+from functools import partial
+
+import httpx
 
 # External libraries
 from rich.console import Console
-from rich.prompt import Prompt
 from rich.progress import Progress, TextColumn
-from typing import Optional
+from rich.prompt import Prompt
+
+from StreamingCommunity.core.processors.helper.kodi_nfo import (
+    KODI_NFO_FILES,
+    generate_kodi_metadata,
+)
+from StreamingCommunity.core.processors.helper.nfo import create_nfo
+from StreamingCommunity.source.N_m3u8 import CustomBarColumn
+from StreamingCommunity.source.utils.tracker import context_tracker, download_tracker
+from StreamingCommunity.utils import config_manager, internet_manager, os_manager
 
 # Internal utilities
 from StreamingCommunity.utils.http_client import create_client, get_userAgent
-from StreamingCommunity.utils import config_manager, os_manager, internet_manager
-from StreamingCommunity.source.N_m3u8 import CustomBarColumn
-from StreamingCommunity.core.processors.helper.nfo import create_nfo
-from StreamingCommunity.core.processors.helper.kodi_nfo import (
-    generate_kodi_metadata,
-    KODI_NFO_FILES,
-)
-from StreamingCommunity.source.utils.tracker import download_tracker, context_tracker
-
 
 # Config
 msg = Prompt()
@@ -34,6 +36,8 @@ CREATE_NFO_FILES = config_manager.config.get_bool(
     "PROCESS", "generate_nfo", default=False
 )
 SKIP_DOWNLOAD = config_manager.config.get_bool("DOWNLOAD", "skip_download")
+
+logger = logging.getLogger(__name__)
 
 
 class InterruptHandler:
@@ -70,11 +74,11 @@ def signal_handler(signum, frame, interrupt_handler, original_handler):
 def MP4_Downloader(
     url: str,
     path: str,
-    referer: Optional[str] = None,
-    headers_: Optional[dict] = None,
+    referer: str | None = None,
+    headers_: dict | None = None,
     show_final_info: bool = True,
-    download_id: Optional[str] = None,
-    site_name: Optional[str] = None,
+    download_id: str | None = None,
+    site_name: str | None = None,
 ):
     """
     Downloads an MP4 video with enhanced interrupt handling.
@@ -100,7 +104,7 @@ def MP4_Downloader(
         return path, False
 
     if not (url.lower().startswith("http://") or url.lower().startswith("https://")):
-        logging.error(f"Invalid URL: {url}")
+        logger.error(f"Invalid URL: {url}")
         console.print(f"[red]Invalid URL: {url}")
         return None, False
 
@@ -143,7 +147,7 @@ def MP4_Downloader(
             )
 
     except Exception:
-        pass
+        logger.exception("threading failed")
 
     # Ensure the output directory exists
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -153,7 +157,7 @@ def MP4_Downloader(
             head = client.head(url, headers=headers)
             head.raise_for_status()
             content_type = (head.headers.get("content-type") or "").lower()
-        except Exception:
+        except httpx.HTTPError:
             content_type = ""
 
         # If HEAD indicates HTML/JSON, attempt a GET without Range/If-Range as fallback
@@ -170,7 +174,7 @@ def MP4_Downloader(
                 try:
                     preview = resp_check.content[:2000]
                     preview_text = preview.decode("utf-8", errors="replace")
-                except Exception:
+                except httpx.HTTPError:
                     preview_text = "<could not read body>"
                     return None, False
 
@@ -178,7 +182,7 @@ def MP4_Downloader(
                 console.print(preview_text)
                 return None, False
 
-            except Exception as e:
+            except httpx.HTTPError as e:
                 console.print(f"[red]Fallback GET failed: {e}")
                 return None, False
 
@@ -190,7 +194,7 @@ def MP4_Downloader(
             content_length = response.headers.get("content-length")
             try:
                 total = int(content_length) if content_length is not None else None
-            except Exception:
+            except (ValueError, TypeError):
                 total = None
 
             if total is None:
@@ -234,18 +238,18 @@ def MP4_Downloader(
                     else:
                         total_size_value, total_size_unit = "--", ""
                         task_total = None
-
-                    task_id = progress_bars.add_task(
-                        "download",
-                        total=task_total,
-                        downloaded="0.00",
-                        downloaded_unit="B",
-                        total_size=total_size_value,
-                        total_unit=total_size_unit,
-                        elapsed="0s",
-                        eta="--",
-                        speed="-- B/s",
-                    )
+                    if progress_bars is not None:
+                        task_id = progress_bars.add_task(
+                            "download",
+                            total=task_total,
+                            downloaded="0.00",
+                            downloaded_unit="B",
+                            total_size=total_size_value,
+                            total_unit=total_size_unit,
+                            elapsed="0s",
+                            eta="--",
+                            speed="-- B/s",
+                        )
 
                 with open(temp_path, "wb") as file:
                     try:
@@ -314,7 +318,10 @@ def MP4_Downloader(
                                     )
 
                                 # Update progress if not GUI
-                                if not context_tracker.is_gui:
+                                if (
+                                    not context_tracker.is_gui
+                                    and progress_bars is not None
+                                ):
                                     progress_bars.update(
                                         task_id,
                                         completed=downloaded,
@@ -329,7 +336,7 @@ def MP4_Downloader(
                         if not interrupt_handler.force_quit:
                             interrupt_handler.kill_download = True
 
-                    except Exception as e:
+                    except (httpx.HTTPError, OSError) as e:
                         incomplete_error = True
                         interrupt_handler.kill_download = True
                         console.print(
@@ -340,8 +347,8 @@ def MP4_Downloader(
                         try:
                             file.flush()
                             os.fsync(file.fileno())
-                        except Exception:
-                            pass
+                        except OSError as e:
+                            logger.error(f"error:{e}")
 
     if os.path.exists(temp_path):
         if incomplete_error == "cancelled":
@@ -401,4 +408,3 @@ def MP4_Downloader(
                 download_id, success=False, error="File missing or empty"
             )
         return None, interrupt_handler.kill_download
-
