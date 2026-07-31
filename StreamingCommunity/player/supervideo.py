@@ -2,7 +2,7 @@
 
 import re
 import logging
-
+from typing import Optional
 
 # External libraries
 import jsbeautifier
@@ -24,7 +24,7 @@ class VideoSource:
         self.headers = get_headers()
         self.url = url
 
-    def make_request(self, url: str) -> str:
+    def make_request(self, url: str) -> Optional[str]:
         """
         Make an HTTP GET request to the provided URL.
 
@@ -37,15 +37,17 @@ class VideoSource:
         try:
             response = create_client_curl(headers=self.headers).get(url)
             if response.status_code >= 400:
-                logging.error(f"Request failed with status code: {response.status_code}, to url: {url}")
+                logging.error(
+                    f"Request failed with status code: {response.status_code}, to url: {url}"
+                )
                 return None
-            
+
             return response.text
-        
+
         except Exception as e:
             logging.error(f"Request failed: {e}")
             return None
- 
+
     def get_iframe(self, soup):
         """
         Extracts the source URL of the second iframe in the provided BeautifulSoup object.
@@ -59,7 +61,7 @@ class VideoSource:
         iframes = soup.find_all("iframe")
         if iframes and len(iframes) > 1:
             return iframes[0].get("src") or iframes[0].get("data-src")
-        
+
         return None
 
     def find_content(self, url):
@@ -75,9 +77,9 @@ class VideoSource:
         content = self.make_request(url)
         if content:
             return BeautifulSoup(content, "html.parser")
-        
+
         return None
-        
+
     def get_result_node_js(self, soup):
         """
         Prepares and runs a Node.js script from the provided BeautifulSoup object to retrieve the video URL.
@@ -91,10 +93,10 @@ class VideoSource:
         for script in soup.find_all("script"):
             if "eval" in str(script):
                 return jsbeautifier.beautify(script.text)
-            
+
         return None
 
-    def get_playlist(self) -> str:
+    def get_playlist(self) -> Optional[str]:
         """
         Download a video from the provided URL.
 
@@ -108,7 +110,9 @@ class VideoSource:
                 return None
 
             # Find master playlist
-            data_js = self.get_result_node_js(BeautifulSoup(html_content, "html.parser"))
+            data_js = self.get_result_node_js(
+                BeautifulSoup(html_content, "html.parser")
+            )
 
             if data_js is not None:
                 match = re.search(r'sources:\s*\[\{\s*file:\s*"([^"]+)"', data_js)
@@ -117,9 +121,8 @@ class VideoSource:
                     return match.group(1)
                 else:
                     logging.error("Failed to find M3U8 URL: No match found")
-                    
-            else:
 
+            else:
                 iframe_src = self.get_iframe(BeautifulSoup(html_content, "html.parser"))
                 if not iframe_src:
                     logging.error("No iframe found.")
@@ -145,13 +148,13 @@ class VideoSource:
                 # Find master playlist
                 data_js = self.get_result_node_js(supervideo_soup)
 
-                match = re.search(r'sources:\s*\[\{\s*file:\s*"([^"]+)"', data_js)
+                match = re.search(r'sources:\s*\[\{\s*file:\s*"([^"]+)"', data_js or "")
 
                 if match:
                     return match.group(1)
                 else:
                     logging.error("Failed to find M3U8 URL: No match found")
-            
+
             return None
 
         except Exception as e:

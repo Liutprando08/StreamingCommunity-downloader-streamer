@@ -1,6 +1,6 @@
 {
   "streamingcommunity": {
-    "full_url": "https://streaming-community.science/"
+    "full_url": "https://streaming-community.recipes/"
   },
   "animeunity": {
     "full_url": "https://www.animeunity.so"
@@ -21,12 +21,12 @@
     "full_url": ""
   },
   "limetorrent": {
-    "full_url": "https://limetorrents.cc",
+    "full_url": "https://limetorrent.net",
     "mirrors": [
-      "https://limetorrents.cc",
-      "https://limetorrents.lol",
-      "https://limetorrents.so",
-      "https://limetorrent.net"
+      "https://limetorrent.net",
+      "https://www.limetorrents.fun",
+      "https://limetorrents.asia",
+      "https://limetorrents.zone"
     ]
   },
   "torrentgalaxy": {

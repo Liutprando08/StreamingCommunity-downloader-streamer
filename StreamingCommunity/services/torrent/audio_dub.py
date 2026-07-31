@@ -70,7 +70,9 @@ def _search_streamingcommunity(query: str) -> int:
     Search StreamingCommunity for a title by name.
     Returns number of results found. Entries are in _sc_entries.
     """
-    from StreamingCommunity.services.streamingcommunity import title_search as sc_title_search
+    from StreamingCommunity.services.streamingcommunity import (
+        title_search as sc_title_search,
+    )
 
     return sc_title_search(query)
 
@@ -90,14 +92,18 @@ def _display_results(entries_manager: EntriesManager) -> Optional[Entries]:
     table_show_manager.add_column(column_info)
 
     for i, entry in enumerate(entries_manager.media_list):
-        table_show_manager.add_tv_show({
-            "Index": str(i),
-            "Name": str(getattr(entry, "name", "N/A")),
-            "Type": str(getattr(entry, "type", "N/A")),
-            "Year": str(getattr(entry, "year", "N/A")),
-        })
+        table_show_manager.add_tv_show(
+            {
+                "Index": str(i),
+                "Name": str(getattr(entry, "name", "N/A")),
+                "Type": str(getattr(entry, "type", "N/A")),
+                "Year": str(getattr(entry, "year", "N/A")),
+            }
+        )
 
-    last_command = table_show_manager.run(force_int_input=True, max_int_input=len(entries_manager.media_list))
+    last_command = table_show_manager.run(
+        force_int_input=True, max_int_input=len(entries_manager.media_list)
+    )
     table_show_manager.clear()
 
     if last_command is None or last_command.lower() in ("q", "quit"):
@@ -114,13 +120,20 @@ def _display_results(entries_manager: EntriesManager) -> Optional[Entries]:
     return None
 
 
-def _download_streaming_content(entry: Entries, base_dir: str = None, season: int = None, episode: int = None) -> Optional[str]:
+def _download_streaming_content(
+    entry: Entries,
+    base_dir: Optional[str] = None,
+    season: Optional[int] = None,
+    episode: Optional[int] = None,
+) -> Optional[str]:
     """
     Download content from StreamingCommunity via HLS_Downloader.
     Audio-only mode first, falls back to full download if it fails.
     Returns path to the downloaded file on success.
     """
-    from StreamingCommunity.services.streamingcommunity.downloader import _get_playlist_url
+    from StreamingCommunity.services.streamingcommunity.downloader import (
+        _get_playlist_url,
+    )
     from StreamingCommunity.core.downloader import HLS_Downloader
 
     imdb_id = getattr(entry, "imdb_id", None)
@@ -135,7 +148,9 @@ def _download_streaming_content(entry: Entries, base_dir: str = None, season: in
         if episode is None:
             episode = 1
 
-    console.print(f"[cyan]Resolving playlist for: [yellow]{getattr(entry, 'name', 'unknown')}")
+    console.print(
+        f"[cyan]Resolving playlist for: [yellow]{getattr(entry, 'name', 'unknown')}"
+    )
 
     playlist_url = _get_playlist_url(imdb_id, is_series, season, episode)
     if not playlist_url:
@@ -158,8 +173,8 @@ def _download_streaming_content(entry: Entries, base_dir: str = None, season: in
         audio_only=True,
     ).start()
 
-    if result and result[0] and os.path.isfile(result[0]):
-        return result[0]
+    if result and os.path.isfile(output_path):
+        return output_path
 
     # Fallback: full download
     console.print("[yellow]Audio-only download failed, trying full download...")
@@ -169,8 +184,8 @@ def _download_streaming_content(entry: Entries, base_dir: str = None, season: in
         audio_only=False,
     ).start()
 
-    if result and result[0] and os.path.isfile(result[0]):
-        return result[0]
+    if result and os.path.isfile(output_path):
+        return output_path
 
     console.print("[red]StreamingCommunity download failed")
     return None
@@ -191,6 +206,7 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
         return None
 
     from StreamingCommunity.torrent.config import TorrentConfig
+
     torrent_config = TorrentConfig(config_manager)
 
     if torrent_config.auto_mux:
@@ -207,7 +223,7 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
 
     default_query = str(getattr(select_title, "name", "")).strip()
     query = msg.ask(
-        f"\n[yellow]Search StreamingCommunity for",
+        "\n[yellow]Search StreamingCommunity for",
         default=default_query,
     )
     if not query or not query.strip():
@@ -217,7 +233,9 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
     console.print(f"\n[cyan]Searching StreamingCommunity for: [yellow]{query}")
 
     from StreamingCommunity.services.streamingcommunity import entries_manager as _sc_em
-    from StreamingCommunity.services.streamingcommunity import title_search as sc_title_search
+    from StreamingCommunity.services.streamingcommunity import (
+        title_search as sc_title_search,
+    )
 
     _sc_em.clear()
     count = sc_title_search(query)
@@ -234,7 +252,11 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
     console.print(f"[cyan]Selected: [yellow]{getattr(picked, 'name', 'unknown')}")
 
     season, episode = _parse_season_episode(str(getattr(select_title, "name", "")))
-    is_series = str(getattr(select_title, "type", "")).lower() in ("tv", "serie", "show")
+    is_series = str(getattr(select_title, "type", "")).lower() in (
+        "tv",
+        "serie",
+        "show",
+    )
 
     streaming_path = _download_streaming_content(
         picked,

@@ -3,7 +3,7 @@
 import re
 import logging
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from types import SimpleNamespace
 
 
@@ -13,7 +13,11 @@ from rich.console import Console
 
 
 # Internal utilities
-from StreamingCommunity.utils.http_client import create_client, get_userAgent, create_client_curl
+from StreamingCommunity.utils.http_client import (
+    create_client,
+    get_userAgent,
+    create_client_curl,
+)
 
 
 # Variable
@@ -21,28 +25,34 @@ console = Console()
 
 
 class VideoSource:
-    def __init__(self, url: str, is_series: bool, media_id: int = None, tmdb_data: Dict[str, Any] = None):
+    def __init__(
+        self,
+        url: str,
+        is_series: bool,
+        media_id: Optional[int] = None,
+        tmdb_data: Optional[Dict[str, Any]] = None,
+    ):
         """
         Initialize video source for streaming site.
-        
+
         Args:
             - url (str): The URL of the streaming site.
             - is_series (bool): Flag for series or movie content
             - media_id (int, optional): Unique identifier for media item
             - tmdb_data (dict, optional): TMDB data with 'id', 's' (season), 'e' (episode)
         """
-        self.headers = {'user-agent': get_userAgent()}
+        self.headers = {"user-agent": get_userAgent()}
         self.url = url
         self.is_series = is_series
         self.media_id = media_id
         self.iframe_src = None
         self.window_parameter = None
-        
+
         # Store TMDB data if provided
         if tmdb_data is not None:
-            self.tmdb_id = tmdb_data.get('id')
-            self.season_number = tmdb_data.get('s')
-            self.episode_number = tmdb_data.get('e')
+            self.tmdb_id = tmdb_data.get("id")
+            self.season_number = tmdb_data.get("s")
+            self.episode_number = tmdb_data.get("e")
         else:
             self.tmdb_id = None
             self.season_number = None
@@ -51,25 +61,25 @@ class VideoSource:
     def get_iframe(self, episode_id: int) -> None:
         """
         Retrieve iframe source for specified episode.
-        
+
         Args:
             episode_id (int): Unique identifier for episode
         """
         params = {}
 
         if self.is_series:
-            params = {
-                'episode_id': episode_id, 
-                'next_episode': '1'
-            }
+            params = {"episode_id": episode_id, "next_episode": "1"}
 
         try:
-            response = create_client(headers=self.headers).get(f"{self.url}/iframe/{self.media_id}", params=params)
+            response = create_client(headers=self.headers).get(
+                f"{self.url}/iframe/{self.media_id}", params=params
+            )
             response.raise_for_status()
 
             # Parse response with BeautifulSoup to get iframe source
             soup = BeautifulSoup(response.text, "html.parser")
-            self.iframe_src = soup.find("iframe").get("src")
+            if iframe := soup.find("iframe"):
+                self.iframe_src = iframe.get("src")
 
         except Exception as e:
             logging.error(f"Error getting iframe source: {e}")
@@ -78,25 +88,41 @@ class VideoSource:
     def parse_script(self, script_text: str) -> None:
         try:
             # token / expires / url (inside masterPlaylist)
-            token_m = re.search(r"(?:['\"]token['\"]|token)\s*:\s*['\"](?P<token>[^'\"]+)['\"]", script_text)
-            expires_m = re.search(r"(?:['\"]expires['\"]|expires)\s*:\s*['\"](?P<expires>[^'\"]+)['\"]", script_text)
-            url_m = re.search(r"(?:['\"]url['\"]|url)\s*:\s*['\"](?P<url>https?://[^'\"]+)['\"]", script_text)
+            token_m = re.search(
+                r"(?:['\"]token['\"]|token)\s*:\s*['\"](?P<token>[^'\"]+)['\"]",
+                script_text,
+            )
+            expires_m = re.search(
+                r"(?:['\"]expires['\"]|expires)\s*:\s*['\"](?P<expires>[^'\"]+)['\"]",
+                script_text,
+            )
+            url_m = re.search(
+                r"(?:['\"]url['\"]|url)\s*:\s*['\"](?P<url>https?://[^'\"]+)['\"]",
+                script_text,
+            )
 
             # simple video id and canPlayFHD
-            video_id_m = re.search(r"window\.video\s*=\s*\{[^}]*\bid\s*:\s*['\"](?P<id>\d+)['\"]", script_text)
+            video_id_m = re.search(
+                r"window\.video\s*=\s*\{[^}]*\bid\s*:\s*['\"](?P<id>\d+)['\"]",
+                script_text,
+            )
             canplay_m = re.search(r"window\.canPlayFHD\s*=\s*(true|false)", script_text)
 
             # Extract values if matches found
-            token = token_m.group('token') if token_m else None
-            expires = expires_m.group('expires') if expires_m else None
-            url = url_m.group('url') if url_m else None
-            video_id = int(video_id_m.group('id')) if video_id_m else None
-            canplay = bool(canplay_m and canplay_m.group(1).lower() == 'true')
+            token = token_m.group("token") if token_m else None
+            expires = expires_m.group("expires") if expires_m else None
+            url = url_m.group("url") if url_m else None
+            video_id = int(video_id_m.group("id")) if video_id_m else None
+            canplay = bool(canplay_m and canplay_m.group(1).lower() == "true")
             self.canPlayFHD = canplay
-            self.window_video = SimpleNamespace(id=video_id) if video_id is not None else None
+            self.window_video = (
+                SimpleNamespace(id=video_id) if video_id is not None else None
+            )
 
             if token or expires or url:
-                self.window_parameter = SimpleNamespace(token=token, expires=expires, url=url)
+                self.window_parameter = SimpleNamespace(
+                    token=token, expires=expires, url=url
+                )
             else:
                 self.window_parameter = None
 
@@ -112,19 +138,28 @@ class VideoSource:
             if self.tmdb_id is not None:
                 console.print("[red]Using API V.2")
                 if self.is_series:
-                    if self.season_number is not None and self.episode_number is not None:
+                    if (
+                        self.season_number is not None
+                        and self.episode_number is not None
+                    ):
                         self.iframe_src = f"https://vixsrc.to/tv/{self.tmdb_id}/{self.season_number}/{self.episode_number}/?lang=it"
                 else:
                     self.iframe_src = f"https://vixsrc.to/movie/{self.tmdb_id}/?lang=it"
 
             # Fetch content from iframe source
             if self.iframe_src is not None:
-                response = create_client(headers=self.headers).get(self.iframe_src)
-                response.raise_for_status()
+                if client := create_client(headers=self.headers):
+                    response = client.get(str(self.iframe_src))
+                    response.raise_for_status()
 
                 # Parse response with BeautifulSoup to get content
                 soup = BeautifulSoup(response.text, "html.parser")
-                script = soup.find("body").find("script").text
+                script_tag = soup.find("script", string=re.compile(r"window\.masterPlaylist"))
+                if not script_tag:
+                    scripts = soup.find_all("script")
+                    script_tag = scripts[-1] if scripts else None
+                if script_tag:
+                    script = script_tag.text
 
                 # Parse script to get video information
                 self.parse_script(script_text=script)
@@ -133,7 +168,7 @@ class VideoSource:
             logging.error(f"Error getting content: {e}")
             raise
 
-    def get_playlist(self) -> str:
+    def get_playlist(self) -> Optional[str]:
         """
         Generate authenticated playlist URL.
 
@@ -142,25 +177,27 @@ class VideoSource:
         """
         if not self.window_parameter:
             return None
-        
+
         if not getattr(self.window_parameter, "url", None):
             return None
 
         params = {}
 
         if self.canPlayFHD:
-            params['h'] = 1
+            params["h"] = 1
 
         parsed_url = urlparse(str(self.window_parameter.url))
         query_params = parse_qs(str(parsed_url.query))
 
-        if 'b' in query_params and query_params['b'] == ['1']:
-            params['b'] = 1
+        if "b" in query_params and query_params["b"] == ["1"]:
+            params["b"] = 1
 
-        params.update({
-            "token": str(self.window_parameter.token),
-            "expires": str(self.window_parameter.expires)
-        })
+        params.update(
+            {
+                "token": str(self.window_parameter.token),
+                "expires": str(self.window_parameter.expires),
+            }
+        )
 
         query_string = urlencode(params)
         return urlunparse(parsed_url._replace(query=str(query_string)))
@@ -170,31 +207,33 @@ class VideoSourceAnime(VideoSource):
     def __init__(self, url: str):
         """
         Initialize anime-specific video source.
-        
+
         Args:
             - url (str): The URL of the streaming site.
-        
+
         Extends base VideoSource with anime-specific initialization
         """
-        self.headers = {'user-agent': get_userAgent()}
+        self.headers = {"user-agent": get_userAgent()}
         self.url = url
         self.src_mp4 = None
         self.master_playlist = None
         self.iframe_src = None
         self.tmdb_id = None
 
-    def get_embed(self, episode_id: int, prefer_mp4: bool = True) -> str:
+    def get_embed(self, episode_id: int, prefer_mp4: bool = True) -> Optional[str]:
         """
         Retrieve embed URL and extract video source.
-        
+
         Args:
             episode_id (int): Unique identifier for episode
-        
+
         Returns:
             str: Parsed script content
         """
         try:
-            response = create_client_curl(headers=self.headers).get(f"{self.url}/embed-url/{episode_id}")
+            response = create_client_curl(headers=self.headers).get(
+                f"{self.url}/embed-url/{episode_id}"
+            )
             response.raise_for_status()
 
             # Extract and clean embed URL
@@ -205,17 +244,29 @@ class VideoSourceAnime(VideoSource):
             video_response = create_client(headers=self.headers).get(embed_url)
             video_response.raise_for_status()
 
-            # Parse response with BeautifulSoup to get content of the scriot
+            # Parse response with BeautifulSoup to get content of the script
             soup = BeautifulSoup(video_response.text, "html.parser")
-            script = soup.find("body").find("script").text
-            self.src_mp4 = soup.find("body").find_all("script")[1].text.split(" = ")[1].replace("'", "")
+            script_tag = soup.find("script", string=re.compile(r"window\.masterPlaylist"))
+            if not script_tag:
+                scripts = soup.find_all("script")
+                script_tag = scripts[-1] if scripts else None
+            script = script_tag.text if script_tag else ""
+
+            download_tag = soup.find("script", string=re.compile(r"window\.downloadUrl"))
+            if download_tag:
+                dl_match = re.search(
+                    r"window\.downloadUrl\s*=\s*['\"]([^'\"]+)['\"]",
+                    download_tag.text,
+                )
+                if dl_match:
+                    self.src_mp4 = dl_match.group(1)
 
             if not prefer_mp4:
                 self.get_content()
                 self.master_playlist = self.get_playlist()
 
             return script
-        
+
         except Exception as e:
             logging.error(f"Error fetching embed URL: {e}")
             return None

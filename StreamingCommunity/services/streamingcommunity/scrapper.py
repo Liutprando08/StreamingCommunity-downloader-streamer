@@ -3,6 +3,7 @@
 import logging
 import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional
 from urllib.parse import urlparse, parse_qs
 
 
@@ -12,7 +13,7 @@ from StreamingCommunity.services._base.object import SeasonManager, Episode, Sea
 
 
 # Variable
-headers = {'user-agent': get_userAgent()}
+headers = {"user-agent": get_userAgent()}
 VIXSRC_API = "https://vixsrc.to/api"
 MAX_WORKERS = 15
 
@@ -22,7 +23,7 @@ def _get_shared_client():
 
 
 class GetSerieInfo:
-    def __init__(self, imdb_id: str, series_name: str = None):
+    def __init__(self, imdb_id: str, series_name: Optional[str] = None):
         self.imdb_id = imdb_id
         self.series_name = series_name or ""
         self.seasons_manager = SeasonManager()
@@ -39,15 +40,15 @@ class GetSerieInfo:
         return None
 
     def _parse_episode_name(self, data: dict) -> str:
-        src = data.get('src', '')
+        src = data.get("src", "")
         parsed = urlparse(src)
         params = parse_qs(parsed.query)
-        d_param = params.get('d', [None])[0]
+        d_param = params.get("d", [None])[0]
         if d_param:
             try:
-                decoded = base64.b64decode(d_param).decode('utf-8')
-                if ' ' in decoded:
-                    return decoded.split(' ', 1)[1]
+                decoded = base64.b64decode(d_param).decode("utf-8")
+                if " " in decoded:
+                    return decoded.split(" ", 1)[1]
             except Exception:
                 pass
         return ""
@@ -83,11 +84,13 @@ class GetSerieInfo:
         results.sort(key=lambda x: x[0])
         for ep_num, ep_data in results:
             ep_name = self._parse_episode_name(ep_data) or f"Episodio {ep_num}"
-            season.episodes.add(Episode(
-                number=ep_num,
-                name=ep_name,
-                id=f"{self.imdb_id}_{season_number}_{ep_num}"
-            ))
+            season.episodes.add(
+                Episode(
+                    number=ep_num,
+                    name=ep_name,
+                    id=f"{self.imdb_id}_{season_number}_{ep_num}",
+                )
+            )
 
     def getEpisodeSeasons(self, season_number: int) -> list:
         self._fill_season_episodes(season_number)

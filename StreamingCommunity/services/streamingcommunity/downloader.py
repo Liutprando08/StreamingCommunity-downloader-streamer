@@ -7,14 +7,17 @@ import os as _os
 # External library
 from rich.console import Console
 from rich.prompt import Prompt
-
+from typing import Optional, Any
 
 # Internal utilities
 from StreamingCommunity.utils import os_manager, config_manager, start_message
 from StreamingCommunity.utils.http_client import create_client, get_userAgent
 from StreamingCommunity.services._base import site_constants, Entries
 from StreamingCommunity.services._base.tv_display_manager import map_episode_title
-from StreamingCommunity.services._base.tv_download_manager import process_season_selection, process_episode_download
+from StreamingCommunity.services._base.tv_download_manager import (
+    process_season_selection,
+    process_episode_download,
+)
 
 
 # Downloader
@@ -33,18 +36,27 @@ from .scrapper import GetSerieInfo
 console = Console()
 msg = Prompt()
 extension_output = config_manager.config.get("PROCESS", "extension")
-headers = {'user-agent': get_userAgent()}
+headers = {"user-agent": get_userAgent()}
 VIXSRC_API = "https://vixsrc.to/api"
 
 
-def _get_playlist_url(imdb_id: str, is_series: bool, season: int = None, episode: int = None) -> str:
-    api_url = f"{VIXSRC_API}/tv/{imdb_id}/{season}/{episode}?lang=it&ref=clone" if is_series else f"{VIXSRC_API}/movie/{imdb_id}?lang=it&ref=clone"
+def _get_playlist_url(
+    imdb_id: Optional[str],
+    is_series: bool,
+    season: Optional[int] = None,
+    episode: Optional[int] = None,
+) -> Optional[str]:
+    api_url = (
+        f"{VIXSRC_API}/tv/{imdb_id}/{season}/{episode}?lang=it&ref=clone"
+        if is_series
+        else f"{VIXSRC_API}/movie/{imdb_id}?lang=it&ref=clone"
+    )
 
     try:
         response = create_client(headers=headers).get(api_url)
         response.raise_for_status()
         data = response.json()
-        embed_src = data.get('src')
+        embed_src = data.get("src")
         if not embed_src:
             console.print("[red]No embed src found in API response")
             return None
@@ -60,11 +72,13 @@ def _get_playlist_url(imdb_id: str, is_series: bool, season: int = None, episode
     return vs.get_playlist()
 
 
-def download_film(select_title: Entries) -> str:
+def download_film(select_title: Entries) -> Optional[tuple[Optional[str], Any]]:
     start_message()
-    console.print(f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{select_title.name} \n")
+    console.print(
+        f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{select_title.name} \n"
+    )
 
-    imdb_id = getattr(select_title, 'imdb_id', None)
+    imdb_id = getattr(select_title, "imdb_id", None)
     if not imdb_id:
         console.print("[red]No IMDB ID available for this title")
         return None
@@ -75,35 +89,50 @@ def download_film(select_title: Entries) -> str:
         return None
 
     mp4_name = f"{os_manager.get_sanitize_file(select_title.name)}.{extension_output}"
-    mp4_path = os.path.join(site_constants.MOVIE_FOLDER, mp4_name.replace(f".{extension_output}", ""))
+    mp4_path = os.path.join(
+        site_constants.MOVIE_FOLDER, mp4_name.replace(f".{extension_output}", "")
+    )
 
     return HLS_Downloader(
-        m3u8_url=master_playlist,
-        output_path=os.path.join(mp4_path, mp4_name)
+        m3u8_url=master_playlist, output_path=os.path.join(mp4_path, mp4_name)
     ).start()
 
 
-def download_episode(obj_episode, index_season_selected, index_episode_selected, scrape_serie):
+def download_episode(
+    obj_episode, index_season_selected, index_episode_selected, scrape_serie
+):
     start_message()
-    console.print(f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{scrape_serie.series_name} [white]\\ [magenta]{obj_episode.name} ([cyan]S{index_season_selected}E{index_episode_selected}) \n")
+    console.print(
+        f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{scrape_serie.series_name} [white]\\ [magenta]{obj_episode.name} ([cyan]S{index_season_selected}E{index_episode_selected}) \n"
+    )
 
-    master_playlist = _get_playlist_url(scrape_serie.imdb_id, True, index_season_selected, index_episode_selected)
+    master_playlist = _get_playlist_url(
+        scrape_serie.imdb_id, True, index_season_selected, index_episode_selected
+    )
     if master_playlist is None:
         console.print("[red]Error: No master playlist found")
         return None, False
 
     mp4_name = f"{map_episode_title(scrape_serie.series_name, index_season_selected, index_episode_selected, obj_episode.name)}.{extension_output}"
-    mp4_path = os.path.join(site_constants.SERIES_FOLDER, scrape_serie.series_name, f"S{index_season_selected}")
+    mp4_path = os.path.join(
+        site_constants.SERIES_FOLDER,
+        scrape_serie.series_name,
+        f"S{index_season_selected}",
+    )
 
     return HLS_Downloader(
-        m3u8_url=master_playlist,
-        output_path=os.path.join(mp4_path, mp4_name)
+        m3u8_url=master_playlist, output_path=os.path.join(mp4_path, mp4_name)
     ).start()
 
 
-def download_series(select_season: Entries, season_selection: str = None, episode_selection: str = None, scrape_serie = None) -> None:
+def download_series(
+    select_season: Entries,
+    season_selection: Optional[str] = None,
+    episode_selection: Optional[str] = None,
+    scrape_serie=None,
+) -> None:
     start_message()
-    imdb_id = getattr(select_season, 'imdb_id', None)
+    imdb_id = getattr(select_season, "imdb_id", None)
     if not imdb_id:
         console.print("[red]No IMDB ID available for this series")
         return
@@ -113,7 +142,9 @@ def download_series(select_season: Entries, season_selection: str = None, episod
         scrape_serie.getNumberSeason()
     seasons_count = len(scrape_serie.seasons_manager)
 
-    def download_episode_callback(season_number: int, download_all: bool, episode_selection: str = None):
+    def download_episode_callback(
+        season_number: int, download_all: bool, episode_selection: Optional[str] = None
+    ):
         def download_video_callback(obj_episode, season_idx, episode_idx):
             return download_episode(obj_episode, season_idx, episode_idx, scrape_serie)
 
@@ -122,7 +153,7 @@ def download_series(select_season: Entries, season_selection: str = None, episod
             scrape_serie=scrape_serie,
             download_video_callback=download_video_callback,
             download_all=download_all,
-            episode_selection=episode_selection
+            episode_selection=episode_selection,
         )
 
     process_season_selection(
@@ -130,7 +161,7 @@ def download_series(select_season: Entries, season_selection: str = None, episod
         seasons_count=seasons_count,
         season_selection=season_selection,
         episode_selection=episode_selection,
-        download_episode_callback=download_episode_callback
+        download_episode_callback=download_episode_callback,
     )
 
 
@@ -138,9 +169,11 @@ def stream_film(select_title: Entries):
     from StreamingCommunity.streaming.session import stream_content
 
     start_message()
-    console.print(f"\n[yellow]Streaming: [red]{site_constants.SITE_NAME} → [cyan]{select_title.name}\n")
+    console.print(
+        f"\n[yellow]Streaming: [red]{site_constants.SITE_NAME} → [cyan]{select_title.name}\n"
+    )
 
-    imdb_id = getattr(select_title, 'imdb_id', None)
+    imdb_id = getattr(select_title, "imdb_id", None)
     if not imdb_id:
         console.print("[red]No IMDB ID available for this title")
         return
@@ -155,19 +188,25 @@ def stream_film(select_title: Entries):
 
     stream_content(
         playlist_url=master_playlist,
-        headers={'User-Agent': get_userAgent()},
+        headers={"User-Agent": get_userAgent()},
         preferred_player=player,
         port=port,
     )
 
 
-def stream_episode(obj_episode, index_season_selected, index_episode_selected, scrape_serie):
+def stream_episode(
+    obj_episode, index_season_selected, index_episode_selected, scrape_serie
+):
     from StreamingCommunity.streaming.session import stream_content
 
     start_message()
-    console.print(f"\n[yellow]Streaming: [red]{site_constants.SITE_NAME} → [cyan]{scrape_serie.series_name} [white]\\ [magenta]{obj_episode.name} ([cyan]S{index_season_selected}E{index_episode_selected})\n")
+    console.print(
+        f"\n[yellow]Streaming: [red]{site_constants.SITE_NAME} → [cyan]{scrape_serie.series_name} [white]\\ [magenta]{obj_episode.name} ([cyan]S{index_season_selected}E{index_episode_selected})\n"
+    )
 
-    master_playlist = _get_playlist_url(scrape_serie.imdb_id, True, index_season_selected, index_episode_selected)
+    master_playlist = _get_playlist_url(
+        scrape_serie.imdb_id, True, index_season_selected, index_episode_selected
+    )
     if master_playlist is None:
         console.print("[red]Error: No master playlist found")
         return
@@ -177,15 +216,20 @@ def stream_episode(obj_episode, index_season_selected, index_episode_selected, s
 
     stream_content(
         playlist_url=master_playlist,
-        headers={'User-Agent': get_userAgent()},
+        headers={"User-Agent": get_userAgent()},
         preferred_player=player,
         port=port,
     )
 
 
-def stream_series(select_season: Entries, season_selection: str = None, episode_selection: str = None, scrape_serie=None):
+def stream_series(
+    select_season: Entries,
+    season_selection: Optional[str] = None,
+    episode_selection: Optional[str] = None,
+    scrape_serie=None,
+):
     start_message()
-    imdb_id = getattr(select_season, 'imdb_id', None)
+    imdb_id = getattr(select_season, "imdb_id", None)
     if not imdb_id:
         console.print("[red]No IMDB ID available for this series")
         return
@@ -195,7 +239,9 @@ def stream_series(select_season: Entries, season_selection: str = None, episode_
         scrape_serie.getNumberSeason()
     seasons_count = len(scrape_serie.seasons_manager)
 
-    def stream_episode_callback(season_number: int, download_all: bool, episode_selection: str = None):
+    def stream_episode_callback(
+        season_number: int, download_all: bool, episode_selection: Optional[str] = None
+    ):
         def stream_video_callback(obj_episode, season_idx, episode_idx):
             return stream_episode(obj_episode, season_idx, episode_idx, scrape_serie)
 
@@ -204,7 +250,7 @@ def stream_series(select_season: Entries, season_selection: str = None, episode_
             scrape_serie=scrape_serie,
             download_video_callback=stream_video_callback,
             download_all=download_all,
-            episode_selection=episode_selection
+            episode_selection=episode_selection,
         )
 
     process_season_selection(
@@ -212,5 +258,5 @@ def stream_series(select_season: Entries, season_selection: str = None, episode_
         seasons_count=seasons_count,
         season_selection=season_selection,
         episode_selection=episode_selection,
-        download_episode_callback=stream_episode_callback
+        download_episode_callback=stream_episode_callback,
     )

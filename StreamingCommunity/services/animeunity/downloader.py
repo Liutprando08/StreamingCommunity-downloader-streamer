@@ -58,6 +58,13 @@ def download_episode(obj_episode, index_select, scrape_serie, video_source):
     # Collect mp4 url
     video_source.get_embed(obj_episode.id, not DOWNOAD_HLS)
 
+    if DOWNOAD_HLS and not video_source.master_playlist:
+        console.print("[red]Error: No master playlist found")
+        return None, False
+    if not DOWNOAD_HLS and not video_source.src_mp4:
+        console.print("[red]Error: No download URL found")
+        return None, False
+
     # Create output path
     mp4_name = f"{scrape_serie.series_name}_EP_{dynamic_format_number(str(obj_episode.number))}"
 

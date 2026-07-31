@@ -6,7 +6,7 @@ import logging
 # Internal utilities
 from StreamingCommunity.utils.http_client import create_client
 from StreamingCommunity.services._base.object import SeasonManager, Episode, Season
-
+from typing import cast, Optional
 
 # Logic
 from .client import get_api
@@ -16,7 +16,7 @@ class GetSerieInfo:
     def __init__(self, show_alternate_id, show_id):
         """
         Initialize series scraper for Discovery+
-        
+
         Args:
             show_alternate_id (str): The alternate ID of the show (e.g., 'homestead-rescue-discovery')
             show_id (str): The numeric ID of the show
@@ -29,55 +29,58 @@ class GetSerieInfo:
         self.n_seasons = 0
         self.collection_id = None
         self._get_show_info()
-        
+
     def _get_show_info(self):
         """Get show information including number of seasons and collection ID"""
         try:
+            cookies: dict[str, str] | None = None
+            if api := self.api:
+                cookies = cast(dict[str, str], api.get_cookies())
             response = create_client(headers=self.api.get_request_headers()).get(
-                f'https://us1-prod-direct.go.discovery.com/cms/routes/show/{self.show_alternate_id}',
+                f"https://us1-prod-direct.go.discovery.com/cms/routes/show/{self.show_alternate_id}",
                 params={
-                    'include': 'default',
-                    'decorators': 'viewingHistory,isFavorite,playbackAllowed'
+                    "include": "default",
+                    "decorators": "viewingHistory,isFavorite,playbackAllowed",
                 },
-                cookies=self.api.get_cookies()
+                cookies=cookies,
             )
             response.raise_for_status()
             data = response.json()
-            
+
             # Get series name from first show element
-            for element in data.get('included', []):
-                if element.get('type') == 'show':
-                    self.series_name = element.get('attributes', {}).get('name', '')
+            for element in data.get("included", []):
+                if element.get("type") == "show":
+                    self.series_name = element.get("attributes", {}).get("name", "")
                     break
-            
-            included = data.get('included', [])
+
+            included = data.get("included", [])
             filters = []
             for element in included:
-                component = element.get('attributes', {}).get('component', {})
-                f = component.get('filters')
+                component = element.get("attributes", {}).get("component", {})
+                f = component.get("filters")
                 if f:
                     filters = f
                     break
             if filters:
-                option_ids = filters[0].get('initiallySelectedOptionIds', [])
+                option_ids = filters[0].get("initiallySelectedOptionIds", [])
                 self.n_seasons = int(option_ids[0]) if option_ids else 0
-            
+
             # Get collection ID
-            for element in data.get('included', []):
-                if element.get('type') == 'collection':
-                    self.collection_id = element.get('id')
+            for element in data.get("included", []):
+                if element.get("type") == "collection":
+                    self.collection_id = element.get("id")
                     break
-                    
+
             return True
-            
+
         except Exception as e:
             logging.error(f"Failed to get show info: {e}")
             return False
-    
+
     def _get_season_episodes(self, season_number):
         """
         Get episodes for a specific season
-        
+
         Args:
             season_number (int): Season number
         """
@@ -86,67 +89,75 @@ class GetSerieInfo:
             return []
 
         try:
+            cookies: dict[str, str] | None = None
+            if api := self.api:
+                cookies = cast(dict[str, str], api.get_cookies())
             response = create_client(headers=self.api.get_request_headers()).get(
-                f'https://us1-prod-direct.go.discovery.com/cms/collections/{self.collection_id}',
+                f"https://us1-prod-direct.go.discovery.com/cms/collections/{self.collection_id}",
                 params={
-                    'include': 'default',
-                    'decorators': 'viewingHistory,isFavorite,playbackAllowed',
-                    'pf[seasonNumber]': season_number,
-                    'pf[show.id]': self.show_id
+                    "include": "default",
+                    "decorators": "viewingHistory,isFavorite,playbackAllowed",
+                    "pf[seasonNumber]": season_number,
+                    "pf[show.id]": self.show_id,
                 },
-                cookies=self.api.get_cookies()
+                cookies=cookies,
             )
             response.raise_for_status()
-            
+
             data = response.json()
             episodes = []
-            
-            for element in data.get('included', []):
-                if element.get('type') == 'video':
-                    attributes = element.get('attributes', {})
-                    if 'episodeNumber' in attributes:
-                        episodes.append({
-                            'id': attributes.get('alternateId'),
-                            'video_id': element.get('id'),
-                            'name': attributes.get('name'),
-                            'episode_number': attributes.get('episodeNumber'),
-                            'duration': attributes.get('videoDuration', 0) // 60000
-                        })
-            
+
+            for element in data.get("included", []):
+                if element.get("type") == "video":
+                    attributes = element.get("attributes", {})
+                    if "episodeNumber" in attributes:
+                        episodes.append(
+                            {
+                                "id": attributes.get("alternateId"),
+                                "video_id": element.get("id"),
+                                "name": attributes.get("name"),
+                                "episode_number": attributes.get("episodeNumber"),
+                                "duration": attributes.get("videoDuration", 0) // 60000,
+                            }
+                        )
+
             # Sort by episode number
-            episodes.sort(key=lambda x: x['episode_number'])
+            episodes.sort(key=lambda x: x["episode_number"])
             return episodes
-            
+
         except Exception as e:
             logging.error(f"Failed to get episodes for season {season_number}: {e}")
             return []
-    
+
     def collect_season(self):
         """Collect all seasons and episodes"""
         try:
             for season_num in range(1, self.n_seasons + 1):
                 episodes = self._get_season_episodes(season_num)
-                
+
                 if episodes:
-                    season_obj = self.seasons_manager.add(Season(
-                        number=season_num,
-                        name=f"Season {season_num}",
-                        id=f"season_{season_num}"
-                    ))
-                    
+                    season_obj = self.seasons_manager.add(
+                        Season(
+                            number=season_num,
+                            name=f"Season {season_num}",
+                            id=f"season_{season_num}",
+                        )
+                    )
+
                     if season_obj:
                         for ep in episodes:
-                            season_obj.episodes.add(Episode(
-                                id=ep.get('id'),
-                                video_id=ep.get('video_id'),
-                                name=ep.get('name'),
-                                number=ep.get('episode_number'),
-                                duration=ep.get('duration')
-                            ))
-                            
+                            season_obj.episodes.add(
+                                Episode(
+                                    id=ep.get("id"),
+                                    video_id=ep.get("video_id"),
+                                    name=ep.get("name"),
+                                    number=ep.get("episode_number"),
+                                    duration=ep.get("duration"),
+                                )
+                            )
+
         except Exception as e:
             logging.error(f"Error in collect_season: {e}")
-
 
     # ------------- FOR GUI -------------
     def getNumberSeason(self) -> int:
@@ -154,23 +165,28 @@ class GetSerieInfo:
         if not self.seasons_manager.seasons:
             self.collect_season()
         return len(self.seasons_manager.seasons)
-    
+
     def getEpisodeSeasons(self, season_number: int) -> list:
         """Get all episodes for a specific season"""
         if not self.seasons_manager.seasons:
             self.collect_season()
-        
+
         season = self.seasons_manager.get_season_by_number(season_number)
         if season:
             return season.episodes.episodes
 
         return []
-    
-    def selectEpisode(self, season_number: int, episode_index: int) -> Episode:
+
+    def selectEpisode(
+        self, season_number: int, episode_index: int
+    ) -> Optional[Episode]:
         """Get information for a specific episode"""
         episodes = self.getEpisodeSeasons(season_number)
         if not episodes or episode_index < 0 or episode_index >= len(episodes):
-            logging.error(f"Episode index {episode_index} out of range for season {season_number}")
+            logging.error(
+                f"Episode index {episode_index} out of range for season {season_number}"
+            )
             return None
-        
+
         return episodes[episode_index]
+
