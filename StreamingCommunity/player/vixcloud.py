@@ -1,27 +1,33 @@
 # 01.03.24
+from __future__ import annotations
 
-import re
 import logging
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-from typing import Dict, Any, Optional
+import re
 from types import SimpleNamespace
-
+from typing import Any
+from urllib.parse import (
+    parse_qs,
+    urlencode,
+    urlparse,
+    urlunparse,
+)
 
 # External libraries
 from bs4 import BeautifulSoup
+from httpx import HTTPError
 from rich.console import Console
-
 
 # Internal utilities
 from StreamingCommunity.utils.http_client import (
     create_client,
-    get_userAgent,
     create_client_curl,
+    get_userAgent,
 )
-
 
 # Variable
 console = Console()
+
+logger = logging.getLogger(__name__)
 
 
 class VideoSource:
@@ -29,8 +35,8 @@ class VideoSource:
         self,
         url: str,
         is_series: bool,
-        media_id: Optional[int] = None,
-        tmdb_data: Optional[Dict[str, Any]] = None,
+        media_id: int | None = None,
+        tmdb_data: dict[str, Any] | None = None,
     ):
         """
         Initialize video source for streaming site.
@@ -82,7 +88,7 @@ class VideoSource:
                 self.iframe_src = iframe.get("src")
 
         except Exception as e:
-            logging.error(f"Error getting iframe source: {e}")
+            logger.error(f"Error getting iframe source: {e}")
             raise
 
     def parse_script(self, script_text: str) -> None:
@@ -127,7 +133,7 @@ class VideoSource:
                 self.window_parameter = None
 
         except Exception as e:
-            logging.error(f"Error parsing script: {e}")
+            logger.error(f"Error parsing script: {e}")
             raise
 
     def get_content(self) -> None:
@@ -154,7 +160,9 @@ class VideoSource:
 
                 # Parse response with BeautifulSoup to get content
                 soup = BeautifulSoup(response.text, "html.parser")
-                script_tag = soup.find("script", string=re.compile(r"window\.masterPlaylist"))
+                script_tag = soup.find(
+                    "script", string=re.compile(r"window\.masterPlaylist")
+                )
                 if not script_tag:
                     scripts = soup.find_all("script")
                     script_tag = scripts[-1] if scripts else None
@@ -165,10 +173,10 @@ class VideoSource:
                 self.parse_script(script_text=script)
 
         except Exception as e:
-            logging.error(f"Error getting content: {e}")
+            logger.error(f"Error getting content: {e}")
             raise
 
-    def get_playlist(self) -> Optional[str]:
+    def get_playlist(self) -> str | None:
         """
         Generate authenticated playlist URL.
 
@@ -220,7 +228,7 @@ class VideoSourceAnime(VideoSource):
         self.iframe_src = None
         self.tmdb_id = None
 
-    def get_embed(self, episode_id: int, prefer_mp4: bool = True) -> Optional[str]:
+    def get_embed(self, episode_id: int, prefer_mp4: bool = True) -> str | None:
         """
         Retrieve embed URL and extract video source.
 
@@ -246,13 +254,17 @@ class VideoSourceAnime(VideoSource):
 
             # Parse response with BeautifulSoup to get content of the script
             soup = BeautifulSoup(video_response.text, "html.parser")
-            script_tag = soup.find("script", string=re.compile(r"window\.masterPlaylist"))
+            script_tag = soup.find(
+                "script", string=re.compile(r"window\.masterPlaylist")
+            )
             if not script_tag:
                 scripts = soup.find_all("script")
                 script_tag = scripts[-1] if scripts else None
             script = script_tag.text if script_tag else ""
 
-            download_tag = soup.find("script", string=re.compile(r"window\.downloadUrl"))
+            download_tag = soup.find(
+                "script", string=re.compile(r"window\.downloadUrl")
+            )
             if download_tag:
                 dl_match = re.search(
                     r"window\.downloadUrl\s*=\s*['\"]([^'\"]+)['\"]",
@@ -267,6 +279,6 @@ class VideoSourceAnime(VideoSource):
 
             return script
 
-        except Exception as e:
-            logging.error(f"Error fetching embed URL: {e}")
+        except HTTPError as e:
+            logger.error(f"Error fetching embed URL: {e}")
             return None

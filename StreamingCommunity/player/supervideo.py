@@ -1,16 +1,19 @@
 # 26.05.24
+from __future__ import annotations
 
-import re
 import logging
-from typing import Optional
+import re
 
-# External libraries
 import jsbeautifier
 from bs4 import BeautifulSoup
 
+# External libraries
+from httpx import HTTPError
 
 # Internal utilities
 from StreamingCommunity.utils.http_client import create_client_curl, get_headers
+
+logger = logging.getLogger(__name__)
 
 
 class VideoSource:
@@ -24,7 +27,7 @@ class VideoSource:
         self.headers = get_headers()
         self.url = url
 
-    def make_request(self, url: str) -> Optional[str]:
+    def make_request(self, url: str) -> str | None:
         """
         Make an HTTP GET request to the provided URL.
 
@@ -37,15 +40,15 @@ class VideoSource:
         try:
             response = create_client_curl(headers=self.headers).get(url)
             if response.status_code >= 400:
-                logging.error(
+                logger.error(
                     f"Request failed with status code: {response.status_code}, to url: {url}"
                 )
                 return None
 
             return response.text
 
-        except Exception as e:
-            logging.error(f"Request failed: {e}")
+        except HTTPError as e:
+            logger.error(f"Request failed: {e}")
             return None
 
     def get_iframe(self, soup):
@@ -96,7 +99,7 @@ class VideoSource:
 
         return None
 
-    def get_playlist(self) -> Optional[str]:
+    def get_playlist(self) -> str | None:
         """
         Download a video from the provided URL.
 
@@ -106,7 +109,7 @@ class VideoSource:
         try:
             html_content = self.make_request(self.url)
             if not html_content:
-                logging.error("Failed to fetch HTML content.")
+                logger.error("Failed to fetch HTML content.")
                 return None
 
             # Find master playlist
@@ -120,29 +123,29 @@ class VideoSource:
                 if match:
                     return match.group(1)
                 else:
-                    logging.error("Failed to find M3U8 URL: No match found")
+                    logger.error("Failed to find M3U8 URL: No match found")
 
             else:
                 iframe_src = self.get_iframe(BeautifulSoup(html_content, "html.parser"))
                 if not iframe_src:
-                    logging.error("No iframe found.")
+                    logger.error("No iframe found.")
                     return None
 
                 down_page_soup = self.find_content(iframe_src)
                 if not down_page_soup:
-                    logging.error("Failed to fetch down page content.")
+                    logger.error("Failed to fetch down page content.")
                     return None
 
                 pattern = r'data-link="(//supervideo[^"]+)"'
                 match = re.search(pattern, str(down_page_soup))
                 if not match:
-                    logging.error("No player available for download.")
+                    logger.error("No player available for download.")
                     return None
 
                 supervideo_url = "https:" + match.group(1)
                 supervideo_soup = self.find_content(supervideo_url)
                 if not supervideo_soup:
-                    logging.error("Failed to fetch supervideo content.")
+                    logger.error("Failed to fetch supervideo content.")
                     return None
 
                 # Find master playlist
@@ -153,10 +156,10 @@ class VideoSource:
                 if match:
                     return match.group(1)
                 else:
-                    logging.error("Failed to find M3U8 URL: No match found")
+                    logger.error("Failed to find M3U8 URL: No match found")
 
             return None
 
-        except Exception as e:
-            logging.error(f"An error occurred: {e}")
+        except HTTPError as e:
+            logger.error(f"An error occurred: {e}")
             return None

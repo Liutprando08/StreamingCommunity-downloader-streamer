@@ -1,32 +1,30 @@
 # 17.10.24
+from __future__ import annotations
 
-import os
-import time
-import shutil
 import logging
-from typing import Any, Dict, Optional
-
+import os
+import shutil
+import time
+from typing import Any
 
 # External libraries
 from rich.console import Console
 
-
-# Internal utilities
-from StreamingCommunity.utils import config_manager, os_manager, internet_manager
-from StreamingCommunity.utils.http_client import get_headers
-from StreamingCommunity.core.processors import join_video, join_audios, join_subtitles
-from StreamingCommunity.core.processors.helper.nfo import create_nfo
+from StreamingCommunity.core.processors import join_audios, join_subtitles, join_video
 from StreamingCommunity.core.processors.helper.kodi_nfo import (
-    generate_kodi_metadata,
     KODI_NFO_FILES,
+    generate_kodi_metadata,
 )
-from StreamingCommunity.source.utils.tracker import download_tracker, context_tracker
-from StreamingCommunity.source.utils.media_players import MediaPlayers
-
+from StreamingCommunity.core.processors.helper.nfo import create_nfo
 
 # # Downloader
 from StreamingCommunity.source.N_m3u8 import MediaDownloader
+from StreamingCommunity.source.utils.media_players import MediaPlayers
+from StreamingCommunity.source.utils.tracker import context_tracker, download_tracker
 
+# Internal utilities
+from StreamingCommunity.utils import config_manager, internet_manager, os_manager
+from StreamingCommunity.utils.http_client import get_headers
 
 # Config
 console = Console()
@@ -40,14 +38,15 @@ MERGE_SUBTITLES = config_manager.config.get_bool(
     "PROCESS", "merge_subtitle", default=True
 )
 MERGE_AUDIO = config_manager.config.get_bool("PROCESS", "merge_audio", default=True)
+logger = logging.getLogger(__name__)
 
 
 class HLS_Downloader:
     def __init__(
         self,
         m3u8_url: str,
-        output_path: Optional[str] = None,
-        headers: Optional[Dict[str, str]] = None,
+        output_path: str | None = None,
+        headers: dict[str, str] | None = None,
         audio_only: bool = False,
     ):
         """
@@ -90,7 +89,7 @@ class HLS_Downloader:
         self.copied_subtitles = []
         self.copied_audios = []
 
-    def start(self) -> tuple[Optional[str], Any]:
+    def start(self) -> tuple[str | None, Any]:
         """Main execution flow for downloading HLS content"""
         if self.file_already_exists:
             console.print("[yellow]File already exists.")
@@ -120,7 +119,7 @@ class HLS_Downloader:
         try:
             self.media_players = MediaPlayers(self.output_dir)
             self.media_players.create()
-        except Exception:
+        except ValueError:
             pass
 
         if self.download_id:
@@ -139,7 +138,7 @@ class HLS_Downloader:
 
         # Check if any media was downloaded
         if self._no_media_downloaded(status):
-            logging.error("No media downloaded")
+            logger.error("No media downloaded")
             if self.download_id:
                 download_tracker.complete_download(
                     self.download_id, success=False, error="No media downloaded"
@@ -158,7 +157,7 @@ class HLS_Downloader:
                 )
                 return None, True
 
-            logging.error("Merge operation failed")
+            logger.error("Merge operation failed")
             if self.download_id:
                 download_tracker.complete_download(
                     self.download_id, success=False, error="Merge failed"
@@ -218,7 +217,7 @@ class HLS_Downloader:
             and status.get("external_subtitles") == []
         )
 
-    def _merge_files(self, status) -> Optional[str]:
+    def _merge_files(self, status) -> str | None:
         """Merge downloaded files using FFmpeg"""
         if status["video"] is None:
             # Audio-only mode: no video, but audio tracks exist
@@ -277,7 +276,7 @@ class HLS_Downloader:
                     f"{self.filename_base}_with_audio.{EXTENSION_OUTPUT}",
                 )
 
-                merged_file, use_shortest, result_json = join_audios(
+                merged_file, _use_shortest, result_json = join_audios(
                     video_path=current_file,
                     audio_tracks=status["audios"],
                     out_path=audio_output,
@@ -367,8 +366,8 @@ class HLS_Downloader:
 
             try:
                 shutil.copy2(src_path, dst_path)
-            except Exception as e:
-                console.print(
+            except OSError as e:
+                logger.error(
                     f"[yellow]Warning: Could not move subtitle {language}: {e}"
                 )
 
@@ -393,8 +392,8 @@ class HLS_Downloader:
 
             try:
                 shutil.copy2(src_path, dst_path)
-            except Exception as e:
-                console.print(f"[yellow]Warning: Could not move audio {language}: {e}")
+            except OSError as e:
+                logger.error(f"[yellow]Warning: Could not move audio {language}: {e}")
 
     def _print_summary(self):
         """Print download summary"""

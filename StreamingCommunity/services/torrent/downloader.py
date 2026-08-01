@@ -1,31 +1,38 @@
 # 2026
+from __future__ import annotations
 
+import logging
 import os
 import shutil
-import logging
-from typing import Optional
-
 
 # External library
 from rich.console import Console
-
 
 # Internal utilities
 from StreamingCommunity.services._base.site_costant import site_constants
 from StreamingCommunity.setup import get_aria2c_path
 from StreamingCommunity.torrent.downloader import TorrentDownloader
 
-
 # Variable
 console = Console()
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
-VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".ts", ".m4v"}
+VIDEO_EXTENSIONS = {
+    ".mkv",
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".wmv",
+    ".flv",
+    ".webm",
+    ".ts",
+    ".m4v",
+}
 
 MIN_SPACE_BYTES = 500 * 1024 * 1024  # 500 MB minimum free space
 
 
-def _get_downloader(is_movie: bool = True) -> Optional[TorrentDownloader]:
+def _get_downloader(is_movie: bool = True) -> TorrentDownloader | None:
     """Create a TorrentDownloader with the correct output path."""
     aria2c = get_aria2c_path()
     if not aria2c:
@@ -45,15 +52,17 @@ def _check_disk_space(path: str, min_bytes: int = MIN_SPACE_BYTES) -> bool:
     """Check if there is enough disk space. Returns True if OK."""
     try:
         usage = shutil.disk_usage(path)
-        free_gb = usage.free / (1024 ** 3)
+        free_gb = usage.free / (1024**3)
         if usage.free < min_bytes:
-            min_gb = min_bytes / (1024 ** 3)
-            console.print(f"[red]Insufficient disk space: {free_gb:.1f} GB free, {min_gb:.1f} GB required")
+            min_gb = min_bytes / (1024**3)
+            console.print(
+                f"[red]Insufficient disk space: {free_gb:.1f} GB free, {min_gb:.1f} GB required"
+            )
             return False
-        log.info("Disk space check OK: %.1f GB free", free_gb)
+        logger.info("Disk space check OK: %.1f GB free", free_gb)
         return True
-    except Exception as e:
-        log.warning("Disk space check failed: %s", e)
+    except OSError as e:
+        logger.warning("Disk space check failed: %s", e)
         return True
 
 
@@ -68,7 +77,7 @@ def _snapshot_files(download_dir: str) -> set:
     return snapshot
 
 
-def _find_new_video(before: set, download_dir: str) -> Optional[str]:
+def _find_new_video(before: set, download_dir: str) -> str | None:
     """Find the newest video file by creation time that wasn't present in the before snapshot."""
     candidates = []
     for root, _dirs, files in os.walk(download_dir):
@@ -86,7 +95,7 @@ def _find_new_video(before: set, download_dir: str) -> Optional[str]:
     return candidates[0]
 
 
-def _find_video_file(download_dir: str) -> Optional[str]:
+def _find_video_file(download_dir: str) -> str | None:
     """Fallback: find the largest video file in the download directory."""
     if not os.path.isdir(download_dir):
         return None
@@ -106,7 +115,7 @@ def _find_video_file(download_dir: str) -> Optional[str]:
     return candidates[0]
 
 
-def _download_impl(select_title, is_movie: bool) -> Optional[str]:
+def _download_impl(select_title, is_movie: bool) -> str | None:
     """Common download logic for both films and series."""
     from StreamingCommunity.services.torrent import _torrent_results
 
@@ -123,7 +132,9 @@ def _download_impl(select_title, is_movie: bool) -> Optional[str]:
         return None
 
     console.print(f"[cyan]Downloading: [yellow]{select_title.name}")
-    console.print(f"[cyan]Source: [yellow]{torrent.source} [cyan]| Quality: [yellow]{torrent.quality}")
+    console.print(
+        f"[cyan]Source: [yellow]{torrent.source} [cyan]| Quality: [yellow]{torrent.quality}"
+    )
 
     before = _snapshot_files(downloader.download_path)
     result = downloader.download_magnet(torrent.magnet_url)
@@ -134,6 +145,7 @@ def _download_impl(select_title, is_movie: bool) -> Optional[str]:
         video_file = _find_new_video(before, result) or _find_video_file(result)
         if video_file:
             from StreamingCommunity.services.torrent.audio_dub import prompt_audio_dub
+
             dubbed = prompt_audio_dub(select_title, video_file)
             if dubbed:
                 console.print(f"[green]Dubbed version: {dubbed}")
@@ -143,16 +155,16 @@ def _download_impl(select_title, is_movie: bool) -> Optional[str]:
     return result
 
 
-def download_film(select_title) -> Optional[str]:
+def download_film(select_title) -> str | None:
     """Download a torrent for a film."""
     return _download_impl(select_title, is_movie=True)
 
 
 def download_series(
     select_title,
-    season_selection: Optional[str] = None,
-    episode_selection: Optional[str] = None,
+    season_selection: str | None = None,
+    episode_selection: str | None = None,
     scrape_serie=None,
-) -> Optional[str]:
+) -> str | None:
     """Download a torrent for a series."""
     return _download_impl(select_title, is_movie=False)
