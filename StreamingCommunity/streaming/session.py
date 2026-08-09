@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import logging
 import signal
-from typing import Optional
 
 from rich.console import Console
 
@@ -13,9 +14,9 @@ class StreamSession:
         self,
         playlist_url: str,
         headers: dict,
-        output_dir: Optional[str] = None,
+        output_dir: str | None = None,
         port: int = 0,
-        preferred_player: Optional[str] = None,
+        preferred_player: str | None = None,
     ):
         self.playlist_url = playlist_url
         self.headers = headers or {}
@@ -91,9 +92,9 @@ class StreamSession:
 def stream_content(
     playlist_url: str,
     headers: dict,
-    output_dir: Optional[str] = None,
+    output_dir: str | None = None,
     port: int = 0,
-    preferred_player: Optional[str] = None,
+    preferred_player: str | None = None,
 ):
     session = StreamSession(
         playlist_url=playlist_url,

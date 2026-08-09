@@ -1,21 +1,24 @@
 # 22.06.26 - Rewritten for streaming-community.fans (vixsrc.to probing)
 
-import logging
-import base64
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional
-from urllib.parse import urlparse, parse_qs
+from __future__ import annotations
 
+import base64
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import parse_qs, urlparse
+
+from httpx import HTTPError
+
+from StreamingCommunity.services._base.object import Episode, Season, SeasonManager
 
 # Internal utilities
 from StreamingCommunity.utils.http_client import create_client, get_userAgent
-from StreamingCommunity.services._base.object import SeasonManager, Episode, Season
-
 
 # Variable
 headers = {"user-agent": get_userAgent()}
 VIXSRC_API = "https://vixsrc.to/api"
 MAX_WORKERS = 15
+logger = logging.getLogger(__name__)
 
 
 def _get_shared_client():
@@ -23,7 +26,7 @@ def _get_shared_client():
 
 
 class GetSerieInfo:
-    def __init__(self, imdb_id: str, series_name: Optional[str] = None):
+    def __init__(self, imdb_id: str, series_name: str | None = None):
         self.imdb_id = imdb_id
         self.series_name = series_name or ""
         self.seasons_manager = SeasonManager()
@@ -35,8 +38,8 @@ class GetSerieInfo:
             response = self._client.get(url)
             if response.status_code == 200:
                 return response.json()
-        except Exception as e:
-            logging.error(f"Error fetching {url}: {e}")
+        except HTTPError as e:
+            logger.error(f"Error fetching {url}: {e}")
         return None
 
     def _parse_episode_name(self, data: dict) -> str:
@@ -49,7 +52,7 @@ class GetSerieInfo:
                 decoded = base64.b64decode(d_param).decode("utf-8")
                 if " " in decoded:
                     return decoded.split(" ", 1)[1]
-            except Exception:
+            except HTTPError:
                 pass
         return ""
 

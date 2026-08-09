@@ -1,36 +1,34 @@
 # 22.06.26 - Rewritten for streaming-community.fans (vixsrc.to API)
 
+from __future__ import annotations
+
 import os
 import os as _os
-
+from typing import Any
 
 # External library
+from httpx import HTTPError
 from rich.console import Console
 from rich.prompt import Prompt
-from typing import Optional, Any
-
-# Internal utilities
-from StreamingCommunity.utils import os_manager, config_manager, start_message
-from StreamingCommunity.utils.http_client import create_client, get_userAgent
-from StreamingCommunity.services._base import site_constants, Entries
-from StreamingCommunity.services._base.tv_display_manager import map_episode_title
-from StreamingCommunity.services._base.tv_download_manager import (
-    process_season_selection,
-    process_episode_download,
-)
-
 
 # Downloader
 from StreamingCommunity.core.downloader import HLS_Downloader
 
-
 # Player
 from StreamingCommunity.player.vixcloud import VideoSource
+from StreamingCommunity.services._base import Entries, site_constants
+from StreamingCommunity.services._base.tv_display_manager import map_episode_title
+from StreamingCommunity.services._base.tv_download_manager import (
+    process_episode_download,
+    process_season_selection,
+)
 
+# Internal utilities
+from StreamingCommunity.utils import config_manager, os_manager, start_message
+from StreamingCommunity.utils.http_client import create_client, get_userAgent
 
 # Logic
 from .scrapper import GetSerieInfo
-
 
 # Variable
 console = Console()
@@ -41,11 +39,11 @@ VIXSRC_API = "https://vixsrc.to/api"
 
 
 def _get_playlist_url(
-    imdb_id: Optional[str],
+    imdb_id: str | None,
     is_series: bool,
-    season: Optional[int] = None,
-    episode: Optional[int] = None,
-) -> Optional[str]:
+    season: int | None = None,
+    episode: int | None = None,
+) -> str | None:
     api_url = (
         f"{VIXSRC_API}/tv/{imdb_id}/{season}/{episode}?lang=it&ref=clone"
         if is_series
@@ -60,7 +58,7 @@ def _get_playlist_url(
         if not embed_src:
             console.print("[red]No embed src found in API response")
             return None
-    except Exception as e:
+    except HTTPError as e:
         console.print(f"[red]Error fetching API: {e}")
         return None
 
@@ -72,7 +70,7 @@ def _get_playlist_url(
     return vs.get_playlist()
 
 
-def download_film(select_title: Entries) -> Optional[tuple[Optional[str], Any]]:
+def download_film(select_title: Entries) -> tuple[str | None, Any] | None:
     start_message()
     console.print(
         f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{select_title.name} \n"
@@ -127,8 +125,8 @@ def download_episode(
 
 def download_series(
     select_season: Entries,
-    season_selection: Optional[str] = None,
-    episode_selection: Optional[str] = None,
+    season_selection: str | None = None,
+    episode_selection: str | None = None,
     scrape_serie=None,
 ) -> None:
     start_message()
@@ -143,7 +141,7 @@ def download_series(
     seasons_count = len(scrape_serie.seasons_manager)
 
     def download_episode_callback(
-        season_number: int, download_all: bool, episode_selection: Optional[str] = None
+        season_number: int, download_all: bool, episode_selection: str | None = None
     ):
         def download_video_callback(obj_episode, season_idx, episode_idx):
             return download_episode(obj_episode, season_idx, episode_idx, scrape_serie)
@@ -224,8 +222,8 @@ def stream_episode(
 
 def stream_series(
     select_season: Entries,
-    season_selection: Optional[str] = None,
-    episode_selection: Optional[str] = None,
+    season_selection: str | None = None,
+    episode_selection: str | None = None,
     scrape_serie=None,
 ):
     start_message()
@@ -240,7 +238,7 @@ def stream_series(
     seasons_count = len(scrape_serie.seasons_manager)
 
     def stream_episode_callback(
-        season_number: int, download_all: bool, episode_selection: Optional[str] = None
+        season_number: int, download_all: bool, episode_selection: str | None = None
     ):
         def stream_video_callback(obj_episode, season_idx, episode_idx):
             return stream_episode(obj_episode, season_idx, episode_idx, scrape_serie)

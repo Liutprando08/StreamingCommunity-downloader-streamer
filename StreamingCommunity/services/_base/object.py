@@ -1,13 +1,13 @@
 # 23.11.24
 
-import difflib
-from datetime import datetime
-from typing import Any, List, Optional, Union
+from __future__ import annotations
 
+import difflib
+from datetime import UTC, datetime
+from typing import Any
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager, tmdb_client
-
 
 # Variable
 TMDB_KEY = config_manager.login.get("TMDB", "api_key", default="")
@@ -16,21 +16,21 @@ TMDB_KEY = config_manager.login.get("TMDB", "api_key", default="")
 class Episode:
     def __init__(
         self,
-        id: Optional[Any] = None,
-        video_id: Optional[str] = None,
-        number: Optional[Any] = None,
-        name: Optional[str] = None,
-        duration: Optional[Any] = None,
-        url: Optional[str] = None,
-        mpd_id: Optional[str] = None,
-        channel: Optional[str] = None,
-        category: Optional[str] = None,
-        description: Optional[str] = None,
-        image: Optional[str] = None,
-        poster: Optional[str] = None,
-        year: Optional[Any] = None,
-        is_special: Optional[bool] = None,
-        tmdb_id: Optional[str] = None,
+        id: Any | None = None,
+        video_id: str | None = None,
+        number: Any | None = None,
+        name: str | None = None,
+        duration: Any | None = None,
+        url: str | None = None,
+        mpd_id: str | None = None,
+        channel: str | None = None,
+        category: str | None = None,
+        description: str | None = None,
+        image: str | None = None,
+        poster: str | None = None,
+        year: Any | None = None,
+        is_special: bool | None = None,
+        tmdb_id: str | None = None,
         **kwargs,
     ):
         self.id = id
@@ -63,7 +63,7 @@ class Episode:
 
 class EpisodeManager:
     def __init__(self):
-        self.episodes: List[Episode] = []
+        self.episodes: list[Episode] = []
 
     def add(self, episode: Episode):
         """
@@ -96,12 +96,12 @@ class EpisodeManager:
 class Season:
     def __init__(
         self,
-        id: Optional[Union[int, str]] = None,
-        number: Optional[int] = None,
-        name: Optional[str] = None,
-        slug: Optional[str] = None,
-        type: Optional[str] = None,
-        tmdb_id: Optional[str] = None,
+        id: int | str | None = None,
+        number: int | None = None,
+        name: str | None = None,
+        slug: str | None = None,
+        type: str | None = None,
+        tmdb_id: str | None = None,
         **kwargs,
     ):
         self.id = id
@@ -121,7 +121,7 @@ class Season:
 
 class SeasonManager:
     def __init__(self):
-        self.seasons: List[Season] = []
+        self.seasons: list[Season] = []
 
     def add(self, season: Season) -> Season:
         """
@@ -131,7 +131,7 @@ class SeasonManager:
         self.seasons.sort(key=lambda x: x.number or 0)
         return season
 
-    def get_season_by_number(self, number: int) -> Optional[Season]:
+    def get_season_by_number(self, number: int) -> Season | None:
         """
         Get a season by its number.
         """
@@ -184,6 +184,7 @@ class Entries(metaclass=EntriesMeta):
     year: str
     provider_language: str
     tmdb_id: str
+    imdb_id: str
 
     def to_dict(self):
         """Convert the entries to a dictionary."""
@@ -202,7 +203,7 @@ class Entries(metaclass=EntriesMeta):
 
 class EntriesManager:
     def __init__(self):
-        self.media_list: List[Entries] = []
+        self.media_list: list[Entries] = []
 
     def add(self, media) -> None:
         """
@@ -212,29 +213,28 @@ class EntriesManager:
             media (Entries): Media item to add.
         """
         # Logic to fetch year if 9999
-        if media.year == "9999":
-            if TMDB_KEY != "" and TMDB_KEY is not None:
-                if media.slug and media.slug != "":
-                    print(f"Fetching year for slug: {media.slug}, type: {media.type}")
-                    media.year = str(
-                        tmdb_client.get_year_by_slug_and_type(media.slug, media.type)
-                        or "9999"
-                    )
-                    if media.year == "9999":
-                        print("Cant fetch year setting current year.")
-                        media.year = str(datetime.now().year)
+        if media.year == "9999" and TMDB_KEY != "" and TMDB_KEY is not None:
+            if media.slug and media.slug != "":
+                print(f"Fetching year for slug: {media.slug}, type: {media.type}")
+                media.year = str(
+                    tmdb_client.get_year_by_slug_and_type(media.slug, media.type)
+                    or "9999"
+                )
+                if media.year == "9999":
+                    print("Cant fetch year setting current year.")
+                    media.year = str(datetime.now(UTC).year)
 
-                elif media.name and media.name != "":
-                    print(f"Fetching year for name: {media.name}, type: {media.type}")
-                    media.year = str(
-                        tmdb_client.get_year_by_slug_and_type(
-                            media.name.replace(" ", "-").lower(), media.type
-                        )
-                        or "9999"
+            elif media.name and media.name != "":
+                print(f"Fetching year for name: {media.name}, type: {media.type}")
+                media.year = str(
+                    tmdb_client.get_year_by_slug_and_type(
+                        media.name.replace(" ", "-").lower(), media.type
                     )
-                    if media.year == "9999":
-                        print("Cant fetch year setting current year.")
-                        media.year = str(datetime.now().year)
+                    or "9999"
+                )
+                if media.year == "9999":
+                    print("Cant fetch year setting current year.")
+                    media.year = str(datetime.now(UTC).year)
 
         self.media_list.append(media)
 
@@ -246,7 +246,7 @@ class EntriesManager:
 
     def __len__(self) -> int:
         """
-        Get the number of media items in the list.
+        Get the numer of media items in the list.
         """
         return len(self.media_list)
 
@@ -268,9 +268,8 @@ class EntriesManager:
                 if title is None
                 else difflib.SequenceMatcher(None, query_lower, title.lower()).ratio()
             )
-            setattr(media, "score", score)
+            media.score = str(score)
         self.media_list.sort(key=lambda x: getattr(x, "score", 0), reverse=True)
 
     def __str__(self):
         return f"EntriesManager(num_media={len(self.media_list)})"
-
