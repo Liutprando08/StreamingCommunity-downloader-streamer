@@ -3,7 +3,8 @@
         "close_console": true,
         "show_message": true,
         "show_device_info": true,
-        "fetch_domain_online": true
+        "fetch_domain_online": true,
+        "check_domain_on_start": true
     },
     "OUTPUT": {
         "root_path": "Video",

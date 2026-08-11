@@ -24,6 +24,7 @@ from StreamingCommunity.setup import (
 )
 from StreamingCommunity.services._base import load_search_functions
 from StreamingCommunity.utils import config_manager, os_manager, start_message
+from StreamingCommunity.utils.domain_check import check_streamingcommunity_domain
 from StreamingCommunity.upload import git_update, binary_update
 from StreamingCommunity.upload.version import __version__, __title__
 
@@ -64,17 +65,14 @@ def initialize():
     # Windows 7 terminal size fix
     if platform.system() == "Windows" and "7" in platform.version():
         subprocess.run(["mode", "120, 40"], check=False)
-
-    # Python version check
-    if sys.version_info < (3, 8):
-        console.log("[red]Install python version >= 3.8")
-        sys.exit(0)
-
     # Attempt GitHub update
     try:
         git_update()
     except Exception as e:
         console.log(f"[red]Error with loading github: {str(e)}")
+
+    # Check if the StreamingCommunity domain changed and update domains.json
+    check_streamingcommunity_domain()
 
 
 def _expand_user_path(path: str) -> str:
@@ -404,7 +402,7 @@ def handle_direct_site_selection(
     return True
 
 
-def get_user_site_selection(args, choice_labels):
+def get_user_site_selection(choice_labels):
     """Get site selection from user (interactive or category-based)."""
     legend_text = " | ".join(
         [f"[{color}]{cat.capitalize()}[/{color}]" for cat, color in COLOR_MAP.items()]
@@ -476,7 +474,7 @@ def main():
 
         if not NOT_CLOSE:
             while True:
-                category = get_user_site_selection(args, choice_labels)
+                category = get_user_site_selection(choice_labels)
 
                 if category == "global":
                     call_global_search(args.search)
@@ -495,7 +493,7 @@ def main():
             force_exit()
 
         else:
-            category = get_user_site_selection(args, choice_labels)
+            category = get_user_site_selection(choice_labels)
 
             if category == "global":
                 call_global_search(args.search)

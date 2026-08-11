@@ -1,54 +1,54 @@
 {
-  "streamingcommunity": {
-    "full_url": "https://streaming-community.ltd/"
-  },
-  "animeunity": {
-    "full_url": "https://www.animeunity.so"
-  },
-  "animeworld": {
-    "full_url": "https://www.animeworld.ac"
-  },
-  "guardaserie": {
-    "full_url": "https://guardaserie.meme"
-  },
-  "crunchyroll": {
-    "full_url": "https://www.crunchyroll.com"
-  },
-  "mostraguarda": {
-    "full_url": "https://mostraguarda.stream"
-  },
-  "torrent": {
-    "full_url": ""
-  },
-  "limetorrent": {
-    "full_url": "https://limetorrent.net",
-    "mirrors": [
-      "https://limetorrent.net",
-      "https://www.limetorrents.fun",
-      "https://limetorrents.asia",
-      "https://limetorrents.zone"
-    ]
-  },
-  "torrentgalaxy": {
-    "full_url": "https://torrentgalaxy.info",
-    "mirrors": [
-      "https://torrentgalaxy.info",
-      "https://torrentgalaxy-official.is",
-      "https://tgx.rs",
-      "https://torrentgalaxy.mx",
-      "https://torrentgalaxy.hair"
-    ]
-  },
-  "eztv": {
-    "full_url": "https://eztvx.to/api"
-  },
-  "nyaa": {
-    "full_url": "https://nyaa.si"
-  },
-  "foodnetwork": {
-    "full_url": "https://www.foodnetwork.it"
-  },
-  "plutotv": {
-    "full_url": "https://pluto.tv"
-  }
+    "streamingcommunity": {
+        "full_url": "https://streaming-community.ltd"
+    },
+    "animeunity": {
+        "full_url": "https://www.animeunity.so"
+    },
+    "animeworld": {
+        "full_url": "https://www.animeworld.ac"
+    },
+    "guardaserie": {
+        "full_url": "https://guardaserie.meme"
+    },
+    "crunchyroll": {
+        "full_url": "https://www.crunchyroll.com"
+    },
+    "mostraguarda": {
+        "full_url": "https://mostraguarda.stream"
+    },
+    "torrent": {
+        "full_url": ""
+    },
+    "limetorrent": {
+        "full_url": "https://limetorrent.net",
+        "mirrors": [
+            "https://limetorrent.net",
+            "https://www.limetorrents.fun",
+            "https://limetorrents.asia",
+            "https://limetorrents.zone"
+        ]
+    },
+    "torrentgalaxy": {
+        "full_url": "https://torrentgalaxy.info",
+        "mirrors": [
+            "https://torrentgalaxy.info",
+            "https://torrentgalaxy-official.is",
+            "https://tgx.rs",
+            "https://torrentgalaxy.mx",
+            "https://torrentgalaxy.hair"
+        ]
+    },
+    "eztv": {
+        "full_url": "https://eztvx.to/api"
+    },
+    "nyaa": {
+        "full_url": "https://nyaa.si"
+    },
+    "foodnetwork": {
+        "full_url": "https://www.foodnetwork.it"
+    },
+    "plutotv": {
+        "full_url": "https://pluto.tv"
+    }
 }
