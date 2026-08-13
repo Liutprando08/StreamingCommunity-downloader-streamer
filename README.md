@@ -17,7 +17,8 @@
 </div>
 
 > **⚠️ If a streaming service doesn't work**, the site URL may have changed.
-> Open `Conf/domains.json` and update the `full_url` for that service, then restart.
+> The app normally fixes this automatically on startup (see [Automatic Link Updates](#automatic-link-updates)).
+> You can also open `Conf/domains.json` and update the `full_url` for that service manually, then restart.
 
 ## 📖 Table of Contents
 
@@ -32,6 +33,9 @@
 - [Configuration](#configuration)
 - [Usage Examples](#usage-examples)
 - [Global Search](#global-search)
+- [Torrent Downloads](#torrent-downloads)
+- [Kodi/Jellyfin/Emby Metadata](#kodijellyfinemby-metadata)
+- [Automatic Link Updates](#automatic-link-updates)
 - [Advanced Features](#advanced-features)
 - [Streaming](#streaming)
 - [TO DO](#todo)
@@ -378,6 +382,143 @@ When using `--global`, you will be prompted to:
 3. Select specific sites to search
 
 Results display title, media type, year, and source site in a consolidated table. You can select any result to download directly.
+
+---
+
+## Torrent Downloads
+
+Search and download content from public torrent trackers as an alternative to streaming sites. Results are aggregated from multiple trackers, ranked by seeders, downloaded with **aria2c** and optionally muxed with the original Italian audio track.
+
+### Usage
+
+```bash
+python -m StreamingCommunity --site torrent --search "interstellar"
+```
+
+In the interactive site menu, select the **Torrent** entry (shown in magenta). Torrent results are also included in [Global Search](#global-search).
+
+### Features
+
+- **Multi-tracker search**: aggregates results from YTS, EZTV, Nyaa, LimeTorrents and TorrentGalaxy (plus Jackett if configured), sorted by seeders
+- **Magnet downloads**: downloads `.torrent`/magnet links via aria2c with live progress output
+- **Audio dub muxing**: after the download completes, you can mux the original Italian audio track (from a streaming site) onto the torrent video using FFmpeg — the `PROCESS` encoding settings apply
+- **Disk space check**: verifies free space before starting and warns on insufficient storage
+
+### Configuration
+
+```json
+{
+    "TORRENT": {
+        "enabled": true,
+        "sync_interval_hours": 24,
+        "jackett_url": "",
+        "jackett_api_key": "",
+        "max_seeders": 0,
+        "preferred_quality": "best",
+        "download_path": "Torrents",
+        "auto_mux": true,
+        "mux_timeout_minutes": 30,
+        "flaresolverr_url": "",
+        "scrape_impersonate": "chrome",
+        "scrape_delay_seconds": 2,
+        "scrape_retry_count": 3
+    }
+}
+```
+
+- **`enabled`**: Enable/disable torrent search (default: `true`)
+- **`sync_interval_hours`**: How often the local torrent index refreshes (default: `24`)
+- **`jackett_url` / `jackett_api_key`**: Optional Jackett server URL and API key to add private indexers
+- **`max_seeders`**: Minimum seeders filter; `0` disables it (default: `0`)
+- **`preferred_quality`**: Preferred quality for results (default: `"best"`)
+- **`download_path`**: Folder where torrents are downloaded (default: `"Torrents"`)
+- **`auto_mux`**: Offer to mux the Italian audio track after download (default: `true`)
+- **`mux_timeout_minutes`**: FFmpeg mux timeout in minutes (default: `30`)
+- **`flaresolverr_url`**: Optional FlareSolverr URL for trackers behind Cloudflare challenges
+- **`scrape_impersonate`**: Browser profile impersonated when scraping (default: `"chrome"`)
+- **`scrape_delay_seconds`**: Delay between scraper requests to avoid rate-limiting (default: `2`)
+- **`scrape_retry_count`**: Retry attempts per scraper on failure (default: `3`)
+
+> **Requires**: `aria2c` (auto-downloaded by the app) and `ffmpeg` (for audio muxing).
+
+---
+
+## Kodi/Jellyfin/Emby Metadata
+
+Generate Kodi-compatible XML metadata files (`.nfo`) plus poster/fanart images alongside your downloads, so media centers (Kodi, Jellyfin, Emby) recognize your library immediately.
+
+### How it works
+
+After a download completes, the app looks up the title on **TMDB** (using the series/movie name from the output path) and writes:
+
+| File | Content |
+|------|---------|
+| `movie.nfo` | Movie title, year, rating, plot, genres, director, cast, MPAA, IMDB/TMDB IDs |
+| `tvshow.nfo` | Series-level metadata for TV shows |
+| `<episode>.nfo` | Per-episode metadata (season, episode, title) |
+| `poster.jpg` / `fanart.jpg` | Poster and backdrop artwork downloaded from TMDB |
+
+### Enable
+
+Set `kodi_nfo` to `true` in the `PROCESS` section of `config.json` and add a TMDB API key to `Conf/login.json`:
+
+```json
+{
+    "PROCESS": {
+        "kodi_nfo": true
+    }
+}
+```
+
+```json
+{
+    "TMDB": {
+        "api_key": "your_tmdb_api_key"
+    }
+}
+```
+
+> **Note**: A free TMDB API key can be obtained at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api). The same key powers metadata lookups and title matching. The older plain-text `generate_nfo` flag can be enabled independently.
+
+---
+
+## Automatic Link Updates
+
+Streaming site URLs change frequently, so the app keeps them up to date automatically in two ways:
+
+### Domain auto-refresh (`fetch_domain_online`)
+
+On startup, the app downloads the latest `domains.json` from the project's GitHub repository and saves it to `Conf/domains.json`, keeping all site links fresh without manual edits.
+
+```json
+{
+    "DEFAULT": {
+        "fetch_domain_online": true
+    }
+}
+```
+
+### StreamingCommunity link check (`check_domain_on_start`)
+
+StreamingCommunity changes its domain very often. When enabled, the app verifies the current domain on every launch by scraping the link tracker page (giardiniblog.it). If the domain changed, `Conf/domains.json` is updated automatically — no restart required.
+
+```json
+{
+    "DEFAULT": {
+        "check_domain_on_start": true
+    }
+}
+```
+
+### Binary auto-update (`-UP`)
+
+For pre-built binaries, run the built-in updater to download and install the latest release:
+
+```bash
+streamingcommunity -UP
+```
+
+For pip installs, update with `pip install -U StreamingCommunity-download-stream`.
 
 ---
 
