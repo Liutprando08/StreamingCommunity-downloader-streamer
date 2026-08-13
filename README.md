@@ -428,7 +428,6 @@ In the interactive site menu, select the **Torrent** entry (shown in magenta). T
 
 - **`enabled`**: Enable/disable torrent search (default: `true`)
 - **`sync_interval_hours`**: How often the local torrent index refreshes (default: `24`)
-- **`jackett_url` / `jackett_api_key`**: Optional Jackett server URL and API key to add private indexers
 - **`max_seeders`**: Minimum seeders filter; `0` disables it (default: `0`)
 - **`preferred_quality`**: Preferred quality for results (default: `"best"`)
 - **`download_path`**: Folder where torrents are downloaded (default: `"Torrents"`)
