@@ -1,15 +1,23 @@
 # 18.07.25
 
 import sys
-
+from typing import Tuple
 
 # Logic
-from .checker import check_bento4, check_mp4dump, check_ffmpeg, check_megatools, check_n_m3u8dl_re, check_shaka_packager, check_aria2c
+from .checker import (
+    check_bento4,
+    check_mp4dump,
+    check_ffmpeg,
+    check_megatools,
+    check_n_m3u8dl_re,
+    check_shaka_packager,
+    check_aria2c,
+)
 from .device_install import check_device_wvd_path, check_device_prd_path
 
 
 # Variable
-is_binary_installation = getattr(sys, 'frozen', False)
+is_binary_installation = getattr(sys, "frozen", False)
 ffmpeg_path, ffprobe_path = check_ffmpeg()
 bento4_decrypt_path = check_bento4()
 mp4dump_path = check_mp4dump()
@@ -24,35 +32,46 @@ aria2c_path = check_aria2c()
 def get_is_binary_installation() -> bool:
     return is_binary_installation
 
-def get_ffmpeg_path() -> str:
+
+def get_ffmpeg_path() -> str | None:
     return ffmpeg_path
 
-def get_ffprobe_path() -> str:
+
+def get_ffprobe_path() -> str | None:
     return ffprobe_path
 
-def get_bento4_decrypt_path() -> str:
+
+def get_bento4_decrypt_path() -> str | None:
     return bento4_decrypt_path
 
-def get_mp4dump_path() -> str:
+
+def get_mp4dump_path() -> str | None:
     return mp4dump_path
 
-def get_wvd_path() -> str:
+
+def get_wvd_path() -> str | None:
     return wvd_path
 
-def get_prd_path() -> str:
+
+def get_prd_path() -> str | None:
     return prd_path
 
-def get_megatools_path() -> str:
+
+def get_megatools_path() -> str | None:
     return megatools_path
 
-def get_n_m3u8dl_re_path() -> str:
+
+def get_n_m3u8dl_re_path() -> str | None:
     return n_m3u8dl_re_path
 
-def get_shaka_packager_path() -> str:
+
+def get_shaka_packager_path() -> Tuple[str | None, str | None] | str | None:
     return shaka_packager
 
-def get_aria2c_path() -> str:
+
+def get_aria2c_path() -> str | None:
     return aria2c_path
+
 
 def get_info_wvd(cdm_device_path):
     if cdm_device_path is not None:
@@ -68,10 +87,12 @@ def get_info_wvd(cdm_device_path):
         build_info = info.get("build_info", "").lower()
 
         # Extract device type
-        is_emulator = any(x in device_name for x in [
-            "generic", "sdk", "emulator", "x86"
-        ]) or "test-keys" in build_info or "userdebug" in build_info
-        
+        is_emulator = (
+            any(x in device_name for x in ["generic", "sdk", "emulator", "x86"])
+            or "test-keys" in build_info
+            or "userdebug" in build_info
+        )
+
         if "tv" in model.lower():
             dev_type = "Android TV"
         elif is_emulator:
@@ -84,6 +105,7 @@ def get_info_wvd(cdm_device_path):
             f"[red]L{device.security_level} [cyan]| [red]{dev_type} [cyan]| "
             f"[cyan]SysID: [red]{device.system_id}"
         )
+
 
 def get_info_prd(cdm_device_path):
     if cdm_device_path is not None:
@@ -98,3 +120,4 @@ def get_info_prd(cdm_device_path):
             f"[red]SL{device.security_level} [cyan]| "
             f"[yellow]{leaf_cert.get_name()} "
         )
+

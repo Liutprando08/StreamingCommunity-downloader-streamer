@@ -24,23 +24,23 @@ def check_bento4() -> Optional[str]:
     """
     system_platform = binary_paths.system
     binary_exec = "mp4decrypt.exe" if system_platform == "windows" else "mp4decrypt"
-    
+
     # STEP 1: Check system PATH
     binary_path = shutil.which(binary_exec)
-    
+
     if binary_path:
         return binary_path
-    
+
     # STEP 2: Check local binary directory
     binary_local = binary_paths.get_binary_path("bento4", binary_exec)
     if binary_local and os.path.isfile(binary_local):
         return binary_local
-    
+
     # STEP 3: Download
     binary_downloaded = binary_paths.download_binary("bento4", binary_exec)
     if binary_downloaded:
         return binary_downloaded
-    
+
     console.print(f"Failed to download {binary_exec}", style="red")
     return None
 
@@ -51,23 +51,23 @@ def check_mp4dump() -> Optional[str]:
     """
     system_platform = binary_paths.system
     binary_exec = "mp4dump.exe" if system_platform == "windows" else "mp4dump"
-    
+
     # STEP 1: Check system PATH
     binary_path = shutil.which(binary_exec)
-    
+
     if binary_path:
         return binary_path
-    
+
     # STEP 2: Check local binary directory
     binary_local = binary_paths.get_binary_path("bento4", binary_exec)
     if binary_local and os.path.isfile(binary_local):
         return binary_local
-    
+
     # STEP 3: Download
     binary_downloaded = binary_paths.download_binary("bento4", binary_exec)
     if binary_downloaded:
         return binary_downloaded
-    
+
     console.print(f"Failed to download {binary_exec}", style="red")
     return None
 
@@ -80,28 +80,33 @@ def check_ffmpeg() -> Tuple[Optional[str], Optional[str]]:
     system_platform = binary_paths.system
     ffmpeg_name = "ffmpeg.exe" if system_platform == "windows" else "ffmpeg"
     ffprobe_name = "ffprobe.exe" if system_platform == "windows" else "ffprobe"
-    
+
     # STEP 1: Check system PATH
     ffmpeg_path = shutil.which(ffmpeg_name)
     ffprobe_path = shutil.which(ffprobe_name)
-    
+
     if ffmpeg_path and ffprobe_path:
         return ffmpeg_path, ffprobe_path
-    
+
     # STEP 2: Check binary directory
     ffmpeg_local = binary_paths.get_binary_path("ffmpeg", ffmpeg_name)
     ffprobe_local = binary_paths.get_binary_path("ffmpeg", ffprobe_name)
-    
-    if ffmpeg_local and os.path.isfile(ffmpeg_local) and ffprobe_local and os.path.isfile(ffprobe_local):
+
+    if (
+        ffmpeg_local
+        and os.path.isfile(ffmpeg_local)
+        and ffprobe_local
+        and os.path.isfile(ffprobe_local)
+    ):
         return ffmpeg_local, ffprobe_local
-    
+
     # STEP 3: Download from GitHub repository
     ffmpeg_downloaded = binary_paths.download_binary("ffmpeg", ffmpeg_name)
     ffprobe_downloaded = binary_paths.download_binary("ffmpeg", ffprobe_name)
-    
+
     if ffmpeg_downloaded and ffprobe_downloaded:
         return ffmpeg_downloaded, ffprobe_downloaded
-    
+
     console.print("Failed to download FFmpeg", style="red")
     return None, None
 
@@ -113,25 +118,25 @@ def check_megatools() -> Optional[str]:
     """
     system_platform = binary_paths.system
     megatools_name = "megatools.exe" if system_platform == "windows" else "megatools"
-    
+
     # STEP 1: Check system PATH
     megatools_path = shutil.which(megatools_name)
-    
+
     if megatools_path:
         return megatools_path
-    
+
     # STEP 2: Check binary directory
     megatools_local = binary_paths.get_binary_path("megatools", megatools_name)
-    
+
     if megatools_local and os.path.isfile(megatools_local):
         return megatools_local
-    
+
     # STEP 3: Download from GitHub repository
     megatools_downloaded = binary_paths.download_binary("megatools", megatools_name)
-    
+
     if megatools_downloaded:
         return megatools_downloaded
-    
+
     console.print("Failed to download megatools", style="red")
     return None
 
@@ -143,53 +148,53 @@ def check_n_m3u8dl_re() -> Optional[str]:
     """
     system_platform = binary_paths.system
     binary_exec = "N_m3u8DL-RE.exe" if system_platform == "windows" else "N_m3u8DL-RE"
-    
+
     # STEP 1: Check system PATH
     binary_path = shutil.which(binary_exec)
-    
+
     if binary_path:
         return binary_path
-    
+
     # STEP 2: Check local binary directory
     binary_local = binary_paths.get_binary_path("n_m3u8dl", binary_exec)
     if binary_local and os.path.isfile(binary_local):
         return binary_local
-    
+
     # STEP 3: Download
     binary_downloaded = binary_paths.download_binary("n_m3u8dl", binary_exec)
     if binary_downloaded:
         return binary_downloaded
-    
+
     console.print(f"Failed to download {binary_exec}", style="red")
     return None
 
 
-def check_shaka_packager() -> Tuple[Optional[str], Optional[str]]:
+def check_shaka_packager() -> Tuple[Optional[str], Optional[str]] | str:
     """
     Check for Shaka Packager executables and download if not found.
     Order: system PATH -> binary directory -> download from GitHub
     """
     system_platform = binary_paths.system
     packager_name = "packager.exe" if system_platform == "windows" else "packager"
-    
+
     # STEP 1: Check system PATH
     packager_path = shutil.which(packager_name)
-    
+
     if packager_path:
         return packager_path
-    
+
     # STEP 2: Check binary directory
     packager_local = binary_paths.get_binary_path("shaka_packager", packager_name)
-    
+
     if packager_local and os.path.isfile(packager_local):
         return packager_local
-    
+
     # STEP 3: Download from GitHub repository
     packager_downloaded = binary_paths.download_binary("shaka_packager", packager_name)
-    
+
     if packager_downloaded:
         return packager_downloaded
-    
+
     console.print("Failed to download Shaka Packager", style="red")
     return None, None
 
@@ -201,22 +206,23 @@ def check_aria2c() -> Optional[str]:
     """
     system_platform = binary_paths.system
     binary_exec = "aria2c.exe" if system_platform == "windows" else "aria2c"
-    
+
     # STEP 1: Check system PATH
     binary_path = shutil.which(binary_exec)
-    
+
     if binary_path:
         return binary_path
-    
+
     # STEP 2: Check local binary directory
     binary_local = binary_paths.get_binary_path("aria2c", binary_exec)
     if binary_local and os.path.isfile(binary_local):
         return binary_local
-    
+
     # STEP 3: Download
     binary_downloaded = binary_paths.download_binary("aria2c", binary_exec)
     if binary_downloaded:
         return binary_downloaded
-    
+
     console.print(f"Failed to download {binary_exec}", style="red")
     return None
+
