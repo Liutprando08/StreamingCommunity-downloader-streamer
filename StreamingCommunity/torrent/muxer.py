@@ -134,6 +134,10 @@ class TorrentMuxer:
 
         ffmpeg_cmd.extend(["-c:v", "copy", "-c:a", "copy"])
 
+        # Force interleaving so the added audio is written alongside the video
+        # instead of being buffered and dumped at the end of the file.
+        ffmpeg_cmd.extend(["-max_interleave_delta", "0"])
+
         ffmpeg_cmd.extend([output_path, "-y"])
 
         console.print(f"[yellow]FFMPEG [cyan]Muxing torrent video + original audio ({original_audio_count} tracks) + Italian audio...")

@@ -218,6 +218,10 @@ def join_audios(video_path: str, audio_tracks: List[Dict[str, str]], out_path: s
     # Add encoding parameters (prima di -shortest e output)
     add_encoding_params(ffmpeg_cmd)
 
+    # Force interleaving so all audio tracks are written alongside the video
+    # instead of being buffered and dumped at the end of the file.
+    ffmpeg_cmd.extend(["-max_interleave_delta", "0"])
+
     # Use shortest input path if any audio track has significant difference
     if use_shortest:
         ffmpeg_cmd.extend(['-shortest', '-strict', 'experimental'])

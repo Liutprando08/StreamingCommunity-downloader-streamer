@@ -1,11 +1,16 @@
 # 23-01-26
 
+from __future__ import annotations
+
 import json
+import logging
 import os
 import threading
 import time
-from typing import Any
 from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class SingletonMeta(type):
@@ -40,7 +45,7 @@ class DownloadTracker(metaclass=SingletonMeta):
 
             base = config_manager.base_path or Path.home()
             return os.path.join(base, ".cache", "history.json")
-        except Exception:
+        except TypeError:
             return os.path.join(os.getcwd(), ".cache", "history.json")
 
     def _load_persisted_history(self) -> None:
@@ -51,8 +56,8 @@ class DownloadTracker(metaclass=SingletonMeta):
                     data = json.load(fh)
                 if isinstance(data, list):
                     self.history = data[-50:]
-        except Exception:
-            pass
+        except OSError as e:
+            logger.error(f"error:{e}")
 
     def _persist_history_entry(self, entry: dict[str, Any]) -> None:
         try:
@@ -60,8 +65,8 @@ class DownloadTracker(metaclass=SingletonMeta):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w", encoding="utf-8") as fh:
                 json.dump(self.history[-50:], fh, indent=2)
-        except Exception:
-            pass
+        except OSError as e:
+            logger.error(f"error:{e}")
 
     def start_download(
         self,
@@ -211,8 +216,8 @@ class DownloadTracker(metaclass=SingletonMeta):
                             proc.terminate()
                         elif hasattr(proc, "cancel"):
                             proc.cancel()
-                    except Exception:
-                        pass
+                    except OSError as e:
+                        logger.error(f"error:{e}")
 
     def is_stopped(self, download_id: str) -> bool:
         """Check if a stop has been requested for this download."""
@@ -241,8 +246,8 @@ class DownloadTracker(metaclass=SingletonMeta):
                             proc.terminate()
                         elif hasattr(proc, "cancel"):
                             proc.cancel()
-                    except Exception:
-                        pass
+                    except OSError as e:
+                        logger.error(f"error:{e}")
 
     def complete_download(
         self,
@@ -334,8 +339,8 @@ class DownloadTracker(metaclass=SingletonMeta):
             path = self._history_path()
             if os.path.exists(path):
                 os.remove(path)
-        except Exception:
-            pass
+        except OSError as e:
+            logger.error(f"error:{e}")
 
 
 class ContextTracker:
@@ -580,5 +585,5 @@ def close_context_download(
         download_tracker.complete_download(
             download_id, success=success, path=path, error=error
         )
-    except Exception:
-        pass
+    except OSError as e:
+        logger.error(f"error:{e}")

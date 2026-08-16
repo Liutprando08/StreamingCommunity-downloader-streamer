@@ -138,7 +138,7 @@ class MediaDownloader:
     ):
         self.url = url
         self.output_dir = Path(output_dir)
-        self.filename = filename | None
+        self.filename = filename
         self.headers = headers or {}
         self.key = key
         self.cookies = cookies or {}
