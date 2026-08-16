@@ -9,16 +9,14 @@ import threading
 
 # External libraries
 from rich.console import Console
-from rich.text import Text
-from rich.progress import Progress, TextColumn, ProgressColumn
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager
-from StreamingCommunity.utils import internet_manager
 from StreamingCommunity.utils.http_client import create_client, get_headers, get_userAgent
-from StreamingCommunity.source.utils.tracker import download_tracker, context_tracker
+from StreamingCommunity.core.ui.bar_manager import DownloadBarManager
+from StreamingCommunity.source.utils.tracker import download_tracker
 
 
 # Logic
@@ -34,72 +32,6 @@ shutdown_flag = threading.Event()
 TIMEOUT = config_manager.config.get_int('REQUESTS', 'timeout')
 MAX_WORKERS = config_manager.config.get_int('DOWNLOAD', 'thread_count')
 MAX_RETRIES = config_manager.config.get_int('REQUESTS', 'max_retry')
-
-
-class CustomBarColumn(ProgressColumn):
-    def __init__(self, bar_width=40):
-        super().__init__()
-        self.bar_width = bar_width
-    
-    def render(self, task):
-        completed = task.completed
-        total = task.total or 100
-        
-        bar_width = int((completed / total) * self.bar_width) if total > 0 else 0
-        bar_width = min(bar_width, self.bar_width)
-        
-        text = Text()
-        if bar_width > 0:
-            text.append("█" * bar_width, style="bright_magenta")
-        if bar_width < self.bar_width:
-            text.append("░" * (self.bar_width - bar_width), style="dim white")
-        
-        return text
-
-
-class ColoredSegmentColumn(ProgressColumn):
-    """Segment count column with colors"""
-    def render(self, task):
-        segment = task.fields.get("progress", "0/0")
-        if "/" in segment:
-            current, total = segment.split("/")
-            return Text.from_markup(f"[green]{current}[/green][dim]/[/dim][cyan]{total}[/cyan]")
-        return Text(segment, style="yellow")
-
-
-class ColoredSpeedColumn(ProgressColumn):
-    """Speed column with green color"""
-    def render(self, task):
-        speed = task.fields.get("speed", "0 MB/s")
-        return Text(speed, style="green")
-
-
-class ColoredSizeColumn(ProgressColumn):
-    """Size column with dim/green colors"""
-    def render(self, task):
-        size = task.fields.get("size", "0 MB / ? MB")
-        if "/" in size:
-            current, total = size.split("/", 1)
-            return Text.from_markup(f"[dim]{current.strip()}[/dim] /[green]{total.strip()}[/green]")
-        return Text(size, style="green")
-
-
-class CompactTimeColumn(ProgressColumn):
-    """Elapsed time column"""
-    def render(self, task):
-        elapsed = task.finished_time if task.finished else task.elapsed
-        if elapsed is None:
-            return Text("--:--", style="yellow")
-        return Text(internet_manager.format_time(elapsed), style="yellow")
-
-
-class CompactTimeRemainingColumn(ProgressColumn):
-    """Remaining time column"""
-    def render(self, task):
-        remaining = task.time_remaining
-        if remaining is None:
-            return Text("--:--", style="cyan")
-        return Text(internet_manager.format_time(remaining), style="cyan")
 
 
 class SegmentDownloader:
@@ -184,32 +116,15 @@ class SegmentDownloader:
         else:
             display_desc = description
         
-        # Use NullContext if in GUI mode to avoid live table conflicts for GUI
-        from contextlib import nullcontext
-        progress_ctx = nullcontext() if context_tracker.is_gui else Progress(
-            TextColumn("{task.description}"),
-            CustomBarColumn(bar_width=40),
-            ColoredSegmentColumn(),
-            TextColumn("│"),
-            ColoredSpeedColumn(),
-            TextColumn("│"),
-            ColoredSizeColumn(),
-            CompactTimeColumn(),
-            TextColumn("/"),
-            CompactTimeRemainingColumn(),
-            console=console,
-            refresh_per_second=4.0
-        )
-
-        with progress_ctx as progress:
-            task = None
-            if not context_tracker.is_gui:
-                task = progress.add_task(
+        # Unified progress bar manager (Rich in CLI, null-context in GUI)
+        with DownloadBarManager(self.download_id) as bar_mgr:
+            if bar_mgr.progress is not None:
+                bar_mgr.tasks["segments"] = bar_mgr.progress.add_task(
                     display_desc,
-                    total=total_segments,
-                    progress=f"0/{total_segments}",
+                    total=100,
+                    segment="0/0",
                     speed="0 MB/s",
-                    size="0 MB / ? MB"
+                    size="0 MB / ? MB",
                 )
             
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -258,28 +173,34 @@ class SegmentDownloader:
                             size_str = f"{format_size(total_size)} / {format_size(total_size * total_segments / max(downloaded_count, 1))}"
                             segments_str = f"{downloaded_count}/{total_segments}"
                             
-                            if not context_tracker.is_gui:
-                                progress.update(task, completed=downloaded_count + failed_count, progress=segments_str, speed=speed_str, size=size_str)
-                            
-                            if self.download_id:
-                                download_tracker.update_progress(
-                                    self.download_id,
-                                    description,
-                                    progress=progress_percent,
-                                    speed=speed_str,
-                                    size=size_str,
-                                    segments=segments_str
-                                )
+                            bar_mgr.handle_progress_line(
+                                {
+                                    "task_key": description,
+                                    "label": display_desc,
+                                    "pct": progress_percent,
+                                    "speed": speed_str,
+                                    "size": size_str,
+                                    "segments": segments_str,
+                                }
+                            )
                         else:
                             failed_count += 1
-                            if not context_tracker.is_gui:
-                                progress.update(task, completed=downloaded_count + failed_count)
+                            bar_mgr.handle_progress_line(
+                                {
+                                    "task_key": description,
+                                    "pct": ((downloaded_count + failed_count) / total_segments * 100) if total_segments > 0 else 0,
+                                }
+                            )
                     
                     except Exception as e:
                         logger.error(f"Error downloading segment {segment.number}: {e}")
                         failed_count += 1
-                        if not context_tracker.is_gui:
-                            progress.update(task, completed=downloaded_count + failed_count)
+                        bar_mgr.handle_progress_line(
+                            {
+                                "task_key": description,
+                                "pct": ((downloaded_count + failed_count) / total_segments * 100) if total_segments > 0 else 0,
+                            }
+                        )
         
         elapsed = time.time() - start_time
         

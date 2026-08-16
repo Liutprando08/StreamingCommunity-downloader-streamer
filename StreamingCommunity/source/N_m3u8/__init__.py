@@ -1,7 +1,7 @@
 # 10.01.26
 
 from .wrapper import MediaDownloader
-from .progress_bar import CustomBarColumn
+from StreamingCommunity.core.ui.progress_bar import CustomBarColumn
 
 
 __all__ = [

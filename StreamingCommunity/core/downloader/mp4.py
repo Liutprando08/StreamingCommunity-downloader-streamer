@@ -7,13 +7,13 @@ import os
 import signal
 import threading
 import time
+from collections import deque
 from functools import partial
 
 import httpx
 
 # External libraries
 from rich.console import Console
-from rich.progress import Progress, TextColumn
 from rich.prompt import Prompt
 
 from StreamingCommunity.core.processors.helper.kodi_nfo import (
@@ -21,7 +21,7 @@ from StreamingCommunity.core.processors.helper.kodi_nfo import (
     generate_kodi_metadata,
 )
 from StreamingCommunity.core.processors.helper.nfo import create_nfo
-from StreamingCommunity.source.N_m3u8 import CustomBarColumn
+from StreamingCommunity.core.ui.bar_manager import DownloadBarManager
 from StreamingCommunity.source.utils.tracker import context_tracker, download_tracker
 from StreamingCommunity.utils import config_manager, internet_manager, os_manager
 
@@ -205,51 +205,11 @@ def MP4_Downloader(
             start_time = time.time()
             downloaded = 0
             incomplete_error = False
+            speed_samples = deque()
 
-            # Use NullContext if in GUI mode to avoid live table conflicts for GUI
-            from contextlib import nullcontext
-
-            progress_ctx = (
-                nullcontext()
-                if context_tracker.is_gui
-                else Progress(
-                    TextColumn("[yellow]MP4[/yellow] [cyan]Downloading[/cyan]: "),
-                    CustomBarColumn(),
-                    TextColumn(
-                        "[bright_green]{task.fields[downloaded]}[/bright_green] [bright_magenta]{task.fields[downloaded_unit]}[/bright_magenta][dim]/[/dim][bright_cyan]{task.fields[total_size]}[/bright_cyan] [bright_magenta]{task.fields[total_unit]}[/bright_magenta]"
-                    ),
-                    TextColumn(
-                        "[dim]\\\\[[/dim][bright_yellow]{task.fields[elapsed]}[/bright_yellow][dim] < [/dim][bright_cyan]{task.fields[eta]}[/bright_cyan][dim]][/dim]"
-                    ),
-                    TextColumn("[bright_magenta]@[/bright_magenta]"),
-                    TextColumn("[bright_cyan]{task.fields[speed]}[/bright_cyan]"),
-                    console=console,
-                    refresh_per_second=4.0,
-                )
-            )
-
-            with progress_ctx as progress_bars:
-                if not context_tracker.is_gui:
-                    if total:
-                        total_size_value, total_size_unit = (
-                            internet_manager.format_file_size(total).split(" ")
-                        )
-                        task_total = total
-                    else:
-                        total_size_value, total_size_unit = "--", ""
-                        task_total = None
-                    if progress_bars is not None:
-                        task_id = progress_bars.add_task(
-                            "download",
-                            total=task_total,
-                            downloaded="0.00",
-                            downloaded_unit="B",
-                            total_size=total_size_value,
-                            total_unit=total_size_unit,
-                            elapsed="0s",
-                            eta="--",
-                            speed="-- B/s",
-                        )
+            # Unified progress bar manager (Rich in CLI, null-context in GUI)
+            with DownloadBarManager(download_id) as bar_mgr:
+                bar_mgr.add_prebuilt_tasks([("video", "MP4")])
 
                 with open(temp_path, "wb") as file:
                     try:
@@ -272,16 +232,25 @@ def MP4_Downloader(
 
                                 # Calculate stats
                                 elapsed = time.time() - start_time
-                                elapsed_str = internet_manager.format_time(elapsed)
 
-                                # Calculate speed and ETA (only if total known)
-                                if elapsed > 0:
-                                    speed = downloaded / elapsed
-                                    speed_str = internet_manager.format_transfer_speed(
-                                        speed
+                                # Windowed speed calculation (3s sliding window)
+                                now = time.time()
+                                speed_samples.append((now, downloaded))
+                                while speed_samples and now - speed_samples[0][0] > 3.0:
+                                    speed_samples.popleft()
+                                if len(speed_samples) >= 2:
+                                    bytes_delta = downloaded - speed_samples[0][1]
+                                    time_delta = now - speed_samples[0][0]
+                                    speed = (
+                                        bytes_delta / time_delta if time_delta > 0 else 0
                                     )
                                 else:
-                                    speed_str = "-- B/s"
+                                    speed = downloaded / elapsed if elapsed > 0 else 0
+                                speed_str = (
+                                    internet_manager.format_transfer_speed(speed)
+                                    if elapsed > 0
+                                    else "-- B/s"
+                                )
 
                                 if total:
                                     remaining_bytes = max(total - downloaded, 0)
@@ -301,36 +270,23 @@ def MP4_Downloader(
                                     )
                                 )
 
-                                # GUI Update
-                                if download_id:
-                                    percent = (downloaded / total * 100) if total else 0
-                                    total_size_str = (
-                                        f"{(total / 1024 / 1024):.2f}MB"
-                                        if total
-                                        else "Unknown"
-                                    )
-                                    download_tracker.update_progress(
-                                        download_id,
-                                        "video",
-                                        progress=percent,
-                                        speed=speed_str,
-                                        size=f"{downloaded_value}{downloaded_unit}/{total_size_str if total else '??'}",
-                                    )
+                                percent = (downloaded / total * 100) if total else 0
+                                total_size_str = (
+                                    f"{(total / 1024 / 1024):.2f}MB"
+                                    if total
+                                    else "Unknown"
+                                )
 
-                                # Update progress if not GUI
-                                if (
-                                    not context_tracker.is_gui
-                                    and progress_bars is not None
-                                ):
-                                    progress_bars.update(
-                                        task_id,
-                                        completed=downloaded,
-                                        downloaded=downloaded_value,
-                                        downloaded_unit=downloaded_unit,
-                                        elapsed=elapsed_str,
-                                        eta=eta_str,
-                                        speed=speed_str,
-                                    )
+                                bar_mgr.handle_progress_line(
+                                    {
+                                        "task_key": "video",
+                                        "label": "MP4",
+                                        "pct": percent,
+                                        "speed": speed_str,
+                                        "size": f"{downloaded_value} {downloaded_unit}/{total_size_str if total else '??'}",
+                                        "duration": eta_str,
+                                    }
+                                )
 
                     except KeyboardInterrupt:
                         if not interrupt_handler.force_quit:
