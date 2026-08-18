@@ -1,23 +1,23 @@
 # 10.01.26
 
+from __future__ import annotations
+
 import os
 import re
 import xml.etree.ElementTree as et
-from typing import Optional, List
 from pathlib import Path
+from typing import List, Optional
 
-
-# External import 
+# External import
 from rich.console import Console
 from ttconv.imsc.reader import to_model
 from ttconv.srt.writer import from_model
-
 
 # Variable
 console = Console()
 
 
-def convert_ttml_to_srt(ttml_path: str, srt_path: Optional[str] = None) -> bool:
+def convert_ttml_to_srt(ttml_path: str, srt_path: str | None = None) -> bool:
     """
     Convert TTML file or .m4s fragment containing TTML to SRT format.
     Uses ttconv for high-fidelity conversion.
@@ -35,23 +35,23 @@ def convert_ttml_to_srt(ttml_path: str, srt_path: Optional[str] = None) -> bool:
         return False
 
     if srt_path is None:
-        srt_path = str(Path(ttml_path).with_suffix('.srt'))
+        srt_path = str(Path(ttml_path).with_suffix(".srt"))
 
     try:
-        with open(ttml_path, 'rb') as f:
+        with open(ttml_path, "rb") as f:
             data = f.read()
 
         # Extract all TTML blocks (works for both plain TTML files and .m4s fragments)
-        ttml_blocks = re.findall(br'<\?xml.*?</tt>', data, re.DOTALL)
+        ttml_blocks = re.findall(rb"<\?xml.*?</tt>", data, re.DOTALL)
 
         if not ttml_blocks:
             # Try to see if it's a plain TTML without the XML declaration or just one block
             try:
-                text_content = data.decode('utf-8')
-                if '<tt' in text_content and '</tt>' in text_content:
-                    match = re.search(r'<tt.*?</tt>', text_content, re.DOTALL)
+                text_content = data.decode("utf-8")
+                if "<tt" in text_content and "</tt>" in text_content:
+                    match = re.search(r"<tt.*?</tt>", text_content, re.DOTALL)
                     if match:
-                        ttml_blocks = [match.group(0).encode('utf-8')]
+                        ttml_blocks = [match.group(0).encode("utf-8")]
             except Exception:
                 pass
 
@@ -65,9 +65,8 @@ def convert_ttml_to_srt(ttml_path: str, srt_path: Optional[str] = None) -> bool:
 
         for block in ttml_blocks:
             try:
-
                 # Decode the TTML block
-                ttml_str = block.decode('utf-8')
+                ttml_str = block.decode("utf-8")
 
                 # Parse the TTML string into an ElementTree
                 root = et.fromstring(ttml_str)
@@ -99,7 +98,7 @@ def convert_ttml_to_srt(ttml_path: str, srt_path: Optional[str] = None) -> bool:
         srt_output = "\n\n".join(all_captions)
 
         # Save the SRT file
-        with open(srt_path, 'w', encoding='utf-8') as f:
+        with open(srt_path, "w", encoding="utf-8") as f:
             f.write(srt_output)
 
         return True
@@ -108,14 +107,18 @@ def convert_ttml_to_srt(ttml_path: str, srt_path: Optional[str] = None) -> bool:
         console.print(f"[red]Error during TTML to SRT conversion: {e}")
         return False
 
-def extract_srt_from_m4s(m4s_file_path: str, output_srt_path: Optional[str] = None) -> str:
+
+def extract_srt_from_m4s(
+    m4s_file_path: str, output_srt_path: Optional[str] = None
+) -> str:
     """
     Compatibility wrapper for the user requested function name.
     """
     if convert_ttml_to_srt(m4s_file_path, output_srt_path):
         if output_srt_path is None:
-            output_srt_path = str(Path(m4s_file_path).with_suffix('.srt'))
-        with open(output_srt_path, 'r', encoding='utf-8') as f:
+            output_srt_path = str(Path(m4s_file_path).with_suffix(".srt"))
+        with open(output_srt_path, "r", encoding="utf-8") as f:
             return f.read()
     else:
         raise ValueError("Failed to extract SRT from m4s")
+

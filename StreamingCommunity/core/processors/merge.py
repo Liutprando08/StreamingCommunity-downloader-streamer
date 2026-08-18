@@ -1,26 +1,26 @@
 # 31.01.24
 
+from __future__ import annotations
+
+import logging
 import os
 import subprocess
-from typing import List, Dict, Optional
-
 
 # External library
 from rich.console import Console
 
+from StreamingCommunity.setup import binary_paths, get_ffmpeg_path
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager
-from StreamingCommunity.setup import binary_paths, get_ffmpeg_path
 
-
-# Logic class
-from .helper.ex_video import detect_ts_timestamp_issues, convert_ts_to_mp4
-from .helper.ex_audio import check_duration_v_a, has_audio
-from .helper.ex_sub import fix_subtitle_extension
 from .capture import capture_ffmpeg_real_time
 from .conversion.ttml_to_srt import convert_ttml_to_srt
+from .helper.ex_audio import check_duration_v_a, has_audio
+from .helper.ex_sub import fix_subtitle_extension
 
+# Logic class
+from .helper.ex_video import convert_ts_to_mp4, detect_ts_timestamp_issues
 
 # Config
 console = Console()
@@ -30,15 +30,19 @@ PARAM_VIDEO = config_manager.config.get_list("PROCESS", "param_video")
 PARAM_AUDIO = config_manager.config.get_list("PROCESS", "param_audio")
 PARAM_FINAL = config_manager.config.get_list("PROCESS", "param_final")
 SUBTITLE_DISPOSITION = config_manager.config.get_bool("PROCESS", "subtitle_disposition")
-SUBTITLE_DISPOSITION_LANGUAGE = config_manager.config.get_list("PROCESS", "subtitle_disposition_language")
+SUBTITLE_DISPOSITION_LANGUAGE = config_manager.config.get_list(
+    "PROCESS", "subtitle_disposition_language"
+)
 AUDIO_ORDER = config_manager.config.get_list("PROCESS", "audio_order")
 SUBTITLE_ORDER = config_manager.config.get_list("PROCESS", "subtitle_order")
 
+logger = logging.getLogger(__name__)
 
-def add_encoding_params(ffmpeg_cmd: List[str]):
+
+def add_encoding_params(ffmpeg_cmd: list[str | None]):
     """
     Add encoding parameters to the ffmpeg command.
-    
+
     Parameters:
         ffmpeg_cmd (List[str]): List of the FFmpeg command to modify
     """
@@ -52,50 +56,69 @@ def add_encoding_params(ffmpeg_cmd: List[str]):
 def detect_gpu_device_type() -> str:
     """
     Detects the GPU device type available on the system.
-    
+
     Returns:
         str: The type of GPU device detected ('cuda', 'vaapi', 'qsv', or 'none').
     """
     try:
-        if os_type == 'linux':
-            result = subprocess.run(['lspci'], capture_output=True, text=True, check=True)
+        if os_type == "linux":
+            result = subprocess.run(
+                ["lspci"], capture_output=True, text=True, check=True
+            )
             output = result.stdout.lower()
-        elif os_type == 'windows':
+        elif os_type == "windows":
             try:
-                result = subprocess.run(['wmic', 'path', 'win32_videocontroller', 'get', 'name'], capture_output=True, text=True, check=True)
+                result = subprocess.run(
+                    ["wmic", "path", "win32_videocontroller", "get", "name"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
                 output = result.stdout.lower()
 
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Fallback to PowerShell if wmic is not available
                 try:
-                    result = subprocess.run(['powershell', '-Command', 'Get-WmiObject win32_videocontroller | Select-Object -ExpandProperty Name'], capture_output=True, text=True, check=True)
+                    result = subprocess.run(
+                        [
+                            "powershell",
+                            "-Command",
+                            "Get-WmiObject win32_videocontroller | Select-Object -ExpandProperty Name",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
                     output = result.stdout.lower()
                 except (subprocess.CalledProcessError, FileNotFoundError):
-                    return 'none'
-                
-        elif os_type == 'darwin':  # macOS
-            result = subprocess.run(['system_profiler', 'SPDisplaysDataType'], capture_output=True, text=True, check=True)
+                    return "none"
+
+        elif os_type == "darwin":  # macOS
+            result = subprocess.run(
+                ["system_profiler", "SPDisplaysDataType"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
             output = result.stdout.lower()
 
         else:
-            return 'none'
-        
-        if 'nvidia' in output:
-            return 'cuda'
-        elif 'intel' in output:
-            return 'vaapi'
-        elif 'amd' in output or 'ati' in output:
-            return 'vaapi'
+            return "none"
+
+        if "nvidia" in output:
+            return "cuda"
+        elif "intel" in output or "amd" in output or "ati" in output:
+            return "vaapi"
         else:
-            return 'none'
+            return "none"
     except (subprocess.CalledProcessError, FileNotFoundError):
-        return 'none'
+        return "none"
 
 
-def join_video(video_path: str, out_path: str, log_path: Optional[str] = None):
+def join_video(video_path: str, out_path: str, log_path: str | None = None):
     """
     Mux video file using FFmpeg.
-    
+
     Parameters:
         - video_path (str): The path to the video file.
         - out_path (str): The path to save the output file.
@@ -105,36 +128,46 @@ def join_video(video_path: str, out_path: str, log_path: Optional[str] = None):
     # Enabled the use of gpu
     if USE_GPU:
         gpu_type_hwaccel = detect_gpu_device_type()
-        console.print(f"[yellow]FFMPEG [cyan]Detected GPU for video join: [red]{gpu_type_hwaccel}")
-        ffmpeg_cmd.extend(['-hwaccel', gpu_type_hwaccel])
+        console.print(
+            f"[yellow]FFMPEG [cyan]Detected GPU for video join: [red]{gpu_type_hwaccel}"
+        )
+        ffmpeg_cmd.extend(["-hwaccel", gpu_type_hwaccel])
 
     # Add mpegts to force to detect input file as ts file
-    if video_path.lower().endswith('.ts'):
-        ffmpeg_cmd.extend(['-f', 'mpegts'])
+    if video_path.lower().endswith(".ts"):
+        ffmpeg_cmd.extend(["-f", "mpegts"])
 
     # Insert input video path
     if not os.path.isfile(video_path):
         console.print(f"[red]Input video file not found: {video_path}")
         return out_path, {}
-    ffmpeg_cmd.extend(['-i', video_path])
+    ffmpeg_cmd.extend(["-i", video_path])
 
     # Add encoding parameters (prima dell'output)
     add_encoding_params(ffmpeg_cmd)
 
     # Output file and overwrite
-    ffmpeg_cmd.extend([out_path, '-y'])
+    ffmpeg_cmd.extend([out_path, "-y"])
 
     # Run join
-    result_json = capture_ffmpeg_real_time(ffmpeg_cmd, "[yellow]FFMPEG [cyan]Join video", log_path)
+    result_json = capture_ffmpeg_real_time(
+        ffmpeg_cmd, "[yellow]FFMPEG [cyan]Join video", log_path
+    )
     print()
 
     return out_path, result_json
 
 
-def join_audios(video_path: str, audio_tracks: List[Dict[str, str]], out_path: str, limit_duration_diff: float = 3, log_path: Optional[str] = None):
+def join_audios(
+    video_path: str,
+    audio_tracks: list[dict[str, str]],
+    out_path: str,
+    limit_duration_diff: float = 3,
+    log_path: str | None = None,
+):
     """
     Joins audio tracks with a video file using FFmpeg.
-    
+
     Parameters:
         - video_path (str): The path to the video file.
         - audio_tracks (list[dict[str, str]]): A list of dictionaries containing information about audio tracks.
@@ -143,37 +176,49 @@ def join_audios(video_path: str, audio_tracks: List[Dict[str, str]], out_path: s
         - limit_duration_diff (float): Maximum duration difference in seconds.
     """
     if AUDIO_ORDER:
+
         def get_order_index(track):
-            track_name = track.get('name', '').lower()
+            track_name = track.get("name", "").lower()
             for i, order_val in enumerate(AUDIO_ORDER):
                 if order_val.lower() in track_name:
                     return i
             return len(AUDIO_ORDER)
+
         audio_tracks = sorted(audio_tracks, key=get_order_index)
 
     use_shortest = False
-    
+
     # Check and convert audio tracks if TS with issues
     temp_audio_paths = []
     for audio_track in audio_tracks:
-        audio_path = audio_track.get('path')
-        if audio_path.lower().endswith('.ts') and detect_ts_timestamp_issues(audio_path):
-            temp_audio_path = audio_path + '.temp.m4a'
+        audio_path = audio_track.get("path")
+        if audio_path is None:
+            break
+        if audio_path.lower().endswith(".ts") and detect_ts_timestamp_issues(
+            audio_path
+        ):
+            temp_audio_path = audio_path + ".temp.m4a"
             if convert_ts_to_mp4(audio_path, temp_audio_path):
-                audio_track['path'] = temp_audio_path
+                audio_track["path"] = temp_audio_path
                 temp_audio_paths.append(temp_audio_path)
             else:
                 console.print(f"[red]Failed to convert audio TS {audio_path} to M4A")
-    
+
     for audio_track in audio_tracks:
-        audio_path = audio_track.get('path')
-        audio_lang = audio_track.get('name', 'unknown')
-        _, diff, video_duration, audio_duration = check_duration_v_a(video_path, audio_path)
-        console.print(f"[yellow]    - [cyan]Audio lang [red]{audio_lang}, [cyan]Path: [red]{audio_path}, [cyan]Video duration: [red]{video_duration:.2f}s, [cyan]Audio duration: [red]{audio_duration:.2f}s, [cyan]Diff: [red]{diff:.2f}s")
-        
+        audio_path = audio_track.get("path")
+        audio_lang = audio_track.get("name", "unknown")
+        _, diff, video_duration, audio_duration = check_duration_v_a(
+            video_path, audio_path
+        )
+        console.print(
+            f"[yellow]    - [cyan]Audio lang [red]{audio_lang}, [cyan]Path: [red]{audio_path}, [cyan]Video duration: [red]{video_duration:.2f}s, [cyan]Audio duration: [red]{audio_duration:.2f}s, [cyan]Diff: [red]{diff:.2f}s"
+        )
+
         # If any audio track has a significant duration difference, use -shortest
         if diff > limit_duration_diff:
-            console.print(f"[yellow]    WARN [cyan]Audio lang: [red]'{audio_lang}' [cyan]has a duration difference of [red]{diff:.2f}s [cyan]which exceeds the limit of [red]{limit_duration_diff}s.")
+            console.print(
+                f"[yellow]    WARN [cyan]Audio lang: [red]'{audio_lang}' [cyan]has a duration difference of [red]{diff:.2f}s [cyan]which exceeds the limit of [red]{limit_duration_diff}s."
+            )
             use_shortest = True
 
     # Start command with locate ffmpeg
@@ -181,39 +226,43 @@ def join_audios(video_path: str, audio_tracks: List[Dict[str, str]], out_path: s
 
     # Enabled the use of gpu
     if USE_GPU:
-        ffmpeg_cmd.extend(['-hwaccel', detect_gpu_device_type()])
+        ffmpeg_cmd.extend(["-hwaccel", detect_gpu_device_type()])
 
     # Insert input video path with TS format
     if not os.path.isfile(video_path):
         console.print(f"[red]Input video file not found: {video_path}")
         return out_path, use_shortest, {}
-    if video_path.lower().endswith('.ts'):
-        ffmpeg_cmd.extend(['-f', 'mpegts'])
-    ffmpeg_cmd.extend(['-i', video_path])
+    if video_path.lower().endswith(".ts"):
+        ffmpeg_cmd.extend(["-f", "mpegts"])
+    ffmpeg_cmd.extend(["-i", video_path])
 
     # Add audio tracks as input with TS format
     for i, audio_track in enumerate(audio_tracks):
-        audio_track_path = audio_track.get('path')
+        audio_track_path = audio_track.get("path")
+        if audio_track_path is None:
+            break
         if not os.path.isfile(audio_track_path):
             console.print(f"[red]Input audio file not found: {audio_track_path}")
             return out_path, use_shortest, {}
-        if audio_track_path.lower().endswith('.ts'):
-            ffmpeg_cmd.extend(['-f', 'mpegts'])
-        ffmpeg_cmd.extend(['-i', audio_track_path])
+        if audio_track_path.lower().endswith(".ts"):
+            ffmpeg_cmd.extend(["-f", "mpegts"])
+        ffmpeg_cmd.extend(["-i", audio_track_path])
 
     # Map the video and audio streams
-    ffmpeg_cmd.extend(['-map', '0:v'])
-    
+    ffmpeg_cmd.extend(["-map", "0:v"])
+
     for i in range(1, len(audio_tracks) + 1):
-        ffmpeg_cmd.extend(['-map', f'{i}:a'])
+        ffmpeg_cmd.extend(["-map", f"{i}:a"])
 
     # Add language metadata for each audio track
     for i, audio_track in enumerate(audio_tracks):
-        lang_code = audio_track.get('name', 'unknown')
-        
+        lang_code = audio_track.get("name", "unknown")
+
         # Extract language code (e.g., "ita" from "ita - Italian")
-        ffmpeg_cmd.extend([f'-metadata:s:a:{i}', f'language={lang_code}'])
-        ffmpeg_cmd.extend([f'-metadata:s:a:{i}', f'title={audio_track.get("name", "unknown")}'])
+        ffmpeg_cmd.extend([f"-metadata:s:a:{i}", f"language={lang_code}"])
+        ffmpeg_cmd.extend(
+            [f"-metadata:s:a:{i}", f"title={audio_track.get('name', 'unknown')}"]
+        )
 
     # Add encoding parameters (prima di -shortest e output)
     add_encoding_params(ffmpeg_cmd)
@@ -224,13 +273,15 @@ def join_audios(video_path: str, audio_tracks: List[Dict[str, str]], out_path: s
 
     # Use shortest input path if any audio track has significant difference
     if use_shortest:
-        ffmpeg_cmd.extend(['-shortest', '-strict', 'experimental'])
+        ffmpeg_cmd.extend(["-shortest", "-strict", "experimental"])
 
     # Output file and overwrite
-    ffmpeg_cmd.extend([out_path, '-y'])
+    ffmpeg_cmd.extend([out_path, "-y"])
 
     # Run join
-    result_json = capture_ffmpeg_real_time(ffmpeg_cmd, "[yellow]FFMPEG [cyan]Join audio", log_path)
+    result_json = capture_ffmpeg_real_time(
+        ffmpeg_cmd, "[yellow]FFMPEG [cyan]Join audio", log_path
+    )
     print()
 
     # Clean up temp audio files
@@ -238,13 +289,18 @@ def join_audios(video_path: str, audio_tracks: List[Dict[str, str]], out_path: s
         if os.path.exists(temp_path):
             try:
                 os.remove(temp_path)
-            except Exception:
-                pass
+            except OSError as e:
+                logger.error(f"error:{e}")
 
     return out_path, use_shortest, result_json
 
 
-def join_subtitles(video_path: str, subtitles_list: List[Dict[str, str]], out_path: str, log_path: Optional[str] = None):
+def join_subtitles(
+    video_path: str,
+    subtitles_list: list[dict[str, str]],
+    out_path: str,
+    log_path: str | None = None,
+):
     """
     Joins subtitles with a video file using FFmpeg.
 
@@ -255,97 +311,117 @@ def join_subtitles(video_path: str, subtitles_list: List[Dict[str, str]], out_pa
         - out_path (str): The path to save the output file.
     """
     if SUBTITLE_ORDER:
+
         def get_order_index(track):
-            track_name = (track.get('name', '') or track.get('language', '') or track.get('lang', '') or '').lower()
+            track_name = (
+                track.get("name", "")
+                or track.get("language", "")
+                or track.get("lang", "")
+                or ""
+            ).lower()
             for i, order_val in enumerate(SUBTITLE_ORDER):
                 if order_val.lower() in track_name:
                     return i
             return len(SUBTITLE_ORDER)
+
         subtitles_list = sorted(subtitles_list, key=get_order_index)
 
     # First, detect and fix subtitle extensions
     for subtitle in subtitles_list:
-        original_path = subtitle['path']
+        original_path = subtitle["path"]
         corrected_path = fix_subtitle_extension(original_path)
-        
+
         # TTML to SRT conversion if needed
-        if corrected_path.lower().endswith(('.ttml', '.xml')) or 'ttml' in corrected_path.lower():
-            srt_path = os.path.splitext(corrected_path)[0] + '.srt'
+        if (
+            corrected_path.lower().endswith((".ttml", ".xml"))
+            or "ttml" in corrected_path.lower()
+        ):
+            srt_path = os.path.splitext(corrected_path)[0] + ".srt"
             if convert_ttml_to_srt(corrected_path, srt_path):
-                console.print(f"[yellow]    - [green]Converted TTML to SRT: [red]{os.path.basename(srt_path)}")
+                console.print(
+                    f"[yellow]    - [green]Converted TTML to SRT: [red]{os.path.basename(srt_path)}"
+                )
                 corrected_path = srt_path
-        
-        subtitle['path'] = corrected_path
-    
+
+        subtitle["path"] = corrected_path
+
     if not os.path.isfile(video_path):
         console.print(f"[red]Input video file not found: {video_path}")
         return out_path, {}
     ffmpeg_cmd = [get_ffmpeg_path(), "-i", video_path]
     output_ext = os.path.splitext(out_path)[1].lower()
-    
+
     # Determine subtitle codec based on output format
-    if output_ext == '.mp4':
-        subtitle_codec = 'mov_text'
-    elif output_ext == '.mkv':
+    if output_ext == ".mp4":
+        subtitle_codec = "mov_text"
+    elif output_ext == ".mkv":
         # Now that we convert TTML manually, we don't need to force srt via ffmpeg unless they are still not srt
-        subtitle_codec = 'srt'
+        subtitle_codec = "srt"
     else:
-        subtitle_codec = 'copy'
-    
+        subtitle_codec = "copy"
+
     # Add subtitle input files first
     for subtitle in subtitles_list:
-        sub_path = subtitle['path']
+        sub_path = subtitle["path"]
         if not os.path.isfile(sub_path):
             console.print(f"[red]Input subtitle file not found: {sub_path}")
             return out_path, {}
         ffmpeg_cmd += ["-i", sub_path]
-    
+
     # Add maps for video and audio streams
     ffmpeg_cmd += ["-map", "0:v"]
     if has_audio(video_path):
         ffmpeg_cmd += ["-map", "0:a"]
-    
+
     # Add subtitle maps and metadata
     for idx, subtitle in enumerate(subtitles_list):
-        lang_display = subtitle.get('lang', subtitle.get('language', 'unknown'))
-        console.print(f"[yellow]    - [cyan]Subtitle lang [red]{lang_display}, [cyan]Path: [red]{subtitle.get('path', 'unknown')}")
+        lang_display = subtitle.get("lang", subtitle.get("language", "unknown"))
+        console.print(
+            f"[yellow]    - [cyan]Subtitle lang [red]{lang_display}, [cyan]Path: [red]{subtitle.get('path', 'unknown')}"
+        )
         ffmpeg_cmd += ["-map", f"{idx + 1}:s"]
-        ffmpeg_cmd += ["-metadata:s:s:{}".format(idx), "title={}".format(lang_display)]
-    
+        ffmpeg_cmd += [f"-metadata:s:s:{idx}", f"title={lang_display}"]
+
     # For subtitles, we always use copy for video/audio
-    ffmpeg_cmd.extend(['-c:v', 'copy', '-c:a', 'copy', '-c:s', subtitle_codec])
-    
+    ffmpeg_cmd.extend(["-c:v", "copy", "-c:a", "copy", "-c:s", subtitle_codec])
+
     # Handle disposition: set all subtitles to 0 (disabled) by default
     for idx in range(len(subtitles_list)):
-        ffmpeg_cmd.extend([f'-disposition:s:{idx}', '0'])
-    
+        ffmpeg_cmd.extend([f"-disposition:s:{idx}", "0"])
+
     # Set disposition ONLY if SUBTITLE_DISPOSITION is enabled
     if SUBTITLE_DISPOSITION and len(subtitles_list) > 0:
         disposition_idx = None
-        
+
         # Find subtitle matching the configured language
         for idx, subtitle in enumerate(subtitles_list):
-            subtitle_lang = subtitle.get('language', '').lower()
+            subtitle_lang = subtitle.get("language", "").lower()
             for lang in SUBTITLE_DISPOSITION_LANGUAGE:
                 config_lang = lang.lower().strip()
-                
-                if subtitle_lang == config_lang or subtitle_lang.startswith(config_lang):
-                    console.print(f"[yellow]    Setting disposition for subtitle: [red]{subtitle.get('language')}")
+
+                if subtitle_lang == config_lang or subtitle_lang.startswith(
+                    config_lang
+                ):
+                    console.print(
+                        f"[yellow]    Setting disposition for subtitle: [red]{subtitle.get('language')}"
+                    )
                     disposition_idx = idx
                     break
-                    
+
             if disposition_idx is not None:
                 break
-            
+
         # If matching subtitle found, set it as default
         if disposition_idx is not None:
-            ffmpeg_cmd.extend([f'-disposition:s:{disposition_idx}', 'default'])
-    
+            ffmpeg_cmd.extend([f"-disposition:s:{disposition_idx}", "default"])
+
     # Overwrite
     ffmpeg_cmd += [out_path, "-y"]
-    
+
     # Run join
-    result_json = capture_ffmpeg_real_time(ffmpeg_cmd, "[yellow]FFMPEG [cyan]Join subtitle", log_path)
+    result_json = capture_ffmpeg_real_time(
+        ffmpeg_cmd, "[yellow]FFMPEG [cyan]Join subtitle", log_path
+    )
     print()
-    
+
     return out_path, result_json
