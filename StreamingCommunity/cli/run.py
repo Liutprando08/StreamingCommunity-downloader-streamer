@@ -1,35 +1,36 @@
 # 10.12.23
 
-import os
-import sys
-import logging
-import platform
-import argparse
-import subprocess
-from typing import Callable, Tuple
+from __future__ import annotations
 
+import argparse
+import logging
+import os
+import platform
+import subprocess
+import sys
+from typing import Callable
 
 # External library
 from rich.console import Console
 from rich.prompt import Prompt
 
+from StreamingCommunity.services._base import load_search_functions
+from StreamingCommunity.setup import (
+    get_info_prd,
+    get_info_wvd,
+    get_prd_path,
+    get_wvd_path,
+)
+from StreamingCommunity.upload import binary_update, git_update
+from StreamingCommunity.upload.version import __title__, __version__
+from StreamingCommunity.utils import config_manager, os_manager, start_message
+from StreamingCommunity.utils.domain_check import check_streamingcommunity_domain
 
 # Internal utilities
 from . import call_global_search
-from StreamingCommunity.setup import (
-    get_prd_path,
-    get_wvd_path,
-    get_info_wvd,
-    get_info_prd,
-)
-from StreamingCommunity.services._base import load_search_functions
-from StreamingCommunity.utils import config_manager, os_manager, start_message
-from StreamingCommunity.utils.domain_check import check_streamingcommunity_domain
-from StreamingCommunity.upload import git_update, binary_update
-from StreamingCommunity.upload.version import __version__, __title__
-
 
 # Config
+logger = logging.getLogger(__name__)
 console = Console()
 msg = Prompt()
 COLOR_MAP = {
@@ -69,7 +70,7 @@ def initialize():
     try:
         git_update()
     except Exception as e:
-        console.log(f"[red]Error with loading github: {str(e)}")
+        console.log(f"[red]Error with loading github: {e!s}")
 
     # Check if the StreamingCommunity domain changed and update domains.json
     check_streamingcommunity_domain()
@@ -94,7 +95,7 @@ def _should_run_on_current_os(hook: dict) -> bool:
     return os_manager.system in normalized
 
 
-def _build_command_for_hook(hook: dict) -> Tuple[list, dict]:
+def _build_command_for_hook(hook: dict) -> tuple[list, dict]:
     """Build the subprocess command and environment for a hook definition."""
     hook_type = str(hook.get("type", "")).strip().lower()
     script_path = hook.get("path")
@@ -126,25 +127,27 @@ def _build_command_for_hook(hook: dict) -> Tuple[list, dict]:
         command = [sys.executable, script_path] + args
         return ([c for c in command if c], {"env": base_env, "cwd": workdir})
 
-    if os_manager.system in ("linux", "darwin"):
-        if hook_type in ("bash", "sh", "shell"):
-            if inline_command:
-                command = ["/bin/bash", "-lc", inline_command]
-            else:
-                if not script_path:
-                    raise ValueError("Missing 'path' for bash/sh hook")
-                command = ["/bin/bash", script_path] + args
-            return (command, {"env": base_env, "cwd": workdir})
+    if os_manager.system in ("linux", "darwin") and hook_type in (
+        "bash",
+        "sh",
+        "shell",
+    ):
+        if inline_command:
+            command = ["/bin/bash", "-lc", inline_command]
+        else:
+            if not script_path:
+                raise ValueError("Missing 'path' for bash/sh hook")
+            command = ["/bin/bash", script_path] + args
+        return (command, {"env": base_env, "cwd": workdir})
 
-    if os_manager.system == "windows":
-        if hook_type in ("bat", "cmd", "shell"):
-            if inline_command:
-                command = ["cmd", "/c", inline_command]
-            else:
-                if not script_path:
-                    raise ValueError("Missing 'path' for bat/cmd hook")
-                command = ["cmd", "/c", script_path] + args
-            return (command, {"env": base_env, "cwd": workdir})
+    if os_manager.system == "windows" and hook_type in ("bat", "cmd", "shell"):
+        if inline_command:
+            command = ["cmd", "/c", inline_command]
+        else:
+            if not script_path:
+                raise ValueError("Missing 'path' for bat/cmd hook")
+            command = ["cmd", "/c", script_path] + args
+        return (command, {"env": base_env, "cwd": workdir})
 
     raise ValueError(f"Unsupported hook type '{hook_type}' on OS '{os_manager.system}'")
 
@@ -204,25 +207,25 @@ def execute_hooks(stage: str) -> None:
             if stdout:
                 console.print(f"[cyan][hook:{name} stdout]\n{stdout}")
             if stderr:
-                logging.warning(f"Hook '{name}' stderr: {stderr}")
+                logger.warning(f"Hook '{name}' stderr: {stderr}")
                 console.print(f"[yellow][hook:{name} stderr]\n{stderr}")
 
             if result.returncode != 0:
                 message = f"Hook '{name}' exited with code {result.returncode}"
                 if continue_on_error:
-                    logging.error(message + " (continuing)")
+                    logger.error(message + " (continuing)")
                     continue
                 else:
-                    logging.error(message + " (stopping)")
+                    logger.error(message + " (stopping)")
                     raise SystemExit(result.returncode)
 
         except Exception as e:
-            message = f"Hook '{name}' failed: {str(e)}"
+            message = f"Hook '{name}' failed: {e!s}"
             if continue_on_error:
-                logging.error(message + " (continuing)")
+                logger.error(message + " (continuing)")
                 continue
             else:
-                logging.error(message + " (stopping)")
+                logger.error(message + " (stopping)")
                 raise
 
 
@@ -396,7 +399,7 @@ def handle_direct_site_selection(
                     "[yellow]No results found. Falling back to interactive mode."
                 )
         except Exception as e:
-            console.print(f"[red]Auto-first failed: {str(e)}")
+            console.print(f"[red]Auto-first failed: {e!s}")
 
     run_function(func_to_run, search_terms=search_terms)
     return True

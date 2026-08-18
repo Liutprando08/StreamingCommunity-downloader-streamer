@@ -1,20 +1,20 @@
 # 18.07.25
 
+from __future__ import annotations
+
 import sys
-from typing import Tuple
 
 # Logic
 from .checker import (
+    check_aria2c,
     check_bento4,
-    check_mp4dump,
     check_ffmpeg,
     check_megatools,
+    check_mp4dump,
     check_n_m3u8dl_re,
     check_shaka_packager,
-    check_aria2c,
 )
-from .device_install import check_device_wvd_path, check_device_prd_path
-
+from .device_install import check_device_prd_path, check_device_wvd_path
 
 # Variable
 is_binary_installation = getattr(sys, "frozen", False)
@@ -65,7 +65,7 @@ def get_n_m3u8dl_re_path() -> str | None:
     return n_m3u8dl_re_path
 
 
-def get_shaka_packager_path() -> Tuple[str | None, str | None] | str | None:
+def get_shaka_packager_path() -> tuple[str | None, str | None] | str | None:
     return shaka_packager
 
 
@@ -120,4 +120,3 @@ def get_info_prd(cdm_device_path):
             f"[red]SL{device.security_level} [cyan]| "
             f"[yellow]{leaf_cert.get_name()} "
         )
-

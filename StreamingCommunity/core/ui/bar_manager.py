@@ -1,5 +1,7 @@
 # 13.03.26
 
+from __future__ import annotations
+
 import platform
 from contextlib import nullcontext
 from typing import Any
@@ -15,7 +17,9 @@ from StreamingCommunity.core.ui.progress_bar import (
 )
 from StreamingCommunity.source.utils.tracker import context_tracker, download_tracker
 
-console = Console(force_terminal=True if platform.system().lower() != "windows" else None)
+console = Console(
+    force_terminal=True if platform.system().lower() != "windows" else None
+)
 
 
 class DownloadBarManager:
@@ -63,8 +67,14 @@ class DownloadBarManager:
             for task_key, task_label in prebuilt_tasks:
                 if task_key not in self.tasks:
                     # If task_label already contains Rich markup (starts with [), use it as-is otherwise wrap it with [cyan] for consistency
-                    final_label = task_label if task_label.startswith("[") else f"[cyan]{task_label}[/cyan]"
-                    initial_segment = "0/100" if task_key.startswith("decrypt_") else "0/0"
+                    final_label = (
+                        task_label
+                        if task_label.startswith("[")
+                        else f"[cyan]{task_label}[/cyan]"
+                    )
+                    initial_segment = (
+                        "0/100" if task_key.startswith("decrypt_") else "0/0"
+                    )
                     compact_metrics = task_key.startswith("decrypt_")
                     self.tasks[task_key] = self.progress.add_task(
                         final_label,
@@ -77,16 +87,15 @@ class DownloadBarManager:
                     )
 
     def add_external_track_task(self, label: str, track_key: str):
-        if self.progress:
-            if track_key not in self.tasks:
-                self.tasks[track_key] = self.progress.add_task(
-                    self._wrap_label(label),
-                    total=100,
-                    segment="0/1",
-                    speed="0Bps",
-                    size="0B/0B",
-                    compact_metrics=False,
-                )
+        if self.progress and track_key not in self.tasks:
+            self.tasks[track_key] = self.progress.add_task(
+                self._wrap_label(label),
+                total=100,
+                segment="0/1",
+                speed="0Bps",
+                size="0B/0B",
+                compact_metrics=False,
+            )
 
     def get_task_id(self, task_key: str):
         return self.tasks.get(task_key)
@@ -104,7 +113,9 @@ class DownloadBarManager:
 
         # ── Create task if first time we see this key ──────────────────────
         if key not in self.tasks:
-            compact_metrics = bool(parsed.get("compact_metrics")) or key.startswith("decrypt_")
+            compact_metrics = bool(parsed.get("compact_metrics")) or key.startswith(
+                "decrypt_"
+            )
             self.tasks[key] = (
                 self.progress.add_task(
                     self._wrap_label(label),
@@ -149,7 +160,7 @@ class DownloadBarManager:
         if "duration" in parsed and not parsed.get("compact_metrics"):
             fields["duration"] = parsed["duration"]
 
-        completed = parsed["pct"] if "pct" in parsed else None
+        completed = parsed.get("pct", None)
         try:
             self.progress.update(tid, completed=completed, **fields)
         except Exception:
@@ -158,10 +169,14 @@ class DownloadBarManager:
         # Subtitle completion
         if "final_size" in parsed:
             self.progress.update(tid, size=parsed["final_size"], completed=100)
-            lang_raw = parsed.get("_lang_code") or key.replace("sub_", "", 1).split("_")[0]
+            lang_raw = (
+                parsed.get("_lang_code") or key.replace("sub_", "", 1).split("_")[0]
+            )
             codec = parsed.get("codec", "")
             if lang_raw:
-                self.subtitle_sizes[f"{lang_raw}:{codec}" if codec else lang_raw] = parsed["final_size"]
+                self.subtitle_sizes[f"{lang_raw}:{codec}" if codec else lang_raw] = (
+                    parsed["final_size"]
+                )
 
     def finish_all_tasks(self):
         if self.progress:
