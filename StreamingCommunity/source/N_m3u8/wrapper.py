@@ -377,7 +377,7 @@ class MediaDownloader:
                 ext_sub["_ext"] = ext_type
                 self.streams.append(
                     StreamInfo(
-                        type_="Subtitle [red]*EXT",
+                        type="Subtitle [red]*EXT",
                         language=ext_sub.get("language", ""),
                         name=ext_sub.get("name", ""),
                         selected=selected,

@@ -91,7 +91,7 @@ def title_search(query: str) -> int:
 
     try:
         console.print(f"[cyan]Searching: [yellow]{search_url}")
-        response = create_client(headers=headers).post(search_url, data=data)
+        response = create_client(headers=headers).get(search_url, params=data)
         response.raise_for_status()
     except HTTPError as e:
         console.print(
@@ -148,8 +148,7 @@ def title_search(query: str) -> int:
             tid, slug, url, name = fut_map[fut]
             clean_name, imdb_id, is_series = fut.result()
             if imdb_id is None:
-                console.print(f"[yellow]Warning: Could not fetch details for {name}")
-                continue
+                imdb_id = ""
 
             media_type = "tv" if is_series else "film"
 

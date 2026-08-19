@@ -197,7 +197,7 @@ class ConfigManager:
         self.base_path = None
         if getattr(sys, "frozen", False):
             self.base_path = os.path.dirname(sys.executable)
-            bundled_conf = os.path.join(sys._MEIPASS, "Conf")
+            bundled_conf = os.path.join(sys._MEIPASS, "Conf")  # type: ignore[attr-defined]
             user_conf = os.path.join(self.base_path, "Conf")
             if os.path.exists(bundled_conf) and not os.path.exists(
                 os.path.join(user_conf, "config.json")

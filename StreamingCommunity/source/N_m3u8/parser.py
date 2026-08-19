@@ -113,7 +113,7 @@ def parse_meta_json(json_path: str, selected_json_path: str) -> List[StreamInfo]
         st_type = classify_stream(s)
         
         streams.append(StreamInfo(
-            type_=st_type,
+            type=st_type,
             resolution=s.get("Resolution", ""),
             language=s.get("Language", ""),
             name=s.get("Name", ""),
