@@ -70,5 +70,9 @@
         "scrape_impersonate": "chrome",
         "scrape_delay_seconds": 2,
         "scrape_retry_count": 3
+    },
+    "YOUTUBE": {
+        "format": "",
+        "max_height": 0
     }
 }

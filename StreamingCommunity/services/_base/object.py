@@ -153,11 +153,13 @@ class SeasonManager:
 
 class EntriesMeta(type):
     def __new__(cls, name, bases, dct):
-        def init(self, **kwargs):
-            for key, value in kwargs.items():
-                setattr(self, key, value)
+        if "__init__" not in dct:
 
-        dct["__init__"] = init
+            def init(self, **kwargs):
+                for key, value in kwargs.items():
+                    setattr(self, key, value)
+
+            dct["__init__"] = init
 
         def get_attr(self, item):
             return self.__dict__.get(item, None)
@@ -173,18 +175,38 @@ class EntriesMeta(type):
 
 
 class Entries(metaclass=EntriesMeta):
-    id: int
-    name: str
-    type: str
-    url: str
-    size: str
-    score: str
-    desc: str
-    slug: str
-    year: str
-    provider_language: str
-    tmdb_id: str
-    imdb_id: str
+    def __init__(
+        self,
+        id: int | str | None = None,
+        name: str | None = None,
+        type: str | None = None,
+        url: str | None = None,
+        size: str | None = None,
+        score: str | None = None,
+        desc: str | None = None,
+        slug: str | None = None,
+        year: str | None = None,
+        provider_language: str | None = None,
+        tmdb_id: str | None = None,
+        imdb_id: str | None = None,
+        **kwargs,
+    ):
+        self.id = id
+        self.name = name
+        self.type = type
+        self.url = url
+        self.size = size
+        self.score = score
+        self.desc = desc
+        self.slug = slug
+        self.year = year
+        self.provider_language = provider_language
+        self.tmdb_id = tmdb_id
+        self.imdb_id = imdb_id
+
+        # [SERVICE-SPECIFIC] Allow additional attributes from different services (e.g., image, path_id)
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def to_dict(self):
         """Convert the entries to a dictionary."""

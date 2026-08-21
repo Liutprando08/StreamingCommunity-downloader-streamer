@@ -50,5 +50,8 @@
     },
     "plutotv": {
         "full_url": "https://pluto.tv"
+    },
+    "youtube": {
+        "full_url": "https://www.youtube.com"
     }
 }
