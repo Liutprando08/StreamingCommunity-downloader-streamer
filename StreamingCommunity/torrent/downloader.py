@@ -1,14 +1,14 @@
 # 2026
 
+from __future__ import annotations
+
 import logging
 import os
 import subprocess
-from typing import Optional
 
 from rich.console import Console
 
 from StreamingCommunity.torrent.title_parser import TorrentResult
-
 
 log = logging.getLogger(__name__)
 console = Console()
@@ -21,7 +21,7 @@ class TorrentDownloader:
         self.aria2c_path = aria2c_path
         self.download_path = download_path
 
-    def _run_aria2c(self, url: str, timeout: int = 3600) -> Optional[str]:
+    def _run_aria2c(self, url: str, timeout: int = 3600) -> str | None:
         os.makedirs(self.download_path, exist_ok=True)
 
         cmd = [
@@ -77,17 +77,19 @@ class TorrentDownloader:
         except FileNotFoundError:
             log.error("aria2c not found at: %s", self.aria2c_path)
             return None
-        except Exception as e:
+        except OSError as e:
             log.error("Torrent download failed: %s", e)
             return None
 
-    def download_magnet(self, magnet_url: str, timeout: int = 3600) -> Optional[str]:
+    def download_magnet(self, magnet_url: str, timeout: int = 3600) -> str | None:
         if not magnet_url.startswith("magnet:?xt=urn:btih:"):
             log.warning("Invalid magnet URL format, rejecting")
             return None
         return self._run_aria2c(magnet_url, timeout)
 
-    def download_torrent_file(self, torrent_url: str, timeout: int = 3600) -> Optional[str]:
+    def download_torrent_file(
+        self, torrent_url: str, timeout: int = 3600
+    ) -> str | None:
         if not torrent_url.startswith(("http://", "https://")):
             log.warning("Invalid torrent URL format, rejecting")
             return None
