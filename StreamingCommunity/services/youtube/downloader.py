@@ -36,13 +36,14 @@ def _build_format(max_height: int | None = None) -> str:
     return DEFAULT_FORMAT
 
 
-def _get_available_heights(url: str) -> list[int]:
+def _get_available_heights(url: str | None) -> list[int]:
     """Return the distinct available video heights for a URL, sorted descending."""
     try:
         with yt_dlp.YoutubeDL(
             {"quiet": True, "no_warnings": True, "skip_download": True}  # type: ignore[reportArgumentType]
         ) as ydl:
-            infos = ydl.extract_info(url, download=False)
+            infos = ydl.extract_info(url, download=False)  # type: ignore[reportArgumentType]
+
     except ExtractorError as e:
         console.print(f"[yellow]Could not fetch available formats: {e}")
         return []
@@ -55,40 +56,7 @@ def _get_available_heights(url: str) -> list[int]:
     return sorted(heights, reverse=True)
 
 
-def _prompt_quality(heights: list[int]) -> str:
-    """Ask the user which video quality to download."""
-    console.print("\n[cyan]Available qualities:")
-    console.print("  [yellow]0.[white] Best available")
-    for i, height in enumerate(heights, start=1):
-        console.print(f"  [yellow]{i}.[white] {height}p")
-
-    while True:
-        try:
-            choice = msg.ask(
-                "[purple]Select quality (empty or 0 for best)",
-                default="0",
-                show_default=False,
-            )
-        except EOFError:
-            return _build_format()
-
-        choice = str(choice).strip()
-        if choice in ("", "0"):
-            return _build_format()
-
-        try:
-            index = int(choice)
-            if 1 <= index <= len(heights):
-                selected = heights[index - 1]
-                console.print(f"[cyan]Selected quality: [yellow]{selected}p")
-                return _build_format(selected)
-        except ValueError:
-            pass
-
-        console.print("[red]Invalid selection. Please try again.")
-
-
-def _resolve_format(url: str) -> str:
+def _resolve_format(url: str | None) -> str | None:
     """
     Determine the yt-dlp format selector to use for the download.
 
@@ -105,26 +73,15 @@ def _resolve_format(url: str) -> str:
     if not heights:
         return _build_format()
 
-    return _prompt_quality(heights)
 
-
-def download_film(select_title: Entries) -> tuple[str | None, bool]:
-    """
-    Downloads a video from YouTube using yt-dlp.
-
-    Parameters:
-        select_title (Entries): The selected video metadata from search.
-
-    Returns:
-        tuple: (output_path, kill_handler) on success, (None, True) on failure.
-    """
+def download_film(select_title: Entries) -> tuple[str | None, bool] | None:
     start_message()
     console.print(
         f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{select_title.name} \n"
     )
-
     # Define output path
-    file_name = f"{os_manager.get_sanitize_file(select_title.name, select_title.year)}.{extension_output}"
+    if select_title.name is not None:
+        file_name = f"{os_manager.get_sanitize_file(select_title.name, select_title.year)}.{extension_output}"
     output_path = os_manager.get_sanitize_path(
         os.path.join(site_constants.MOVIE_FOLDER, file_name)
     )
@@ -159,7 +116,8 @@ def download_film(select_title: Entries) -> tuple[str | None, bool]:
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # type: ignore[reportArgumentType]
-            ydl.download([select_title.url])
+            ydl.download([select_title.url])  # type: ignore[reportArgumentType]
+
     except DownloadError as e:
         console.print(f"[red]Error downloading video: {e}")
         return None, True

@@ -1,24 +1,25 @@
 # 24.01.24
 
+from __future__ import annotations
+
+import logging
 import os
 import shutil
-import logging
 
+from pathvalidate import sanitize_filename, sanitize_filepath
+from rich.console import Console
+from rich.prompt import Prompt
 
 # External library
 from unidecode import unidecode
-from rich.console import Console
-from rich.prompt import Prompt
-from pathvalidate import sanitize_filename, sanitize_filepath
-
 
 # Internal utilities
 from ..setup.binary_paths import binary_paths
 
-
 # Variable
 msg = Prompt()
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 class OsManager:
@@ -28,9 +29,9 @@ class OsManager:
 
     def _get_max_length(self) -> int:
         """Get max filename length based on OS."""
-        return 255 if self.system == 'windows' else 4096
+        return 255 if self.system == "windows" else 4096
 
-    def get_sanitize_file(self, filename: str, year: str = None) -> str:
+    def get_sanitize_file(self, filename: str, year: str | None = None) -> str:
         """Sanitize filename. Optionally append a year in format ' (YYYY)' if year is provided and valid."""
         if not filename:
             return filename
@@ -38,7 +39,7 @@ class OsManager:
         # Extract and validate year if provided
         year_str = ""
         if year:
-            y = str(year).split('-')[0].strip()
+            y = str(year).split("-")[0].strip()
             if y.isdigit() and len(y) == 4:
                 year_str = f" ({y})"
 
@@ -53,11 +54,11 @@ class OsManager:
         name_with_year = name + year_str
 
         # Calculate available length for name considering the '...' and extension
-        max_name_length = self.max_length - len('...') - len(ext)
+        max_name_length = self.max_length - len("...") - len(ext)
 
         # Truncate name if it exceeds the max name length
         if len(name_with_year) > max_name_length:
-            name_with_year = name_with_year[:max_name_length] + '...'
+            name_with_year = name_with_year[:max_name_length] + "..."
 
         # Ensure the final file name includes the extension
         return name_with_year + ext
@@ -71,50 +72,44 @@ class OsManager:
         decoded = unidecode(path)
         sanitized = sanitize_filepath(decoded)
 
-        if self.system == 'windows':
+        if self.system == "windows":
             # Handle network paths (UNC or IP-based)
-            if sanitized.startswith('\\\\') or sanitized.startswith('//'):
-                parts = sanitized.replace('/', '\\').split('\\')
+            if sanitized.startswith(("\\\\", "//")):
+                parts = sanitized.replace("/", "\\").split("\\")
                 sanitized_parts = parts[:4]
 
                 # Sanitize remaining parts
                 if len(parts) > 4:
-                    sanitized_parts.extend([
-                        self.get_sanitize_file(part)
-                        for part in parts[4:]
-                        if part
-                    ])
-                return '\\'.join(sanitized_parts)
+                    sanitized_parts.extend(
+                        [self.get_sanitize_file(part) for part in parts[4:] if part]
+                    )
+                return "\\".join(sanitized_parts)
 
             # Handle drive letters
-            elif len(sanitized) >= 2 and sanitized[1] == ':':
+            elif len(sanitized) >= 2 and sanitized[1] == ":":
                 drive = sanitized[:2]
-                rest = sanitized[2:].lstrip('\\').lstrip('/')
+                rest = sanitized[2:].lstrip("\\").lstrip("/")
                 path_parts = [drive] + [
                     self.get_sanitize_file(part)
-                    for part in rest.replace('/', '\\').split('\\')
+                    for part in rest.replace("/", "\\").split("\\")
                     if part
                 ]
-                return '\\'.join(path_parts)
+                return "\\".join(path_parts)
 
             # Regular path
             else:
-                parts = sanitized.replace('/', '\\').split('\\')
-                return '\\'.join(p for p in parts if p)
-        
+                parts = sanitized.replace("/", "\\").split("\\")
+                return "\\".join(p for p in parts if p)
+
         else:
             # Handle Unix-like paths (Linux and macOS)
-            is_absolute = sanitized.startswith('/')
-            parts = sanitized.replace('\\', '/').split('/')
-            sanitized_parts = [
-                self.get_sanitize_file(part)
-                for part in parts
-                if part
-            ]
+            is_absolute = sanitized.startswith("/")
+            parts = sanitized.replace("\\", "/").split("/")
+            sanitized_parts = [self.get_sanitize_file(part) for part in parts if part]
 
-            result = '/'.join(sanitized_parts)
+            result = "/".join(sanitized_parts)
             if is_absolute:
-                result = '/' + result
+                result = "/" + result
 
             return result
 
@@ -135,8 +130,8 @@ class OsManager:
             os.makedirs(sanitized_path, mode=mode, exist_ok=True)
             return True
 
-        except Exception as e:
-            logging.error(f"Path creation error: {e}")
+        except OSError as e:
+            logger.error(f"Path creation error: {e}")
             return False
 
     def remove_folder(self, folder_path: str) -> bool:
@@ -154,33 +149,33 @@ class OsManager:
             return True
 
         except OSError as e:
-            logging.error(f"Folder removal error: {e}")
+            logger.error(f"Folder removal error: {e}")
             return False
 
 
-class InternetManager():
-    def format_file_size(self, size_bytes) -> str:
+class InternetManager:
+    def format_file_size(self, size_bytes) -> str | int | None:
         """Formats a file size from bytes into a human-readable string representation."""
         if isinstance(size_bytes, str):
             try:
                 size_str = str(size_bytes).upper().strip()
-                if 'GB' in size_str:
-                    return int(float(size_str.replace('GB', '')) * 1024 * 1024 * 1024)
-                elif 'MB' in size_str:
-                    return int(float(size_str.replace('MB', '')) * 1024 * 1024)
-                elif 'KB' in size_str:
-                    return int(float(size_str.replace('KB', '')) * 1024)
-                elif 'B' in size_str:
-                    return int(float(size_str.replace('B', '')))
+                if "GB" in size_str:
+                    return int(float(size_str.replace("GB", "")) * 1024 * 1024 * 1024)
+                elif "MB" in size_str:
+                    return int(float(size_str.replace("MB", "")) * 1024 * 1024)
+                elif "KB" in size_str:
+                    return int(float(size_str.replace("KB", "")) * 1024)
+                elif "B" in size_str:
+                    return int(float(size_str.replace("B", "")))
                 return None
-            except Exception:
+            except OSError:
                 return None
-        
-        elif isinstance(size_bytes, float) or isinstance(size_bytes, int):
+
+        elif isinstance(size_bytes, (float, int)):
             if size_bytes <= 0:
                 return "0B"
 
-            units = ['B', 'KB', 'MB', 'GB', 'TB']
+            units = ["B", "KB", "MB", "GB", "TB"]
             unit_index = 0
             while size_bytes >= 1024 and unit_index < len(units) - 1:
                 size_bytes /= 1024
@@ -196,22 +191,22 @@ class InternetManager():
                 return f"{bytes / 1024:.2f} KB/s"
             else:
                 return f"{bytes / (1024 * 1024):.2f} MB/s"
-        
+
         elif isinstance(bytes, int):
             if bytes >= 1024 * 1024 * 1024:
-                return f"{bytes/(1024*1024*1024):.2f} GB"
+                return f"{bytes / (1024 * 1024 * 1024):.2f} GB"
             elif bytes >= 1024 * 1024:
-                return f"{bytes/(1024*1024):.2f} MB"
+                return f"{bytes / (1024 * 1024):.2f} MB"
             elif bytes >= 1024:
-                return f"{bytes/1024:.2f} KB"
+                return f"{bytes / 1024:.2f} KB"
             else:
                 return f"{bytes} B"
-            
+
     def format_time(self, seconds: float, add_hours: bool = False) -> str:
         """Format seconds to MM:SS or HH:MM:SS"""
-        if seconds < 0 or seconds == float('inf'):
+        if seconds < 0 or seconds == float("inf"):
             return "00:00"
-        
+
         minutes = int(seconds // 60)
         secs = int(seconds % 60)
         if add_hours:
@@ -222,6 +217,7 @@ class InternetManager():
             return f"{minutes:02d}:{secs:02d}"
 
 
-# Initialize 
+# Initialize
 os_manager = OsManager()
 internet_manager = InternetManager()
+

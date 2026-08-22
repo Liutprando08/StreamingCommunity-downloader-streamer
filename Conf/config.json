@@ -73,6 +73,6 @@
     },
     "YOUTUBE": {
         "format": "",
-        "max_height": 0
+        "max_height": 1080
     }
 }
