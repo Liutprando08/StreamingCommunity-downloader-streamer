@@ -1,20 +1,16 @@
 # 2026
 
 import json
+import logging
 import os
 import shutil
-import logging
 import subprocess
-from typing import Optional, List, Dict
-
 
 # External library
+from curl_cffi.requests.exceptions import HTTPError
 from rich.console import Console
 
-
 # Internal utilities (lazy to avoid circular imports via torrent/__init__.py)
-from StreamingCommunity.core.processors.capture import capture_ffmpeg_real_time
-
 
 # Variable
 console = Console()
@@ -26,10 +22,11 @@ class TorrentMuxer:
 
     def __init__(self):
         from StreamingCommunity.setup import get_ffmpeg_path, get_ffprobe_path
+
         self.ffmpeg_path = get_ffmpeg_path()
         self.ffprobe_path = get_ffprobe_path()
 
-    def detect_streams(self, file_path: str) -> Dict[str, list]:
+    def detect_streams(self, file_path: str) -> dict[str, list]:
         """
         Use ffprobe to detect available streams in a media file.
 
@@ -43,12 +40,16 @@ class TorrentMuxer:
         try:
             cmd = [
                 self.ffprobe_path,
-                "-v", "error",
+                "-v",
+                "error",
                 "-show_streams",
-                "-print_format", "json",
+                "-print_format",
+                "json",
                 file_path,
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=30, check=False
+            )
             if result.returncode != 0:
                 log.warning("ffprobe failed: %s", result.stderr.strip())
                 return {"video": [], "audio": [], "subtitle": []}
@@ -64,7 +65,7 @@ class TorrentMuxer:
 
             return classified
 
-        except Exception as e:
+        except HTTPError as e:
             log.error("Stream detection failed: %s", e)
             return {"video": [], "audio": [], "subtitle": []}
 
@@ -73,7 +74,7 @@ class TorrentMuxer:
         video_path: str,
         audio_source_path: str,
         output_path: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Mux video from one file with audio from another using ffmpeg.
 
@@ -103,11 +104,13 @@ class TorrentMuxer:
         try:
             usage = shutil.disk_usage(os.path.dirname(output_path) or ".")
             if usage.free < required_bytes:
-                free_gb = usage.free / (1024 ** 3)
-                need_gb = required_bytes / (1024 ** 3)
-                console.print(f"[red]Insufficient disk space for mux: {free_gb:.1f} GB free, ~{need_gb:.1f} GB required")
+                free_gb = usage.free / (1024**3)
+                need_gb = required_bytes / (1024**3)
+                console.print(
+                    f"[red]Insufficient disk space for mux: {free_gb:.1f} GB free, ~{need_gb:.1f} GB required"
+                )
                 return None
-        except Exception as e:
+        except OSError as e:
             log.warning("Disk space check failed: %s", e)
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
@@ -140,10 +143,8 @@ class TorrentMuxer:
 
         ffmpeg_cmd.extend([output_path, "-y"])
 
-        console.print(f"[yellow]FFMPEG [cyan]Muxing torrent video + original audio ({original_audio_count} tracks) + Italian audio...")
-        result_json = capture_ffmpeg_real_time(
-            ffmpeg_cmd,
-            "[yellow]FFMPEG [cyan]Audio dub",
+        console.print(
+            f"[yellow]FFMPEG [cyan]Muxing torrent video + original audio ({original_audio_count} tracks) + Italian audio..."
         )
         print()
 

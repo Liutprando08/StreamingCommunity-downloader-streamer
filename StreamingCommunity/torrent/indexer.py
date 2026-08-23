@@ -1,7 +1,5 @@
 # 2026
 
-from typing import Optional
-
 
 class SQLiteIndexer:
     """SQLite index for cached torrent results."""
