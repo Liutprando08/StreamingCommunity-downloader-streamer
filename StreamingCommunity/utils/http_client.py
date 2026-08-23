@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import httpx
+import httpx2
 import ua_generator
 from curl_cffi import requests
 from curl_cffi.requests import BrowserTypeLiteral, ProxySpec
@@ -72,8 +72,8 @@ def create_client(
     proxies: dict[str, str] | None = None,
     http2: bool = False,
     follow_redirects: bool = True,
-) -> httpx.Client:
-    """Factory for a configured httpx.Client."""
+) -> httpx2.Client:
+    """Factory for a configured httpx2.Client."""
     proxy_val = proxies if proxies is not None else _get_proxies()
     proxy_arg: str | None = None
 
@@ -82,7 +82,7 @@ def create_client(
     elif isinstance(proxy_val, str):
         proxy_arg = proxy_val
 
-    return httpx.Client(
+    return httpx2.Client(
         headers=_default_headers(headers),
         cookies=cookies,
         timeout=timeout if timeout is not None else _get_timeout(),
@@ -102,8 +102,8 @@ def create_async_client(
     proxies: dict[str, str] | None = None,
     http2: bool = False,
     follow_redirects: bool = True,
-) -> httpx.AsyncClient:
-    """Factory for a configured httpx.AsyncClient."""
+) -> httpx2.AsyncClient:
+    """Factory for a configured httpx2.AsyncClient."""
     proxy_val = proxies if proxies is not None else _get_proxies()
     proxy_arg: str | None = None
 
@@ -112,7 +112,7 @@ def create_async_client(
     elif isinstance(proxy_val, str):
         proxy_arg = proxy_val
 
-    return httpx.AsyncClient(
+    return httpx2.AsyncClient(
         headers=_default_headers(headers),
         cookies=cookies,
         timeout=timeout if timeout is not None else _get_timeout(),
@@ -171,7 +171,7 @@ def get_my_location() -> dict[str, Any]:
                 "ip": data.get("query"),
             }
         return {"status": "fail", "country_code": "XX"}
-    except (httpx.HTTPError, ValueError, KeyError) as e:
+    except (httpx2.HTTPError, ValueError, KeyError) as e:
         return {"status": "fail", "country_code": "XX", "error": str(e)}
 
 

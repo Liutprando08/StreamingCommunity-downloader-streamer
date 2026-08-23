@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # External library
 from bs4 import BeautifulSoup
-from httpx import HTTPError
+from httpx2 import HTTPError
 from rich.console import Console
 from rich.prompt import Prompt
 

@@ -7,7 +7,7 @@ import os as _os
 from typing import Any
 
 # External library
-from httpx import HTTPError
+from httpx2 import HTTPError
 from rich.console import Console
 from rich.prompt import Prompt
 

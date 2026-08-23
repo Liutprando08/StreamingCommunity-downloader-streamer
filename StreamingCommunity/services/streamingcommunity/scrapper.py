@@ -7,7 +7,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import parse_qs, urlparse
 
-from httpx import HTTPError
+from httpx2 import HTTPError
 
 from StreamingCommunity.services._base.object import Episode, Season, SeasonManager
 

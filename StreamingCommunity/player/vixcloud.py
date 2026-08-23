@@ -14,7 +14,7 @@ from urllib.parse import (
 
 # External libraries
 from bs4 import BeautifulSoup
-from httpx import HTTPError
+from httpx2 import HTTPError
 from rich.console import Console
 
 # Internal utilities

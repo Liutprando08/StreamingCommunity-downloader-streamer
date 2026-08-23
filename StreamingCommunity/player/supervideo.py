@@ -8,7 +8,7 @@ import jsbeautifier
 from bs4 import BeautifulSoup
 
 # External libraries
-from httpx import HTTPError
+from httpx2 import HTTPError
 
 # Internal utilities
 from StreamingCommunity.utils.http_client import create_client_curl, get_headers

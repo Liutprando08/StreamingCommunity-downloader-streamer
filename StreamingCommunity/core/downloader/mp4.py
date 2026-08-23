@@ -10,7 +10,7 @@ import time
 from collections import deque
 from functools import partial
 
-import httpx
+import httpx2
 
 # External libraries
 from rich.console import Console
@@ -157,7 +157,7 @@ def MP4_Downloader(
             head = client.head(url, headers=headers)
             head.raise_for_status()
             content_type = (head.headers.get("content-type") or "").lower()
-        except httpx.HTTPError:
+        except httpx2.HTTPError:
             content_type = ""
 
         # If HEAD indicates HTML/JSON, attempt a GET without Range/If-Range as fallback
@@ -174,7 +174,7 @@ def MP4_Downloader(
                 try:
                     preview = resp_check.content[:2000]
                     preview_text = preview.decode("utf-8", errors="replace")
-                except httpx.HTTPError:
+                except httpx2.HTTPError:
                     preview_text = "<could not read body>"
                     return None, False
 
@@ -182,7 +182,7 @@ def MP4_Downloader(
                 console.print(preview_text)
                 return None, False
 
-            except httpx.HTTPError as e:
+            except httpx2.HTTPError as e:
                 console.print(f"[red]Fallback GET failed: {e}")
                 return None, False
 
@@ -292,7 +292,7 @@ def MP4_Downloader(
                         if not interrupt_handler.force_quit:
                             interrupt_handler.kill_download = True
 
-                    except (httpx.HTTPError, OSError) as e:
+                    except (httpx2.HTTPError, OSError) as e:
                         incomplete_error = True
                         interrupt_handler.kill_download = True
                         console.print(

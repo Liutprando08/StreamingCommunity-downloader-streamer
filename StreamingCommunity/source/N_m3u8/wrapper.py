@@ -420,7 +420,7 @@ class MediaDownloader:
             self.key = key
 
     async def _download_external_subtitles(self):
-        """Download external subtitles using httpx"""
+        """Download external subtitles using httpx2"""
         if not self.external_subtitles:
             return []
 

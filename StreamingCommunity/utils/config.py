@@ -11,7 +11,7 @@ import sys
 from typing import Any
 
 # External library
-import httpx
+import httpx2
 from rich.console import Console
 
 # Variable
@@ -298,7 +298,7 @@ class ConfigManager:
                 self._download_file(
                     CONFIG_LOGIN_DOWNLOAD_URL, self.login_file_path, "login.json"
                 )
-            except httpx.HTTPError as e:
+            except httpx2.HTTPError as e:
                 console.print(f"[yellow]Could not download login.json: {e!s}")
                 console.print("[yellow]Creating empty login configuration...")
                 self._login_data.clear()
@@ -328,7 +328,7 @@ class ConfigManager:
                 self._download_file(
                     REMOTE_CDM_DOWNLOAD_URL, self.remote_cdm_path, "remote_cdm.json"
                 )
-            except httpx.HTTPError as e:
+            except httpx2.HTTPError as e:
                 console.print(f"[yellow]Could not download remote_cdm.json: {e!s}")
                 console.print("[yellow]Creating empty remote cdm configuration...")
                 self._remote_cdm_data.clear()
@@ -412,7 +412,7 @@ class ConfigManager:
     def _download_file(self, url: str, file_path: str, file_name: str) -> None:
         """Download a file from a URL."""
         try:
-            response = httpx.get(
+            response = httpx2.get(
                 url, timeout=8.0, headers={"User-Agent": "Mozilla/5.0"}
             )
 
@@ -442,7 +442,7 @@ class ConfigManager:
         """Load site data from GitHub and update local domains.json file."""
         headers = {"User-Agent": "Mozilla/5.0"}
         try:
-            response = httpx.get(DOMAINS_DOWNLOAD_URL, timeout=8.0, headers=headers)
+            response = httpx2.get(DOMAINS_DOWNLOAD_URL, timeout=8.0, headers=headers)
 
             if response.status_code == 200:
                 self._domains_data.clear()
@@ -461,7 +461,7 @@ class ConfigManager:
             console.print(f"[red]Error parsing JSON from GitHub: {e!s}")
             self._handle_site_data_fallback()
 
-        except httpx.HTTPError as e:
+        except httpx2.HTTPError as e:
             console.print(f"[red]GitHub connection error: {e!s}")
             self._handle_site_data_fallback()
 

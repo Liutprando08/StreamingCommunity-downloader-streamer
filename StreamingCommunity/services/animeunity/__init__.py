@@ -3,7 +3,7 @@ from __future__ import annotations
 import urllib.parse
 
 # External library
-from httpx import HTTPError
+from httpx2 import HTTPError
 from rich.console import Console
 from rich.prompt import Prompt
 

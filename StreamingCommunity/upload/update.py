@@ -8,7 +8,7 @@ import importlib.metadata
 
 
 # External library
-import httpx
+import httpx2
 from rich.console import Console
 
 
@@ -31,7 +31,7 @@ console = Console()
 def fetch_github_releases():
     """Fetch releases data from GitHub API (sync)"""
     try:
-        response = httpx.get(
+        response = httpx2.get(
             "https://api.github.com/repos/Liutprando08/StreamingCommunity-downloader-streamer/releases",
             headers={'user-agent': get_userAgent()},
             timeout=config_manager.config.get_int("REQUESTS", "timeout"),
@@ -39,7 +39,7 @@ def fetch_github_releases():
         )
         response.raise_for_status()
         return response.json()
-    except httpx.HTTPError as e:
+    except httpx2.HTTPError as e:
         console.print(f"[red]GitHub API HTTP error: {e}")
         return []
     except Exception as e:
@@ -103,7 +103,7 @@ def auto_update():
         console.print(f"[cyan]Downloading {asset['name']}...")
         
         # Download
-        response = httpx.get(asset['browser_download_url'], headers={'user-agent': get_userAgent()}, timeout=300, follow_redirects=True)
+        response = httpx2.get(asset['browser_download_url'], headers={'user-agent': get_userAgent()}, timeout=300, follow_redirects=True)
         
         if response.status_code != 200:
             console.print("[red]Download failed")

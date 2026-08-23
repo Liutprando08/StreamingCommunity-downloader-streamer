@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from httpx import HTTPError
+from httpx2 import HTTPError
 
 from StreamingCommunity.services._base.object import Episode, EpisodeManager
 

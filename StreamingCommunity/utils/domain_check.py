@@ -4,7 +4,7 @@ import logging
 import re
 from urllib.parse import urlparse
 
-from httpx import HTTPError
+from httpx2 import HTTPError
 from rich.console import Console
 
 # Internal utilities

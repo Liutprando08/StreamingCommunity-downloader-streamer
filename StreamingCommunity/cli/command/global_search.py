@@ -6,7 +6,7 @@ import logging
 import time
 
 # External library
-from httpx import HTTPError
+from httpx2 import HTTPError
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table

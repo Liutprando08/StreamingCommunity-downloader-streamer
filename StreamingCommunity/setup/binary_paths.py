@@ -6,7 +6,7 @@ from typing import Optional
 
 
 # External library
-import httpx
+import httpx2
 from rich.console import Console
 
 
@@ -69,7 +69,7 @@ class BinaryPaths:
         
         try:
             url = f"{self.github_repo}/binary_paths.json"
-            response = httpx.get(url, timeout=10, headers=get_headers())
+            response = httpx2.get(url, timeout=10, headers=get_headers())
             response.raise_for_status()
             self.paths_cache = response.json()
             return self.paths_cache
@@ -120,7 +120,7 @@ class BinaryPaths:
                 console.log(f"[cyan]Downloading from [red]{url} [cyan]to [yellow]{local_path}")
                 
                 try:
-                    response = httpx.get(url, timeout=60, headers=get_headers())
+                    response = httpx2.get(url, timeout=60, headers=get_headers())
                     response.raise_for_status()
                     
                     with open(local_path, 'wb') as f:
