@@ -1,21 +1,22 @@
 # 03.03.2
 
-import sys
 import logging
-from typing import Dict, List, Any
+import sys
+from typing import Any, cast
 
-
-# External library
-from rich.console import Console, JustifyMethod
-from rich.table import Table
-from rich.prompt import Prompt
 from rich import box
 
+# External library
+from rich.console import JustifyMethod
+from rich.prompt import Prompt
+from rich.table import Table
+
+from StreamingCommunity.utils.console.shared import console
 
 # Internal utilities
 from .message import start_message
 
-from typing import cast  # or wherever it's exported from in your rich version
+logger = logging.getLogger(__name__)
 
 
 class TVShowManager:
@@ -23,14 +24,13 @@ class TVShowManager:
         """
         Initialize TVShowManager with default values.
         """
-        self.console = Console()
-        self.tv_shows: List[Dict[str, Any]] = []
+        self.tv_shows: list[dict[str, Any]] = []
         self.slice_start = 0
         self.slice_end = 10
         self.step = self.slice_end
-        self.column_info: Dict[str, Dict[str, str]] = {}
+        self.column_info: dict[str, dict[str, str]] = {}
 
-    def add_column(self, column_info: Dict[str, Dict[str, str]]) -> None:
+    def add_column(self, column_info: dict[str, dict[str, str]]) -> None:
         """
         Add column information.
 
@@ -39,7 +39,7 @@ class TVShowManager:
         """
         self.column_info = column_info
 
-    def add_tv_show(self, tv_show: Dict[str, Any]) -> None:
+    def add_tv_show(self, tv_show: dict[str, Any]) -> None:
         """
         Add a TV show to the list of TV shows.
 
@@ -49,7 +49,7 @@ class TVShowManager:
         if tv_show:
             self.tv_shows.append(tv_show)
 
-    def display_data(self, data_slice: List[Dict[str, Any]]) -> int | None:
+    def display_data(self, data_slice: list[dict[str, Any]]) -> int | None:
         """
         Display TV show data in a tabular format.
 
@@ -57,11 +57,11 @@ class TVShowManager:
             - data_slice (List[Dict[str, Any]]): List of dictionaries containing TV show details to display.
         """
         if not data_slice:
-            logging.error("Nothing to display.")
+            logger.error("Nothing to display.")
             return 404
 
         if not self.column_info:
-            logging.error("Error: Column information not configured.")
+            logger.error("Error: Column information not configured.")
             return 404
 
         # Create table with specified style
@@ -85,12 +85,12 @@ class TVShowManager:
         for idx, entry in enumerate(data_slice):
             if entry:
                 row_data = [
-                    str(entry.get(col_name, "")) for col_name in self.column_info.keys()
+                    str(entry.get(col_name, "")) for col_name in self.column_info
                 ]
                 style = "dim" if idx % 2 == 1 else None
                 table.add_row(*row_data, style=style)
 
-        self.console.print(table)
+        console.print(table)
 
     def run(self, force_int_input: bool = False, max_int_input: int = 0) -> str:
         """
@@ -104,15 +104,17 @@ class TVShowManager:
             str: Last command executed before breaking out of the loop.
         """
         if not self.tv_shows:
-            logging.error("Error: No data available for display.")
+            logger.error("Error: No data available for display.")
             sys.exit(0)
 
         if not self.column_info:
-            logging.error("Error: Columns not configured.")
+            logger.error("Error: Columns not configured.")
             return ""
 
         total_items = len(self.tv_shows)
         last_command = ""
+
+        start_message()
 
         while True:
             start_message()
@@ -130,7 +132,7 @@ class TVShowManager:
 
             # Handle pagination and user input
             if self.slice_end < total_items:
-                self.console.print(
+                console.print(
                     "\n[green]Press [red]Enter [green]for next page, [red]'q' [green]to quit."
                 )
 
@@ -155,14 +157,13 @@ class TVShowManager:
                 elif key == "":
                     self.slice_start += self.step
                     self.slice_end += self.step
-                    if self.slice_end > total_items:
-                        self.slice_end = total_items
+                    self.slice_end = min(self.slice_end, total_items)
                 else:
                     break
 
             else:
                 # Last page handling
-                self.console.print(
+                console.print(
                     "\n[green]You've reached the end. [red]Enter [green]for first page, [red]'q' [green]to quit."
                 )
 
@@ -199,4 +200,3 @@ class TVShowManager:
         self.tv_shows = []
         self.slice_start = 0
         self.slice_end = self.step
-
