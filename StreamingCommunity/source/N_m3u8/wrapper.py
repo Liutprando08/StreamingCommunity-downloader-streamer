@@ -14,6 +14,7 @@ from rich.console import Console
 
 # Internal
 from StreamingCommunity.utils.config import config_manager
+from StreamingCommunity.utils.console.shared import SCHEMA_THEME
 from StreamingCommunity.utils.os import internet_manager
 from StreamingCommunity.core.ui.bar_manager import DownloadBarManager
 from StreamingCommunity.setup import (
@@ -47,7 +48,8 @@ from .ui import build_table
 
 # Variable
 console = Console(
-    force_terminal=True if platform.system().lower() != "windows" else None
+    theme=SCHEMA_THEME,
+    force_terminal=True if platform.system().lower() != "windows" else None,
 )
 
 

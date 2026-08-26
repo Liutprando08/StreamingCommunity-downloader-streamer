@@ -7,7 +7,6 @@ import os
 
 # External library
 import yt_dlp
-from rich.console import Console
 from rich.prompt import Prompt
 from yt_dlp.utils import DownloadError, ExtractorError
 
@@ -15,10 +14,10 @@ from StreamingCommunity.services._base import Entries, site_constants
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager, os_manager, start_message
+from StreamingCommunity.utils.console.shared import console
 
 # Variables
 msg = Prompt()
-console = Console()
 extension_output = config_manager.config.get("PROCESS", "extension")
 SKIP_DOWNLOAD = config_manager.config.get_bool("DOWNLOAD", "skip_download")
 CUSTOM_FORMAT = config_manager.config.get("YOUTUBE", "format", default="")

@@ -13,8 +13,9 @@ from functools import partial
 import httpx2
 
 # External libraries
-from rich.console import Console
 from rich.prompt import Prompt
+
+from StreamingCommunity.utils.console.shared import console
 
 from StreamingCommunity.core.processors.helper.kodi_nfo import (
     KODI_NFO_FILES,
@@ -30,7 +31,6 @@ from StreamingCommunity.utils.http_client import create_client, get_userAgent
 
 # Config
 msg = Prompt()
-console = Console()
 REQUEST_VERIFY = config_manager.config.get_bool("REQUESTS", "verify")
 CREATE_NFO_FILES = config_manager.config.get_bool(
     "PROCESS", "generate_nfo", default=False

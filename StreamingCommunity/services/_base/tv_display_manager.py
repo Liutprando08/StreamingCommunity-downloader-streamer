@@ -6,16 +6,15 @@ import logging
 import sys
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager, os_manager
 from StreamingCommunity.utils.console import TVShowManager
+from StreamingCommunity.utils.console.shared import console
 
 # Variable
 msg = Prompt()
-console = Console()
 MAP_EPISODE = config_manager.config.get("OUTPUT", "map_episode_name")
 logger = logging.getLogger(__name__)
 

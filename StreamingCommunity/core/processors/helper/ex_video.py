@@ -4,13 +4,8 @@ import json
 import subprocess
 
 # External library
-from rich.console import Console
-
-# Internal utilities
 from StreamingCommunity.setup import get_ffmpeg_path, get_ffprobe_path
-
-# Variable
-console = Console()
+from StreamingCommunity.utils.console.shared import console
 
 
 def detect_ts_timestamp_issues(file_path):

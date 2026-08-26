@@ -5,15 +5,14 @@ import re
 from urllib.parse import urlparse
 
 from httpx2 import HTTPError
-from rich.console import Console
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.http_client import create_client
 
 
 # Variable
-console = Console()
 SITE_NAME = "streamingcommunity"
 SCRAPER_URL = "https://www.giardiniblog.it/streamingcommunity-nuovo-link/"
 DEFAULT_TIMEOUT = 10.0

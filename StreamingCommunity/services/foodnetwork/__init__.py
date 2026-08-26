@@ -1,7 +1,6 @@
 # 26.11.25
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 
@@ -9,6 +8,7 @@ from rich.prompt import Prompt
 from StreamingCommunity.services._base import site_constants, EntriesManager, Entries
 from StreamingCommunity.utils.http_client import create_client, get_userAgent, check_region_availability
 from StreamingCommunity.utils import TVShowManager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.services._base.site_search_manager import base_process_search_result, base_search
 
 # Logic
@@ -22,7 +22,6 @@ _region = ["IT"]
 
 
 msg = Prompt()
-console = Console()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 

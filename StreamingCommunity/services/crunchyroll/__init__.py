@@ -1,7 +1,6 @@
 # 16.03.25
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 from StreamingCommunity.services._base import Entries, EntriesManager, site_constants
@@ -12,6 +11,7 @@ from StreamingCommunity.services._base.site_search_manager import (
 
 # Internal utilities
 from StreamingCommunity.utils import TVShowManager, config_manager
+from StreamingCommunity.utils.console.shared import console
 
 from .client import CrunchyrollClient
 
@@ -23,7 +23,6 @@ indice = 7
 _useFor = "Anime"
 _drm = ["Widevine", "PlayReady"]
 msg = Prompt()
-console = Console()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 

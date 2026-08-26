@@ -7,7 +7,6 @@ from typing import Tuple
 
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 
@@ -17,6 +16,7 @@ from StreamingCommunity.utils.http_client import create_client
 from StreamingCommunity.services._base import site_constants, Entries
 from StreamingCommunity.services._base.tv_display_manager import map_episode_title
 from StreamingCommunity.services._base.tv_download_manager import process_season_selection, process_episode_download
+from StreamingCommunity.utils.console.shared import console
 
 
 # Downloader
@@ -30,7 +30,6 @@ from .client import get_playback_url, get_tracking_info, generate_license_url
 
 
 # Variable
-console = Console()
 msg = Prompt()
 extension_output = config_manager.config.get("PROCESS", "extension")
 

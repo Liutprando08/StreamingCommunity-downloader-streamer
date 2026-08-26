@@ -3,15 +3,13 @@
 import time
 
 # External library
-from rich.console import Console
-
 
 # Internal utilities
 from StreamingCommunity.utils.http_client import create_client, get_userAgent, get_headers
+from StreamingCommunity.utils.console.shared import console
 
 
 # Variable
-console = Console()
 
 _bearer_token_cache = {}
 _BEARER_TOKEN_TTL = 300

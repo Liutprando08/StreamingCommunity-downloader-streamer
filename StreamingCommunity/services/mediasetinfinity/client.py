@@ -7,16 +7,15 @@ import xml.etree.ElementTree as ET
 
 # External library
 from bs4 import BeautifulSoup
-from rich.console import Console
 
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager
 from StreamingCommunity.utils.http_client import create_client, create_client_curl, get_headers, get_userAgent
+from StreamingCommunity.utils.console.shared import console
 
 
 # Variable
-console = Console()
 class_mediaset_api = None
 
 

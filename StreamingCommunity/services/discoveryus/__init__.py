@@ -1,12 +1,12 @@
 # 22.12.25
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 
 # Internal utilities
 from StreamingCommunity.utils import TVShowManager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.http_client import create_client, check_region_availability
 from StreamingCommunity.services._base import site_constants, EntriesManager, Entries
 from StreamingCommunity.services._base.site_search_manager import base_process_search_result, base_search
@@ -22,7 +22,6 @@ _useFor = "Film_Serie"
 _region = ["US"]
 _drm = ["widevine", "playready", "fairplay"]
 msg = Prompt()
-console = Console()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 

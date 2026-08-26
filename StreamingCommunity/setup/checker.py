@@ -6,7 +6,7 @@ from typing import Optional, Tuple
 
 
 # External library
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 
 
 # Logic
@@ -14,7 +14,6 @@ from .binary_paths import binary_paths
 
 
 # Variable
-console = Console()
 
 
 def check_bento4() -> Optional[str]:

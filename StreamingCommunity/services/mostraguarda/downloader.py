@@ -6,13 +6,13 @@ import logging
 
 # External libraries
 from bs4 import BeautifulSoup
-from rich.console import Console
 
 
 # Internal utilities
 from StreamingCommunity.utils import os_manager, config_manager, start_message
 from StreamingCommunity.utils.http_client import create_client, get_headers
 from StreamingCommunity.services._base import site_constants, Entries
+from StreamingCommunity.utils.console.shared import console
 
 
 # Downloader
@@ -24,7 +24,6 @@ from StreamingCommunity.player.supervideo import VideoSource
 
 
 # Variable
-console = Console()
 extension_output = config_manager.config.get("PROCESS", "extension")
 
 

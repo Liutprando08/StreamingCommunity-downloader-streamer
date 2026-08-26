@@ -8,12 +8,11 @@ import os
 import platform
 import subprocess
 import sys
-from typing import Callable
+from collections.abc import Callable
 
-# External library
-from rich.console import Console
 from rich.prompt import Prompt
 
+# External library
 from StreamingCommunity.services._base import load_search_functions
 from StreamingCommunity.setup import (
     get_info_prd,
@@ -24,6 +23,7 @@ from StreamingCommunity.setup import (
 from StreamingCommunity.upload import binary_update, git_update
 from StreamingCommunity.upload.version import __title__, __version__
 from StreamingCommunity.utils import config_manager, os_manager, start_message
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.domain_check import check_streamingcommunity_domain
 
 # Internal utilities
@@ -31,7 +31,6 @@ from . import call_global_search
 
 # Config
 logger = logging.getLogger(__name__)
-console = Console()
 msg = Prompt()
 COLOR_MAP = {
     "anime": "red",

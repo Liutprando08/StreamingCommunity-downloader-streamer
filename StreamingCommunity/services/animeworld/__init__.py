@@ -2,13 +2,13 @@
 
 # External library
 from bs4 import BeautifulSoup
-from rich.console import Console
 from rich.prompt import Prompt
 
 
 # Internal utilities
 from StreamingCommunity.utils.http_client import create_client, get_headers
 from StreamingCommunity.utils import TVShowManager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.services._base import site_constants, EntriesManager, Entries
 from StreamingCommunity.services._base.site_search_manager import base_process_search_result, base_search
 
@@ -24,7 +24,6 @@ _useFor = "Anime"
 
 
 msg = Prompt()
-console = Console()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 

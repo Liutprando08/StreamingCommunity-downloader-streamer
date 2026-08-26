@@ -5,15 +5,14 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Optional
 
 # External imports
-from rich.console import Console
 from rich.prompt import Prompt
 
 # Internal utilities
 from StreamingCommunity.services._base import Entries, EntriesManager
 from StreamingCommunity.utils import TVShowManager
+from StreamingCommunity.utils.console.shared import console
 
 # Variable
-console = Console()
 msg = Prompt()
 available_colors = ["red", "magenta", "yellow", "cyan", "green", "blue", "white"]
 column_to_hide = [

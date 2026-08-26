@@ -117,7 +117,6 @@ class TVShowManager:
         start_message()
 
         while True:
-            start_message()
 
             # Check and adjust slice indices if out of bounds
             current_slice = self.tv_shows[self.slice_start : self.slice_end]

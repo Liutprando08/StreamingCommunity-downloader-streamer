@@ -7,7 +7,6 @@ import os
 import shutil
 
 from pathvalidate import sanitize_filename, sanitize_filepath
-from rich.console import Console
 from rich.prompt import Prompt
 
 # External library
@@ -15,10 +14,10 @@ from unidecode import unidecode
 
 # Internal utilities
 from ..setup.binary_paths import binary_paths
+from StreamingCommunity.utils.console.shared import console
 
 # Variable
 msg = Prompt()
-console = Console()
 logger = logging.getLogger(__name__)
 
 

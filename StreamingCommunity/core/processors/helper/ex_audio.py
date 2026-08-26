@@ -7,13 +7,8 @@ import logging
 import subprocess
 
 # External library
-from rich.console import Console
-
-# Internal utilities
 from StreamingCommunity.setup import get_ffprobe_path
-
-# Variable
-console = Console()
+from StreamingCommunity.utils.console.shared import console
 
 logger = logging.getLogger(__name__)
 

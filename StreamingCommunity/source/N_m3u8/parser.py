@@ -6,7 +6,7 @@ from typing import List, Tuple
 
 
 # External 
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 
 
 # Logic
@@ -14,7 +14,6 @@ from ..utils.object import StreamInfo
 
 
 # Variable
-console = Console()
 
 
 class LogParser:

@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 
 
 # External import
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 
 
 # Internal utilities
@@ -20,7 +20,6 @@ from StreamingCommunity.utils import config_manager
 
 
 # Variable
-console = Console()
 CREATE_DB_ON_STARTUP = config_manager.remote_cdm.get('config', 'create_local_db', default=False)
 
 

@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 import signal
 
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 
 logger = logging.getLogger(__name__)
-console = Console()
 
 
 class StreamSession:

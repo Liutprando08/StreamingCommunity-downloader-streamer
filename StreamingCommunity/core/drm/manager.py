@@ -3,7 +3,7 @@
 import time
 
 # External libraries
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 
 
 # Internal utilities
@@ -18,7 +18,6 @@ from .widevine import get_widevine_keys
 
 
 # Variable
-console = Console()
 DELAY = config_manager.remote_cdm.get_int('config', 'delay_after_request')
 
 

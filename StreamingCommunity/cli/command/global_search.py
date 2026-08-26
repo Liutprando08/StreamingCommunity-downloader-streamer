@@ -3,23 +3,20 @@
 from __future__ import annotations
 
 import logging
-import time
 
 # External library
 from httpx2 import HTTPError
-from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
 
 from StreamingCommunity.services._base import load_search_functions
-
-# Internal utilities
 from StreamingCommunity.utils.console.message import start_message
 
-# Variable console = Console()
+# Internal utilities
+from StreamingCommunity.utils.console.shared import console
+
 msg = Prompt()
 logger = logging.getLogger(__name__)
-console = Console()
 
 
 def global_search(search_terms: str | None = None, selected_sites: list | None = None):
@@ -168,7 +165,6 @@ def display_consolidated_results(all_media_items, search_terms):
         all_media_items (list): List of media items from all searched sites.
         search_terms (str): The search terms used.
     """
-    time.sleep(1)
     start_message()
 
     console.print(f"\n[green]Search results for: [yellow]{search_terms} \n")

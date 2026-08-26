@@ -7,16 +7,13 @@ import shutil
 
 
 # External libraries
-from rich.console import Console
-
-
 # Internal utilities
 from StreamingCommunity.utils.os import os_manager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.setup import get_megatools_path
 
 
 # Variable
-console = Console()
 
 
 class MEGA_Downloader:

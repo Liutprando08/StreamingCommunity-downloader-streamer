@@ -5,7 +5,7 @@ from typing import Optional, List, Dict
 
 
 # External libraries
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 from pyplayready.system.pssh import PSSH as PR_PSSH
 from pywidevine.pssh import PSSH as WV_PSSH
 
@@ -15,7 +15,6 @@ from StreamingCommunity.utils.http_client import create_client_curl, get_userAge
 
 
 # Variable
-console = Console()
 
 
 class DRMSystem:

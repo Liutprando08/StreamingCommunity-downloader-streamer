@@ -5,7 +5,6 @@ import os
 
 # External library
 from bs4 import BeautifulSoup
-from rich.console import Console
 from rich.prompt import Prompt
 
 
@@ -13,6 +12,7 @@ from rich.prompt import Prompt
 from StreamingCommunity.utils import config_manager, start_message
 from StreamingCommunity.utils.http_client import create_client_curl, get_headers
 from StreamingCommunity.services._base import site_constants, Entries
+from StreamingCommunity.utils.console.shared import console
 
 
 # Downloader
@@ -20,7 +20,6 @@ from StreamingCommunity.core.downloader import MEGA_Downloader
 
 
 # Variable
-console = Console()
 msg = Prompt()
 extension_output = config_manager.config.get("PROCESS", "extension")
 

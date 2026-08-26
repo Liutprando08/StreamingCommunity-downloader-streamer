@@ -8,13 +8,10 @@ import shutil
 from typing import Optional
 
 # External import
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 
 # Local import
 from .ex_font import FontManager
-
-# Variable
-console = Console()
 
 
 def extract_font_name_from_style(style_line: str) -> str | None:

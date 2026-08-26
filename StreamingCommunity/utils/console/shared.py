@@ -1,4 +1,3 @@
-from rich import console
 from rich.console import Console
 from rich.theme import Theme
 

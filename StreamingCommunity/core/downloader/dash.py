@@ -9,11 +9,9 @@ from typing import Dict
 
 
 # External libraries
-from rich.console import Console
-
-
 # Internal utilities
 from StreamingCommunity.utils import config_manager, os_manager, internet_manager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.http_client import get_headers
 from StreamingCommunity.setup import get_wvd_path, get_prd_path
 from StreamingCommunity.core.processors import join_video, join_audios, join_subtitles
@@ -33,7 +31,6 @@ from StreamingCommunity.source.N_m3u8 import MediaDownloader
 
 
 # Config
-console = Console()
 CLEANUP_TMP = config_manager.config.get_bool('DOWNLOAD', 'cleanup_tmp_folder')
 EXTENSION_OUTPUT = config_manager.config.get("PROCESS", "extension")
 SKIP_DOWNLOAD = config_manager.config.get_bool('DOWNLOAD', 'skip_download')

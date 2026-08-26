@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 # Downloader
@@ -21,12 +20,12 @@ from StreamingCommunity.services._base.tv_display_manager import (
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager, os_manager, start_message
+from StreamingCommunity.utils.console.shared import console
 
 # Logic
 from .scrapper import ScrapeSerieAnime
 
 # Variable
-console = Console()
 msg = Prompt()
 extension_output = config_manager.config.get("PROCESS", "extension")
 KILL_HANDLER = False

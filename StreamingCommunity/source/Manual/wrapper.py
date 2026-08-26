@@ -9,7 +9,7 @@ from xml.etree import ElementTree as ET
 
 
 # External libraries
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 
 
 # Internal utilities
@@ -28,7 +28,6 @@ from .utils.file_size import format_bitrate
 
 # Variable
 logger = logging.getLogger(__name__)
-console = Console()
 
 
 # Config

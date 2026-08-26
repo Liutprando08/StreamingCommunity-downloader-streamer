@@ -6,15 +6,14 @@ import os
 import shutil
 
 # External library
-from rich.console import Console
 
 # Internal utilities
 from StreamingCommunity.services._base.site_costant import site_constants
 from StreamingCommunity.setup import get_aria2c_path
 from StreamingCommunity.torrent.downloader import TorrentDownloader
+from StreamingCommunity.utils.console.shared import console
 
 # Variable
-console = Console()
 logger = logging.getLogger(__name__)
 
 VIDEO_EXTENSIONS = {

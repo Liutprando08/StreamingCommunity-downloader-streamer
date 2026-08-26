@@ -15,9 +15,9 @@ from urllib.parse import (
 # External libraries
 from bs4 import BeautifulSoup
 from httpx2 import HTTPError
-from rich.console import Console
 
 # Internal utilities
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.http_client import (
     create_client,
     create_client_curl,
@@ -25,7 +25,6 @@ from StreamingCommunity.utils.http_client import (
 )
 
 # Variable
-console = Console()
 
 logger = logging.getLogger(__name__)
 

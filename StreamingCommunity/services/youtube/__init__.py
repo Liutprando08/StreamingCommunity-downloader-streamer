@@ -4,7 +4,6 @@ from __future__ import annotations
 from typing import Any
 
 import yt_dlp
-from rich.console import Console
 from rich.prompt import Prompt
 from yt_dlp.utils import DownloadError, ExtractorError
 
@@ -16,6 +15,7 @@ from StreamingCommunity.services._base.site_search_manager import (
 
 # Internal utilities
 from StreamingCommunity.utils import TVShowManager
+from StreamingCommunity.utils.console.shared import console
 
 # Logic
 from .downloader import download_film
@@ -25,7 +25,6 @@ indice = 19
 _useFor = "Film_Serie"
 search_url = "youtube.com"
 msg = Prompt()
-console = Console()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 

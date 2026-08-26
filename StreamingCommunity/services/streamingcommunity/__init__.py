@@ -7,7 +7,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # External library
 from bs4 import BeautifulSoup
 from httpx2 import HTTPError
-from rich.console import Console
 from rich.prompt import Prompt
 
 from StreamingCommunity.services._base import Entries, EntriesManager, site_constants
@@ -19,6 +18,7 @@ from StreamingCommunity.services._base.site_search_manager import (
 # Internal utilities
 from StreamingCommunity.utils import TVShowManager
 from StreamingCommunity.utils.http_client import create_client, get_userAgent
+from StreamingCommunity.utils.console.shared import console
 
 # Logic
 from .downloader import download_film, download_series, stream_film, stream_series
@@ -29,7 +29,6 @@ _useFor = "Film_Serie"
 
 
 msg = Prompt()
-console = Console()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 

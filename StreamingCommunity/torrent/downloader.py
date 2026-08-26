@@ -6,12 +6,12 @@ import logging
 import os
 import subprocess
 
-from rich.console import Console
+from rich.live import Live
 
 from StreamingCommunity.torrent.title_parser import TorrentResult
+from StreamingCommunity.utils.console.shared import console
 
 log = logging.getLogger(__name__)
-console = Console()
 
 
 class TorrentDownloader:
@@ -47,19 +47,20 @@ class TorrentDownloader:
             )
 
             last_status = ""
-            for line in iter(process.stdout.readline, ""):
-                line = line.strip()
-                if not line:
-                    continue
+            with Live(console=console, refresh_per_second=4, transient=True) as live:
+                for line in iter(process.stdout.readline, ""):
+                    line = line.strip()
+                    if not line:
+                        continue
 
-                if "Download complete:" in line:
-                    console.print(f"[green]{line}")
-                elif "ETA:" in line or "Speed:" in line:
-                    if line != last_status:
-                        console.print(f"[cyan]{line}", end="\r")
-                        last_status = line
-                elif "error" in line.lower() or "fail" in line.lower():
-                    console.print(f"[red]{line}")
+                    if "Download complete:" in line:
+                        live.update(f"[green]{line}")
+                    elif "ETA:" in line or "Speed:" in line:
+                        if line != last_status:
+                            live.update(f"[cyan]{line}")
+                            last_status = line
+                    elif "error" in line.lower() or "fail" in line.lower():
+                        live.update(f"[red]{line}")
 
             process.wait(timeout=timeout + 30)
 

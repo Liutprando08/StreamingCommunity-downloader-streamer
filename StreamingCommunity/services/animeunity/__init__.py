@@ -4,7 +4,6 @@ import urllib.parse
 
 # External library
 from httpx2 import HTTPError
-from rich.console import Console
 from rich.prompt import Prompt
 
 from StreamingCommunity.services._base import Entries, EntriesManager, site_constants
@@ -13,6 +12,7 @@ from StreamingCommunity.services._base.site_search_manager import (
     base_search,
 )
 from StreamingCommunity.utils import TVShowManager
+from StreamingCommunity.utils.console.shared import console
 
 # Internal utilities
 from StreamingCommunity.utils.http_client import create_client_curl, get_userAgent
@@ -26,7 +26,6 @@ _useFor = "Anime"
 
 
 msg = Prompt()
-console = Console()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 

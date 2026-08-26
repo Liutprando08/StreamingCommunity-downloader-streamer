@@ -9,10 +9,9 @@ import importlib.metadata
 
 # External library
 import httpx2
-from rich.console import Console
-
 
 # Internal utilities
+from StreamingCommunity.utils.console.shared import console
 from .version import __version__ as source_code_version, __author__, __title__
 from StreamingCommunity.utils import config_manager
 from StreamingCommunity.utils.http_client import get_userAgent
@@ -25,7 +24,6 @@ if get_is_binary_installation():
     base_path = os.path.join(sys._MEIPASS, "StreamingCommunity")
 else:
     base_path = os.path.dirname(__file__)
-console = Console()
 
 
 def fetch_github_releases():

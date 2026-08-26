@@ -7,7 +7,7 @@ from typing import Optional
 
 # External library
 import httpx2
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 
 
 # Internal utilities
@@ -15,7 +15,6 @@ from StreamingCommunity.utils.http_client import get_headers
 
 
 # Variable
-console = Console()
 
 
 class BinaryPaths:

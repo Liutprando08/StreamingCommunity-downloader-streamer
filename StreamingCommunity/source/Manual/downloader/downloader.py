@@ -8,12 +8,11 @@ from datetime import datetime
 
 
 # External libraries
-from rich.console import Console
 from rich.table import Table
-
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.http_client import create_client, get_headers
 
 
@@ -31,7 +30,6 @@ from ...utils.trans_codec import get_audio_codec_name, get_video_codec_name, get
 
 # Variable
 logger = logging.getLogger(__name__)
-console = Console()
 TIMEOUT = config_manager.config.get_int('REQUESTS', 'timeout')
 MAX_WORKERS = config_manager.config.get_int('DOWNLOAD', 'thread_count')
 

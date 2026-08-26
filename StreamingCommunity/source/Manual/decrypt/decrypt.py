@@ -8,7 +8,7 @@ import logging
 
 
 # External import 
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 AES = None
 unpad = None
 try:
@@ -28,7 +28,6 @@ from StreamingCommunity.setup import get_bento4_decrypt_path, get_mp4dump_path, 
 
 # Variable
 logger = logging.getLogger(__name__)
-console = Console()
 
 
 class Decryptor:

@@ -8,12 +8,11 @@ import threading
 
 
 # External libraries
-from rich.console import Console
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.http_client import create_client, get_headers, get_userAgent
 from StreamingCommunity.core.ui.bar_manager import DownloadBarManager
 from StreamingCommunity.source.utils.tracker import download_tracker
@@ -25,7 +24,6 @@ from ..utils.file_size import format_size
 
 # Variable
 logger = logging.getLogger(__name__)
-console = Console()
 failed_segments = set()
 failed_segments_lock = threading.Lock()
 shutdown_flag = threading.Event()

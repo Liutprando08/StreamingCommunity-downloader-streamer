@@ -7,11 +7,7 @@ from typing import List
 
 
 # External import
-from rich.console import Console
-
-
-# Variable
-console = Console()
+from StreamingCommunity.utils.console.shared import console
 
 
 class FontManager:

@@ -7,12 +7,11 @@ import os
 import subprocess
 
 # External library
-from rich.console import Console
-
 from StreamingCommunity.setup import binary_paths, get_ffmpeg_path
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager
+from StreamingCommunity.utils.console.shared import console
 
 from .capture import capture_ffmpeg_real_time
 from .conversion.ttml_to_srt import convert_ttml_to_srt
@@ -23,7 +22,6 @@ from .helper.ex_sub import fix_subtitle_extension
 from .helper.ex_video import convert_ts_to_mp4, detect_ts_timestamp_issues
 
 # Config
-console = Console()
 os_type = binary_paths._detect_system()
 USE_GPU = config_manager.config.get_bool("PROCESS", "use_gpu")
 PARAM_VIDEO = config_manager.config.get_list("PROCESS", "param_video")

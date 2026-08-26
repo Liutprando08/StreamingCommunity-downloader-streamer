@@ -16,9 +16,11 @@ from StreamingCommunity.core.ui.progress_bar import (
     TransferStatsColumn,
 )
 from StreamingCommunity.source.utils.tracker import context_tracker, download_tracker
+from StreamingCommunity.utils.console.shared import SCHEMA_THEME
 
 console = Console(
-    force_terminal=True if platform.system().lower() != "windows" else None
+    theme=SCHEMA_THEME,
+    force_terminal=True if platform.system().lower() != "windows" else None,
 )
 
 

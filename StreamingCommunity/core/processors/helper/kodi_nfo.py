@@ -6,12 +6,9 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from rich.console import Console
-
 from StreamingCommunity.utils import config_manager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.tmdb_client import tmdb
-
-console = Console()
 
 KODI_NFO_FILES = config_manager.config.get_bool("PROCESS", "kodi_nfo", default=False)
 logger = logging.getLogger(__name__)

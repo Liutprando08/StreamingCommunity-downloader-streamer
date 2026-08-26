@@ -6,12 +6,12 @@ from typing import Dict, Optional
 
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 
 # Internal utilities
 from StreamingCommunity.utils import TVShowManager, config_manager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.services._base import EntriesManager, Entries
 from StreamingCommunity.services._base.site_search_manager import base_process_search_result, base_search
 from StreamingCommunity.torrent.title_parser import TorrentResult
@@ -26,7 +26,6 @@ from .downloader import download_film, download_series
 _useFor = "Film_Serie"
 
 msg = Prompt()
-console = Console()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 

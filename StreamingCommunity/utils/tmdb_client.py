@@ -9,16 +9,14 @@ from difflib import SequenceMatcher
 
 # External libraries
 from curl_cffi.requests.exceptions import RequestException
-from rich.console import Console
-
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.http_client import create_client_curl, get_userAgent
 
 
 # Variable
-console = Console()
 api_key = config_manager.login.get("TMDB", "api_key", default="")
 
 

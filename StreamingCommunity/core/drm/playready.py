@@ -1,7 +1,7 @@
 # 29.01.26
 
 # External libraries
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 from pyplayready.cdm import Cdm
 from pyplayready.device import Device
 from pyplayready.remote.remotecdm import RemoteCdm
@@ -14,7 +14,6 @@ from StreamingCommunity.source.utils.object import KeysManager
 
 
 # Variable
-console = Console()
 
 
 def get_playready_keys(pssh_list: list[dict], license_url: str, cdm_device_path: str = None, cdm_remote_api: list[str] = None, headers: dict = None, key: str = None):

@@ -4,13 +4,12 @@ from typing import List, Optional
 
 
 # External import
-from rich.console import Console
 from StreamingCommunity.utils.http_client import create_client
 from StreamingCommunity.utils.config import config_manager
+from StreamingCommunity.utils.console.shared import console
 
 
 # Variable
-console = Console()
 
 
 class ExternalSupaDBVault:

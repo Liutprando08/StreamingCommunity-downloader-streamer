@@ -5,7 +5,6 @@ import os
 
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 
@@ -13,6 +12,7 @@ from rich.prompt import Prompt
 from StreamingCommunity.utils import os_manager, start_message
 from StreamingCommunity.services._base import site_constants, Entries
 from StreamingCommunity.services._base.tv_display_manager import manage_selection, dynamic_format_number
+from StreamingCommunity.utils.console.shared import console
 
 
 # Downloader
@@ -28,7 +28,6 @@ from .scrapper import ScrapSerie
 
 
 # Variable
-console = Console()
 msg = Prompt()
 
 

@@ -8,7 +8,6 @@ from typing import Any
 
 # External library
 from httpx2 import HTTPError
-from rich.console import Console
 from rich.prompt import Prompt
 
 # Downloader
@@ -26,12 +25,12 @@ from StreamingCommunity.services._base.tv_download_manager import (
 # Internal utilities
 from StreamingCommunity.utils import config_manager, os_manager, start_message
 from StreamingCommunity.utils.http_client import create_client, get_userAgent
+from StreamingCommunity.utils.console.shared import console
 
 # Logic
 from .scrapper import GetSerieInfo
 
 # Variable
-console = Console()
 msg = Prompt()
 extension_output = config_manager.config.get("PROCESS", "extension")
 headers = {"user-agent": get_userAgent()}

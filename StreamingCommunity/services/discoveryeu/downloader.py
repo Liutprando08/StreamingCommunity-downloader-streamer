@@ -4,7 +4,6 @@ import os
 
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 
@@ -13,6 +12,7 @@ from StreamingCommunity.utils import os_manager, config_manager, start_message
 from StreamingCommunity.services._base import site_constants, Entries
 from StreamingCommunity.services._base.tv_display_manager import map_episode_title
 from StreamingCommunity.services._base.tv_download_manager import process_season_selection, process_episode_download
+from StreamingCommunity.utils.console.shared import console
 
 
 # Downloader
@@ -26,7 +26,6 @@ from .scrapper import GetSerieInfo
 
 # Variables
 msg = Prompt()
-console = Console()
 extension_output = config_manager.config.get("PROCESS", "extension")
 
 

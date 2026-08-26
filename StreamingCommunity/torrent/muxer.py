@@ -8,12 +8,11 @@ import subprocess
 
 # External library
 from curl_cffi.requests.exceptions import HTTPError
-from rich.console import Console
 
 # Internal utilities (lazy to avoid circular imports via torrent/__init__.py)
+from StreamingCommunity.utils.console.shared import console
 
 # Variable
-console = Console()
 log = logging.getLogger(__name__)
 
 

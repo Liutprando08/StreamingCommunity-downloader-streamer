@@ -12,10 +12,9 @@ from typing import Any
 
 # External library
 import httpx2
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 
 # Variable
-console = Console()
 logger = logging.getLogger(__name__)
 CONFIG_FILENAME = "config.json"
 LOGIN_FILENAME = "login.json"

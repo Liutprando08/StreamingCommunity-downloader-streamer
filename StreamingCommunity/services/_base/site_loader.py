@@ -5,11 +5,8 @@ from __future__ import annotations
 
 import importlib
 
-# External import
-from rich.console import Console
-
-# Variable
-console = Console()
+# Internal utilities
+from StreamingCommunity.utils.console.shared import console
 folder_name = "services"
 
 

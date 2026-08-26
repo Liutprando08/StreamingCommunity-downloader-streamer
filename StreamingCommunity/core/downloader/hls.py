@@ -8,9 +8,8 @@ import time
 from typing import Any
 
 # External libraries
-from rich.console import Console
-
 from StreamingCommunity.core.processors import join_audios, join_subtitles, join_video
+from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.core.processors.helper.kodi_nfo import (
     KODI_NFO_FILES,
     generate_kodi_metadata,
@@ -27,7 +26,6 @@ from StreamingCommunity.utils import config_manager, internet_manager, os_manage
 from StreamingCommunity.utils.http_client import get_headers
 
 # Config
-console = Console()
 CLEANUP_TMP = config_manager.config.get_bool("DOWNLOAD", "cleanup_tmp_folder")
 EXTENSION_OUTPUT = config_manager.config.get("PROCESS", "extension")
 SKIP_DOWNLOAD = config_manager.config.get_bool("DOWNLOAD", "skip_download")

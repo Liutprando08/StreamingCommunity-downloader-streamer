@@ -9,12 +9,9 @@ from pathlib import Path
 from typing import List, Optional
 
 # External import
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 from ttconv.imsc.reader import to_model
 from ttconv.srt.writer import from_model
-
-# Variable
-console = Console()
 
 
 def convert_ttml_to_srt(ttml_path: str, srt_path: str | None = None) -> bool:

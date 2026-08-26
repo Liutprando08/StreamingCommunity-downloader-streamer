@@ -8,7 +8,6 @@ from typing import Optional
 
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 
@@ -16,10 +15,10 @@ from rich.prompt import Prompt
 from StreamingCommunity.utils import TVShowManager, config_manager, os_manager
 from StreamingCommunity.services._base import EntriesManager, Entries
 from StreamingCommunity.torrent.muxer import TorrentMuxer
+from StreamingCommunity.utils.console.shared import console
 
 
 # Variable
-console = Console()
 msg = Prompt()
 log = logging.getLogger(__name__)
 

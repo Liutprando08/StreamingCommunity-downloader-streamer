@@ -5,7 +5,6 @@ from typing import Optional
 
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 
@@ -17,6 +16,7 @@ from StreamingCommunity.services._base.tv_download_manager import (
     process_season_selection,
     process_episode_download,
 )
+from StreamingCommunity.utils.console.shared import console
 
 
 # Downloader
@@ -30,7 +30,6 @@ from .client import get_playback_info, generate_license_headers
 
 # Variables
 msg = Prompt()
-console = Console()
 extension_output = config_manager.config.get("PROCESS", "extension")
 
 

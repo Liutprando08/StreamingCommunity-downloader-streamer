@@ -4,16 +4,15 @@ from typing import Callable, Any, Optional
 
 
 # External library
-from rich.console import Console
 from rich.prompt import Prompt
 
 
 # Internal utilities
 from StreamingCommunity.services._base.tv_display_manager import manage_selection, validate_selection, display_episodes_list, display_seasons_list
+from StreamingCommunity.utils.console.shared import console
 
 
 # Variable
-console = Console()
 
 
 def process_season_selection(scrape_serie: Any, seasons_count: int, season_selection: Optional[str], episode_selection: Optional[str], download_episode_callback: Callable) -> None:

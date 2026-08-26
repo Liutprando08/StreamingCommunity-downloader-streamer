@@ -5,12 +5,11 @@ import logging
 
 
 # External libraries
-from rich.console import Console
+from StreamingCommunity.utils.console.shared import console
 
 
 # Variable
 logger = logging.getLogger(__name__)
-console = Console()
 
 
 class FileMerger:
