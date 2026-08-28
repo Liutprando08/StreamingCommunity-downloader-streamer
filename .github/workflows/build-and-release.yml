@@ -29,9 +29,9 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
-      # Installa pyinstaller e sincronizza le dipendenze dal file uv.lock
+      # Sincronizza le dipendenze dal file uv.lock, creando il virtualenv
       - name: Install dependencies
-        run: uv pip install pyinstaller && uv pip install -r pyproject.toml
+        run: uv sync && uv pip install pyinstaller
 
       # Esegue pyinstaller isolato nel corretto ambiente virtuale gestito da uv
       - name: Build
