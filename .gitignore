@@ -39,7 +39,7 @@ ENV/
 env.bak/
 venv.bak/
 downloaded_files/
-
+.uv/
 # IDEs
 .idea
 .vscode

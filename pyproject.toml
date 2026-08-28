@@ -25,7 +25,7 @@ dependencies = [
   "rich",
   "ttconv",
   "unidecode",
-  "curl_cffi",
+  "curl-cffi",
   "jsbeautifier",
   "pathvalidate",
   "ua-generator",
@@ -33,6 +33,7 @@ dependencies = [
   "pyplayready",
   "pycryptodomex",
   "yt-dlp",
+  "requests>=2.34.2",
 ]
 
 [project.urls]
