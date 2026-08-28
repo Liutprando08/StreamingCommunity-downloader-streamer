@@ -57,4 +57,11 @@ class SiteConstant:
             base_path = os.path.join(base_path, self.SITE_NAME)
         return os.path.join(base_path, config_manager.config.get('OUTPUT', 'anime_folder_name'))
 
+    @property
+    def MUSIC_FOLDER(self):
+        base_path = self.ROOT_PATH
+        if config_manager.config.get_bool("OUTPUT", "add_siteName"):
+            base_path = os.path.join(base_path, self.SITE_NAME)
+        return os.path.join(base_path, config_manager.config.get('OUTPUT', 'music_folder_name'))
+
 site_constants = SiteConstant()

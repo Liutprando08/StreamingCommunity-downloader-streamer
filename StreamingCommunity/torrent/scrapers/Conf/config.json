@@ -10,6 +10,7 @@
         "movie_folder_name": "Movie",
         "serie_folder_name": "Serie",
         "anime_folder_name": "Anime",
+        "music_folder_name": "Music",
         "map_episode_name": "%(episode_name) S%(season)E%(episode)",
         "add_siteName": false
     },

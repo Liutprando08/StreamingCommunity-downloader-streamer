@@ -53,5 +53,11 @@
     },
     "youtube": {
         "full_url": "https://www.youtube.com"
+    },
+    "musicmp3": {
+        "full_url": "https://musicmp3.ru"
+    },
+    "goldenmp3": {
+        "full_url": "https://www.goldenmp3.ru"
     }
 }

@@ -32,6 +32,8 @@ SITE_REGISTRY = {
     "plutotv": {"indice": 17, "use_for": "Serie"},
     "torrent": {"indice": 18, "use_for": "Film_Serie"},
     "youtube": {"indice": 19, "use_for": "Film_Serie"},
+    "musicmp3": {"indice": 20, "use_for": "Music"},
+    "goldenmp3": {"indice": 21, "use_for": "Music"},
 }
 
 
