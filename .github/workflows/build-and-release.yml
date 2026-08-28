@@ -30,7 +30,7 @@ jobs:
 
       # Installa pyinstaller e sincronizza le dipendenze dal file uv.lock
       - name: Install dependencies
-        run: uv pip install pyinstaller && uv sync
+        run: uv pip install pyinstaller && uv sync --no-install-project
 
       # Esegue pyinstaller isolato nel corretto ambiente virtuale gestito da uv
       - name: Build
