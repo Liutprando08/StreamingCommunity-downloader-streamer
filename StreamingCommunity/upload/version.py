@@ -1,5 +1,5 @@
 __title__ = "StreamingCommunity"
-__version__ = "v1.1.3"
+__version__ = "v1.2.0"
 __author__ = "Liutprando08"
 __description__ = "A command-line program to download film"
 __copyright__ = "Copyright 2026"
