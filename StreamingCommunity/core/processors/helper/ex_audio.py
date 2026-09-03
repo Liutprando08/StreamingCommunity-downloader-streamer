@@ -118,3 +118,24 @@ def check_duration_v_a(video_path, audio_path, tolerance=1.0):
     else:
         return False, duration_difference, video_duration, audio_duration
 
+
+def check_sync_offset(video_path, audio_path, tolerance_ms=45.0):
+    """
+    Confronta i timestamp di inizio di video e audio con precisione al millisecondo.
+
+    Returns:
+        tuple (float, bool):
+            - offset_ms: (audio_start - video_start) in millisecondi (>0 => audio parte dopo)
+            - within_tolerance: True se abs(offset) <= tolerance_ms
+    """
+    from .ex_timing import probe_stream_start
+
+    video_start = probe_stream_start(video_path, "v")
+    audio_start = probe_stream_start(audio_path, "a")
+
+    if video_start is None or audio_start is None:
+        return 0.0, True
+
+    offset_ms = (audio_start - video_start) * 1000.0
+    return offset_ms, abs(offset_ms) <= tolerance_ms
+

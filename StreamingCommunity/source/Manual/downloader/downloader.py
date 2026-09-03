@@ -92,7 +92,8 @@ class StreamDownloader:
             resolution=display_resolution, encryption_method=stream.encryption_method, key_data=stream.key_data, iv=stream.iv,
             decryptor=self.decryptor if stream.encryption_method == 'AES-128' else None
         ):
-            console.print("[yellow]⚠ Download incomplete.")
+            console.print(f"[red]Download incomplete for {description}: aborting stream (a missing segment would break A/V sync).")
+            return None
         
         # Merge segments
         merged_file = os.path.join(seg_dir, f"merged_{description}.mp4")

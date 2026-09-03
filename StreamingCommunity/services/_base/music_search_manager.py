@@ -222,11 +222,15 @@ def process_music_entry(
             console.print(f"[red]No tracks found for {entry.name}")
             return False
 
-        if download_album_func and msg.ask(
-            f"\n[cyan]Download the whole album '{entry.name}'? [yellow](y/n)",
-            choices=["y", "n"],
-            default="n",
-        ).lower() == "y":
+        if (
+            download_album_func
+            and msg.ask(
+                f"\n[cyan]Download the whole album '{entry.name}'? [yellow]",
+                choices=["y", "n"],
+                default="n",
+            ).lower()
+            == "y"
+        ):
             return download_album_func(entry) is not None
 
         tracks = select_tracks_to_download(track_manager, table_show_manager)

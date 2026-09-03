@@ -39,6 +39,9 @@
         "subtitle_order": [],
         "subtitle_disposition": false,
         "subtitle_disposition_language": ["forced-ita","ita-forced"],
+        "sync_tolerance_ms": 45,
+        "sync_itsoffset_threshold_ms": 10,
+        "audio_resync": false,
         "merge_audio": true,
         "merge_subtitle": true,
         "extension": "mkv"
@@ -70,7 +73,8 @@
         "flaresolverr_url": "",
         "scrape_impersonate": "chrome",
         "scrape_delay_seconds": 2,
-        "scrape_retry_count": 3
+        "scrape_retry_count": 3,
+        "max_duration_diff_sec": 30
     },
     "YOUTUBE": {
         "format": "",

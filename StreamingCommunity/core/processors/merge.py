@@ -15,8 +15,9 @@ from StreamingCommunity.utils.console.shared import console
 
 from .capture import capture_ffmpeg_real_time
 from .conversion.ttml_to_srt import convert_ttml_to_srt
-from .helper.ex_audio import check_duration_v_a, has_audio
+from .helper.ex_audio import check_duration_v_a, has_audio, check_sync_offset
 from .helper.ex_sub import fix_subtitle_extension
+from .helper.ex_timing import probe_stream_start, compute_itsoffset
 
 # Logic class
 from .helper.ex_video import convert_ts_to_mp4, detect_ts_timestamp_issues
@@ -33,6 +34,8 @@ SUBTITLE_DISPOSITION_LANGUAGE = config_manager.config.get_list(
 )
 AUDIO_ORDER = config_manager.config.get_list("PROCESS", "audio_order")
 SUBTITLE_ORDER = config_manager.config.get_list("PROCESS", "subtitle_order")
+SYNC_TOLERANCE_MS = config_manager.config.get_int("PROCESS", "sync_tolerance_ms", default=45)
+SYNC_ITSOFFSET_THRESHOLD_MS = config_manager.config.get_int("PROCESS", "sync_itsoffset_threshold_ms", default=10)
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +169,9 @@ def join_audios(
     """
     Joins audio tracks with a video file using FFmpeg.
 
+    Ogni traccia audio viene allineata alla timeline del video tramite
+    -itsoffset (nessuna ricodifica) se l'offset di partenza supera la soglia.
+
     Parameters:
         - video_path (str): The path to the video file.
         - audio_tracks (list[dict[str, str]]): A list of dictionaries containing information about audio tracks.
@@ -208,14 +214,22 @@ def join_audios(
         _, diff, video_duration, audio_duration = check_duration_v_a(
             video_path, audio_path
         )
+        offset_ms, within_tolerance = check_sync_offset(video_path, audio_path, tolerance_ms=SYNC_TOLERANCE_MS)
         console.print(
-            f"[yellow]    - [cyan]Audio lang [red]{audio_lang}, [cyan]Path: [red]{audio_path}, [cyan]Video duration: [red]{video_duration:.2f}s, [cyan]Audio duration: [red]{audio_duration:.2f}s, [cyan]Diff: [red]{diff:.2f}s"
+            f"[yellow]    - [cyan]Audio lang [red]{audio_lang}, [cyan]Path: [red]{audio_path}, "
+            f"[cyan]Video duration: [red]{video_duration:.2f}s, [cyan]Audio duration: [red]{audio_duration:.2f}s, "
+            f"[cyan]Diff: [red]{diff:.2f}s, [cyan]Start offset: [red]{offset_ms:+.0f}ms"
         )
+
+        if not within_tolerance:
+            console.print(f"[yellow]    WARN [cyan]Audio lang: [red]'{audio_lang}' [cyan]starts {offset_ms:+.0f}ms "
+                          f"relative to video (tolerance {SYNC_TOLERANCE_MS}ms).")
 
         # If any audio track has a significant duration difference, use -shortest
         if diff > limit_duration_diff:
             console.print(
-                f"[yellow]    WARN [cyan]Audio lang: [red]'{audio_lang}' [cyan]has a duration difference of [red]{diff:.2f}s [cyan]which exceeds the limit of [red]{limit_duration_diff}s."
+                f"[yellow]    WARN [cyan]Audio lang: [red]'{audio_lang}' [cyan]has a duration difference of [red]{diff:.2f}s "
+                f"[cyan]which exceeds the limit of [red]{limit_duration_diff}s."
             )
             use_shortest = True
 
@@ -231,8 +245,11 @@ def join_audios(
         console.print(f"[red]Input video file not found: {video_path}")
         return out_path, use_shortest, {}
     if video_path.lower().endswith(".ts"):
+        ffmpeg_cmd.extend(["-fflags", "+genpts+igndts+discardcorrupt"])
         ffmpeg_cmd.extend(["-f", "mpegts"])
     ffmpeg_cmd.extend(["-i", video_path])
+
+    video_start = probe_stream_start(video_path, "v")
 
     # Add audio tracks as input with TS format
     for i, audio_track in enumerate(audio_tracks):
@@ -243,7 +260,16 @@ def join_audios(
             console.print(f"[red]Input audio file not found: {audio_track_path}")
             return out_path, use_shortest, {}
         if audio_track_path.lower().endswith(".ts"):
+            ffmpeg_cmd.extend(["-fflags", "+genpts+igndts+discardcorrupt"])
             ffmpeg_cmd.extend(["-f", "mpegts"])
+
+        # Allinea l'audio alla partenza del video (-itsoffset, nessuna ricodifica)
+        audio_start = probe_stream_start(audio_track_path, "a")
+        offset = compute_itsoffset(video_start, audio_start, tolerance_ms=SYNC_ITSOFFSET_THRESHOLD_MS)
+        if offset is not None:
+            console.print(f"[yellow]    - [cyan]Audio {audio_track.get('name', i)}: offset iniziale {offset:+.3f}s -> -itsoffset")
+            ffmpeg_cmd.extend(["-itsoffset", f"{offset}"])
+
         ffmpeg_cmd.extend(["-i", audio_track_path])
 
     # Map the video and audio streams
@@ -272,6 +298,9 @@ def join_audios(
     # Use shortest input path if any audio track has significant difference
     if use_shortest:
         ffmpeg_cmd.extend(["-shortest", "-strict", "experimental"])
+
+    # Evita timestamp negativi in output
+    ffmpeg_cmd.extend(["-avoid_negative_ts", "make_zero"])
 
     # Output file and overwrite
     ffmpeg_cmd.extend([out_path, "-y"])
