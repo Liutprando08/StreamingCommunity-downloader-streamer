@@ -58,12 +58,15 @@ class GetSerieInfo:
 
     def getNumberSeason(self) -> int:
         season = 1
-        while season <= 50:
-            data = self._get_embed_json(season, 1)
-            if data is None:
-                break
-            self.seasons_manager.add(Season(number=season, name=f"Stagione {season}"))
-            season += 1
+        with ThreadPoolExecutor(max_workers=15) as executor:
+            while season <= 50:
+                data = executor.submit(self._get_embed_json, season, 1)
+                if data is None:
+                    break
+                self.seasons_manager.add(
+                    Season(number=season, name=f"Stagione {season}")
+                )
+                season += 1
         return len(self.seasons_manager)
 
     def _fill_season_episodes(self, season_number: int):

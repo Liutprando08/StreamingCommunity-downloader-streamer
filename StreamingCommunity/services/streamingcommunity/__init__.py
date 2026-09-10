@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import re
-from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from difflib import SequenceMatcher
+from urllib.parse import quote
 
 # External library
-from bs4 import BeautifulSoup
 from httpx2 import HTTPError
 from rich.prompt import Prompt
 
@@ -17,8 +17,8 @@ from StreamingCommunity.services._base.site_search_manager import (
 
 # Internal utilities
 from StreamingCommunity.utils import TVShowManager
-from StreamingCommunity.utils.http_client import create_client, get_userAgent
 from StreamingCommunity.utils.console.shared import console
+from StreamingCommunity.utils.http_client import create_client, get_userAgent
 
 # Logic
 from .downloader import download_film, download_series, stream_film, stream_series
@@ -33,136 +33,150 @@ entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 
 
-def _extract_imdb_id(soup):
-    ids = []
-    for sel, attr, pattern in [
-        (
-            '[style*="/uploads/backdrops/"]',
-            "style",
-            r"/uploads/backdrops/(tt\d+)\.webp",
-        ),
-        ('[src*="/uploads/logos/"]', "src", r"/uploads/logos/(tt\d+)\.webp"),
-        ('img[src*="/uploads/posters/"]', "src", r"/uploads/posters/(tt\d+)\.webp"),
-    ]:
-        el = soup.select_one(sel)
-        if el:
-            match = re.search(pattern, el.get(attr, ""))
-            if match:
-                ids.append(match.group(1))
-    if not ids:
+def _slugify(text: str) -> str:
+    """Normalize and slugify a text for fuzzy matching."""
+    text = text.lower()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_]+", "-", text)
+    return text.strip("-")
+
+
+def _resolve_imdb_id(
+    title: str | None, year: int | None, media_type: str
+) -> str | None:
+    """Resolve an IMDb id from title/year/type via IMDb's public suggestion API."""
+    if not title:
         return None
-    return Counter(ids).most_common(1)[0][0]
 
+    query = quote(title.strip())
+    first = query[0].lower() if query else "x"
+    url = f"https://v2.sg.media-imdb.com/suggestion/{first}/{query}.json"
 
-def _is_series(soup):
-    if 'data-category="Serie TV"' in str(soup):
-        return True
-    return bool(soup.select_one("#episodi"))
-
-
-def _fetch_title_details(title_url, name):
     try:
-        client = create_client(headers={"user-agent": get_userAgent()})
-        response = client.get(title_url)
+        response = create_client(headers={"user-agent": get_userAgent()}).get(url)
         response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
+        data = response.json()
+    except (HTTPError, ValueError):
+        return None
 
-        h1 = soup.select_one("h1")
-        clean_name = h1.text.strip() if h1 else name
+    candidates = (data or {}).get("d") or []
+    if not candidates:
+        return None
 
-        imdb_id = _extract_imdb_id(soup)
-        is_series = _is_series(soup)
-        return clean_name, imdb_id, is_series
-    except HTTPError:
-        return None, None, None
+    title_slug = _slugify(title)
+    best_match: str | None = None
+    best_score = 0.0
+
+    for candidate in candidates:
+        candidate_id = candidate.get("id", "")
+        if not candidate_id.startswith("tt"):
+            continue
+
+        candidate_year = candidate.get("y")
+        candidate_title = candidate.get("l") or ""
+        ratio = SequenceMatcher(None, title_slug, _slugify(candidate_title)).ratio()
+
+        # Same-media-type detection: series vs movie
+        category = str(candidate.get("qid") or candidate.get("q") or "").lower()
+        is_series_candidate = any(k in category for k in ("series", "mini", "tv"))
+        is_movie_candidate = any(
+            k in category for k in ("movie", "feature", "video", "short")
+        )
+        type_score = 0.0
+        if media_type == "tv" and is_series_candidate:
+            type_score = 0.4
+        elif media_type != "tv" and is_movie_candidate:
+            type_score = 0.4
+
+        # Year matching is the strongest signal (Italian titles often differ
+        # wildly from the original English ones).
+        year_score = 0.0
+        if year and candidate_year:
+            if candidate_year == year:
+                year_score = 1.5
+            elif abs(candidate_year - year) == 1:
+                year_score = 0.6
+
+        score = year_score + ratio * 0.5 + type_score
+        if score > best_score:
+            best_match = candidate_id
+            best_score = score
+
+    # Require a meaningful match: enough evidence to avoid random hits.
+    if best_score < 1.15:
+        return None
+    return best_match
 
 
 def title_search(query: str) -> int:
     entries_manager.clear()
     table_show_manager.clear()
 
-    search_url = f"{site_constants.FULL_URL}/index.php?do=search"
-    headers = {
-        "user-agent": get_userAgent(),
-        "content-type": "application/x-www-form-urlencoded",
-    }
-    data = {"do": "search", "subaction": "search", "story": query}
+    search_url = f"{site_constants.FULL_URL}/api/v1/web/archive"
 
     try:
         console.print(f"[cyan]Searching: [yellow]{search_url}")
-        response = create_client(headers=headers).get(search_url, params=data)
+        response = create_client(headers={"user-agent": get_userAgent()}).get(
+            search_url, params={"q": query, "limit": 30, "count": 1}
+        )
         response.raise_for_status()
+        data = response.json()
     except HTTPError as e:
         console.print(
             f"[red]Site: {site_constants.SITE_NAME}, request search error: {e}"
         )
         return 0
+    except ValueError as e:
+        console.print(
+            f"[red]Site: {site_constants.SITE_NAME}, invalid search response: {e}"
+        )
+        return 0
 
-    soup = BeautifulSoup(response.text, "html.parser")
-    tiles = soup.select(".slider-tile")
-
-    if not tiles:
+    if not (data or {}).get("ok"):
         console.print("[yellow]No results found on search page")
         return 0
 
-    tile_info = []
-    for tile in tiles:
-        try:
-            link = tile.select_one('a[href*="/titles/"]')
-            if not link:
-                continue
-
-            href = link.get("href", "")
-            if not isinstance(href, str):
-                continue
-            match = re.search(r"/titles/(\d+)-(.*?)\.html", href)
-            if not match:
-                continue
-
-            title_id = match.group(1)
-            slug = match.group(2)
-            title_url = (
-                href if href.startswith("http") else f"{site_constants.FULL_URL}{href}"
-            )
-
-            img = tile.select_one("img")
-            if img and img.get("alt"):
-                name = img.get("alt")
-            elif img and img.get("title"):
-                name = img.get("title")
-            else:
-                name = slug.replace("-", " ").title()
-
-            tile_info.append((title_id, slug, title_url, name))
-        except HTTPError as e:
-            console.print(f"[red]Error parsing search entry: {e}")
-            continue
+    items = (data or {}).get("items") or []
+    if not items:
+        console.print("[yellow]No results found on search page")
+        return 0
 
     with ThreadPoolExecutor(max_workers=10) as executor:
-        fut_map = {
-            executor.submit(_fetch_title_details, url, name): (tid, slug, url, name)
-            for tid, slug, url, name in tile_info
-        }
-        for fut in as_completed(fut_map):
-            tid, slug, url, name = fut_map[fut]
-            clean_name, imdb_id, is_series = fut.result()
-            if imdb_id is None:
-                imdb_id = ""
+        fut_map = {}
+        for item in items:
+            try:
+                title_id = item.get("id")
+                slug = item.get("slug")
+                name = item.get("title")
+                year = item.get("year")
+                media_type = "tv" if item.get("kind") == "series" else "film"
 
-            media_type = "tv" if is_series else "film"
+                if title_id is None or slug is None or not name:
+                    continue
+
+                title_url = f"{site_constants.FULL_URL}/titles/{title_id}-{slug}"
+                fut = executor.submit(_resolve_imdb_id, name, year, media_type)
+                fut_map[fut] = (title_id, slug, title_url, name, year, media_type)
+            except HTTPError as e:
+                console.print(f"[red]Error parsing search entry: {e}")
+                continue
+
+        for fut in as_completed(fut_map):
+            title_id, slug, title_url, name, year, media_type = fut_map[fut]
+            imdb_id = fut.result() or ""
 
             entry = Entries.__new__(Entries)
-            entry.id = int(tid)
-            entry.name = clean_name or name
+            entry.id = int(title_id)
+            entry.name = name
             entry.type = media_type
-            entry.url = url
+            entry.url = title_url
             entry.size = ""
             entry.score = ""
             entry.desc = ""
             entry.slug = slug
-            entry.year = ""
+            entry.year = str(year) if year else ""
             entry.provider_language = ""
-            entry.imdb_id = imdb_id or ""
+            entry.imdb_id = imdb_id
 
             entries_manager.add(entry)
 
