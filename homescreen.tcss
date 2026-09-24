@@ -1,0 +1,5 @@
+ColumnsContainer {
+        width: 1fr;
+        height: 1fr;
+        border: solid white;
+
