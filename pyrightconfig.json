@@ -1,8 +1,15 @@
 {
   "venvPath": ".",
-  "venv": "venv",
+  "venv": ".venv",
   "typeCheckingMode": "basic",
   "reportMissingTypeStubs": false,
-  "include": ["StreamingCommunity"],
-  "exclude": ["Test", "venv", ".git", "Video"]
+  "include": [
+    "StreamingCommunity"
+  ],
+  "exclude": [
+    "Test",
+    "venv",
+    ".git",
+    "Video"
+  ]
 }
