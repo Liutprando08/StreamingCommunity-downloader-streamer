@@ -17,7 +17,11 @@ from StreamingCommunity.utils.http_client import create_client, get_userAgent
 # Variable
 headers = {"user-agent": get_userAgent()}
 VIXSRC_API = "https://vixsrc.to/api"
-MAX_WORKERS = 15
+MAX_WORKERS = 6
+WINDOW_SIZE = 8
+MAX_EPISODES = 2000
+MAX_SEASONS = 50
+STOP_MISSES = 6
 logger = logging.getLogger(__name__)
 
 
@@ -38,9 +42,16 @@ class GetSerieInfo:
             response = self._client.get(url)
             if response.status_code == 200:
                 return response.json()
-        except HTTPError as e:
-            logger.error(f"Error fetching {url}: {e}")
+        except Exception as e:
+            logger.warning(f"Error fetching {url}: {e}")
         return None
+
+    def _fetch_embed(self, season: int, episode: int):
+        """Fetch an embed payload with a single retry for transient failures."""
+        data = self._get_embed_json(season, episode)
+        if data is None:
+            data = self._get_embed_json(season, episode)
+        return data
 
     def _parse_episode_name(self, data: dict) -> str:
         src = data.get("src", "")
@@ -52,21 +63,25 @@ class GetSerieInfo:
                 decoded = base64.b64decode(d_param).decode("utf-8")
                 if " " in decoded:
                     return decoded.split(" ", 1)[1]
-            except HTTPError:
+            except Exception:
                 pass
         return ""
 
     def getNumberSeason(self) -> int:
         season = 1
-        with ThreadPoolExecutor(max_workers=15) as executor:
-            while season <= 50:
-                data = executor.submit(self._get_embed_json, season, 1)
-                if data is None:
-                    break
+        consecutive_misses = 0
+        while season <= MAX_SEASONS:
+            data = self._fetch_embed(season, 1)
+            if data is not None:
+                consecutive_misses = 0
                 self.seasons_manager.add(
                     Season(number=season, name=f"Stagione {season}")
                 )
-                season += 1
+            else:
+                consecutive_misses += 1
+                if consecutive_misses >= 3:
+                    break
+            season += 1
         return len(self.seasons_manager)
 
     def _fill_season_episodes(self, season_number: int):
@@ -74,21 +89,47 @@ class GetSerieInfo:
         if not season or season.episodes.episodes:
             return
 
+        results: dict[int, dict] = {}
+        cursor = 1
+        consecutive_misses = 0
+
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            fut_map = {}
-            for ep in range(1, 101):
-                fut = executor.submit(self._get_embed_json, season_number, ep)
-                fut_map[fut] = ep
+            while cursor <= MAX_EPISODES and consecutive_misses < STOP_MISSES:
+                window = list(range(cursor, cursor + WINDOW_SIZE))
+                fut_map = {
+                    executor.submit(self._fetch_embed, season_number, ep): ep
+                    for ep in window
+                }
 
-            results = []
-            for fut in as_completed(fut_map):
-                ep_num = fut_map[fut]
-                data = fut.result()
-                if data is not None:
-                    results.append((ep_num, data))
+                found: list[int] = []
+                missing: list[int] = []
+                for fut in as_completed(fut_map):
+                    ep_num = fut_map[fut]
+                    try:
+                        data = fut.result()
+                    except Exception:
+                        data = None
+                    if data is not None:
+                        results[ep_num] = data
+                        found.append(ep_num)
+                    else:
+                        missing.append(ep_num)
 
-        results.sort(key=lambda x: x[0])
-        for ep_num, ep_data in results:
+                # Recover transient misses only when the window produced some
+                # hits; a fully empty window means the range genuinely has no
+                # episodes and does not deserve a second probe.
+                if found:
+                    consecutive_misses = 0
+                    for ep_num in missing:
+                        data = self._fetch_embed(season_number, ep_num)
+                        if data is not None:
+                            results[ep_num] = data
+                            found.append(ep_num)
+                else:
+                    consecutive_misses += len(window)
+                cursor += WINDOW_SIZE
+
+        for ep_num, ep_data in sorted(results.items()):
             ep_name = self._parse_episode_name(ep_data) or f"Episodio {ep_num}"
             season.episodes.add(
                 Episode(

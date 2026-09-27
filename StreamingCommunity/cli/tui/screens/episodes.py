@@ -74,7 +74,10 @@ class EpisodesScreen(Screen):
         table.cursor_type = "row"
         self._show_loader(True)
         from functools import partial
-        self.run_worker(partial(self._load_episodes), group="episodes", exclusive=True, thread=True)
+
+        self.run_worker(
+            partial(self._load_episodes), group="episodes", exclusive=True, thread=True
+        )
 
     def _show_loader(self, visible: bool) -> None:
         self.query_one("#episodes-loader", LoadingIndicator).styles.display = (
@@ -104,9 +107,7 @@ class EpisodesScreen(Screen):
                 num = getattr(ep, "number", i + 1)
                 name = getattr(ep, "name", "") or ""
                 table.add_row(" ", str(num), str(name))
-            self._set_status(
-                f"[green]{len(episodes)} episodi. Invio per selezionare."
-            )
+            self._set_status(f"[green]{len(episodes)} episodi. Invio per selezionare.")
             self._show_loader(False)
 
         self.app.call_from_thread(apply)
@@ -132,10 +133,10 @@ class EpisodesScreen(Screen):
         table = self.query_one("#episodes-table", DataTable)
         if index in self._selected:
             self._selected.discard(index)
-            table.update_cell(RowKey(index), "sel", " ")
+            table.update_cell(RowKey(str(index)), "sel", " ")
         else:
             self._selected.add(index)
-            table.update_cell(RowKey(index), "sel", "✓")
+            table.update_cell(RowKey(str(index)), "sel", "✓")
 
     @on(Input.Submitted, "#episode-range")
     def _on_range(self, event: Input.Submitted) -> None:
@@ -221,3 +222,4 @@ class EpisodesScreen(Screen):
 
     def action_back(self) -> None:
         self.app.pop_screen()
+

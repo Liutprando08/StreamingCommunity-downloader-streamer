@@ -7,7 +7,15 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Header, Input, Label, LoadingIndicator, Static
+from textual.widgets import (
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Label,
+    LoadingIndicator,
+    Static,
+)
 
 from ..providers.base import ServiceProvider
 from .detail import DetailScreen
@@ -25,9 +33,11 @@ class SearchScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         with Vertical(classes="flow-root"):
-            yield Label(f"[bold cyan]Ricerca su {self.provider.name}[/]", id="search-title")
+            yield Label(
+                f"[bold cyan]Search on {self.provider.name}[/]", id="search-title"
+            )
             yield Input(
-                placeholder="Inserisci il titolo da cercare (es. One Piece)",
+                placeholder="Insert the title (ex. One Piece)",
                 id="search-input",
             )
             with Container(id="table-box"):
@@ -55,7 +65,7 @@ class SearchScreen(Screen):
         query = event.value.strip()
         if not query:
             return
-        self.query_one("#search-status", Static).update("[yellow]Ricerca in corso...")
+        self.query_one("#search-status", Static).update("[yellow]Search ongoing...")
         self._show_loader(True)
         from functools import partial
 
@@ -71,7 +81,7 @@ class SearchScreen(Screen):
         try:
             results = self.provider.search(query)
         except Exception as exc:
-            self.app.call_from_thread(self._set_status, f"[red]Errore ricerca: {exc}")
+            self.app.call_from_thread(self._set_status, f"[red]Search error: {exc}")
             self.app.call_from_thread(self._show_loader, False)
             return
 
@@ -86,7 +96,7 @@ class SearchScreen(Screen):
                     str(getattr(entry, "type", "") or ""),
                     str(getattr(entry, "year", "") or ""),
                     str(getattr(entry, "imdb_id", "") or ""),
-                    key=idx,
+                    key=str(idx),
                 )
                 self._rows[idx] = row_key
             if not results:
@@ -116,3 +126,4 @@ class SearchScreen(Screen):
 
     def action_back(self) -> None:
         self.app.pop_screen()
+

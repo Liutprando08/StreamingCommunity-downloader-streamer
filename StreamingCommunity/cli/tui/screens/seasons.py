@@ -28,7 +28,9 @@ from .episodes import EpisodesScreen
 class SeasonsScreen(Screen):
     BINDINGS = [("escape", "back", "Indietro")]
 
-    def __init__(self, provider: ServiceProvider, entry, mode: str = "download", **kwargs):
+    def __init__(
+        self, provider: ServiceProvider, entry, mode: str = "download", **kwargs
+    ):
         super().__init__(**kwargs)
         self.provider = provider
         self.entry = entry
@@ -68,7 +70,10 @@ class SeasonsScreen(Screen):
         table.cursor_type = "row"
         self._show_loader(True)
         from functools import partial
-        self.run_worker(partial(self._load_seasons), group="seasons", exclusive=True, thread=True)
+
+        self.run_worker(
+            partial(self._load_seasons), group="seasons", exclusive=True, thread=True
+        )
 
     def _show_loader(self, visible: bool) -> None:
         self.query_one("#seasons-loader", LoadingIndicator).styles.display = (
@@ -99,9 +104,7 @@ class SeasonsScreen(Screen):
                     str(getattr(season, "number", "") or ""),
                     str(getattr(season, "name", "") or ""),
                 )
-            self._set_status(
-                f"[green]{len(seasons)} stagion/i. Invio per selezionare."
-            )
+            self._set_status(f"[green]{len(seasons)} stagion/i. Invio per selezionare.")
             self._show_loader(False)
 
         self.app.call_from_thread(apply)
@@ -113,10 +116,10 @@ class SeasonsScreen(Screen):
         table = self.query_one("#season-table", DataTable)
         if row_index in self._selected:
             self._selected.discard(row_index)
-            table.update_cell(RowKey(row_index), "sel", " ")
+            table.update_cell(RowKey(str(row_index)), "sel", " ")
         else:
             self._selected.add(row_index)
-            table.update_cell(RowKey(row_index), "sel", "✓")
+            table.update_cell(RowKey(str(row_index)), "sel", "✓")
 
     def _apply_ranges(self, text: str) -> None:
         numbers = parse_ranges(text, max_count=len(self._seasons))
@@ -169,7 +172,10 @@ class SeasonsScreen(Screen):
                 self._selected = set(range(len(self._seasons)))
             except Exception:
                 pass
-        season_numbers = [int(getattr(self._seasons[i], "number", i + 1)) for i in sorted(self._selected)]
+        season_numbers = [
+            int(getattr(self._seasons[i], "number", i + 1))
+            for i in sorted(self._selected)
+        ]
         batch = SeasonBatch(
             provider=self.provider,
             entry=self.entry,
@@ -179,7 +185,9 @@ class SeasonsScreen(Screen):
         )
         first = batch.first()
         if first is not None:
-            self.app.push_screen(EpisodesScreen(self.provider, self.entry, batch, first))
+            self.app.push_screen(
+                EpisodesScreen(self.provider, self.entry, batch, first)
+            )
 
     @on(Button.Pressed, "#back-btn")
     def _back(self) -> None:
@@ -187,3 +195,4 @@ class SeasonsScreen(Screen):
 
     def action_back(self) -> None:
         self.app.pop_screen()
+

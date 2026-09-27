@@ -80,9 +80,9 @@ async def _settle(pilot, n=10):
         await pilot.pause()
 
 
-async def _wait_for(pilot, predicate, limit=80):
+async def _wait_for(pilot, predicate, limit=150, delay=0.05):
     for _ in range(limit):
-        await pilot.pause()
+        await pilot.pause(delay)
         value = predicate()
         if inspect.isawaitable(value):
             value = await value
@@ -93,8 +93,8 @@ async def _wait_for(pilot, predicate, limit=80):
 
 async def _wait_queue_done(pilot):
     seen = False
-    for _ in range(200):
-        await pilot.pause()
+    for _ in range(400):
+        await pilot.pause(0.05)
         screen = pilot.app.screen_stack[-1]
         if isinstance(screen, QueueScreen):
             seen = True

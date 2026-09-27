@@ -15,7 +15,7 @@ HOME_MARKUP = (
     "[b][magenta]██║   ██║╚════██║   ██║   ██╔══╝  [/]\n"
     "[b][magenta] ██████╔╝███████║   ██║   ███████╗[/]\n"
     "[b][magenta]  ╚════╝ ╚══════╝   ╚═╝   ╚══════╝[/]\n\n"
-    "[i][dim]You are gonna be king of the pirates[/]"
+    "[i][dim]I'm gonna be king of the pirates[/]"
 )
 
 
@@ -34,12 +34,9 @@ class HomeScreen(Screen):
                 yield Static(HOME_MARKUP, id="home-title-view")
         yield Footer()
 
-    def on_mount(self) -> None:
-        providers = registry.all()
-        if len(providers) == 1:
-            self.query_one("#home-title-view", Static).update(
-                HOME_MARKUP + f"\n\n[cyan]Servizio attivo:[yellow] {providers[0].name}"
-            )
+    def action_toggle_dark(self) -> None:
+        app = self.app
+        app.theme = "textual-dark" if app.theme == "textual-light" else "textual-light"
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         prompt = str(event.option.prompt)
