@@ -3,9 +3,10 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.containers import Container
 from textual.screen import Screen
-from textual.widgets import Footer, Header, OptionList, Static
+from textual.widgets import Footer, OptionList, Static
 
 from ..providers import registry
+from ..widgets import Header
 from .search import SearchScreen
 
 HOME_MARKUP = (
@@ -39,11 +40,9 @@ class HomeScreen(Screen):
         app.theme = "textual-dark" if app.theme == "textual-light" else "textual-light"
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        prompt = str(event.option.prompt)
-        if "Esci" in prompt:
+        providers = registry.all()
+        if event.option_index >= len(providers):
             self.app.exit()
             return
-        for provider in registry.all():
-            if provider.name in prompt:
-                self.app.push_screen(SearchScreen(provider))
-                return
+
+        self.app.push_screen(SearchScreen(providers[event.option_index]))

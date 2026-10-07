@@ -21,9 +21,10 @@ from StreamingCommunity.services._base.tv_display_manager import (
 # Internal utilities
 from StreamingCommunity.utils import config_manager, os_manager, start_message
 from StreamingCommunity.utils.console.shared import console
+from StreamingCommunity.utils.http_client import get_userAgent
 
 # Logic
-from .scrapper import ScrapeSerieAnime
+from .scrapper import new_scraper
 
 # Variable
 msg = Prompt()
@@ -36,20 +37,35 @@ def download_film(select_title: Entries):
     """
     Downloads a film using the provided Entries information.
     """
-    scrape_serie = ScrapeSerieAnime(site_constants.FULL_URL)
+    scrape_serie = new_scraper(select_title.id, select_title.slug or select_title.name)
+    scrape_serie.is_series = False
     video_source = VideoSourceAnime(site_constants.FULL_URL)
 
-    # Set up video source (only configure scrape_serie now)
-    scrape_serie.setup(None, select_title.id, select_title.slug)
-    scrape_serie.is_series = False
     obj_episode = scrape_serie.selectEpisode(1, 0)
-    download_episode(obj_episode, 0, scrape_serie, video_source)
+    if obj_episode is None:
+        console.print("[red]Error: No episode available for this title")
+        return None
+
+    return download_episode(obj_episode, 1, 1, scrape_serie, video_source)
 
 
-def download_episode(obj_episode, index_select, scrape_serie, video_source):
+def download_episode(
+    obj_episode,
+    index_season_selected,
+    index_episode_selected,
+    scrape_serie,
+    video_source=None,
+):
     """
     Downloads a specific episode from the specified season.
     """
+    if obj_episode is None:
+        console.print("[red]Error: No episode available for this title")
+        return None, False
+
+    if video_source is None:
+        video_source = VideoSourceAnime(site_constants.FULL_URL)
+
     start_message()
     console.print(
         f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{scrape_serie.series_name} ([cyan]E{obj_episode.number}) \n"
@@ -90,7 +106,7 @@ def download_episode(obj_episode, index_select, scrape_serie, video_source):
 
     else:
         path, kill_handler = HLS_Downloader(
-            m3u8_url=video_source.master_playlist,
+            m3u8_url=str(video_source.master_playlist),
             output_path=os.path.join(mp4_path, f"{mp4_name}.{extension_output}"),
         ).start()
         return path, kill_handler
@@ -113,13 +129,18 @@ def download_series(
     """
     start_message()
     if scrape_serie is None:
-        scrape_serie = ScrapeSerieAnime(site_constants.FULL_URL)
-        scrape_serie.setup(None, select_title.id, select_title.slug)
+        scrape_serie = new_scraper(
+            select_title.id, select_title.slug or select_title.name
+        )
 
     video_source = VideoSourceAnime(site_constants.FULL_URL)
 
     # Get episode information
     episoded_count = scrape_serie.get_count_episodes()
+    if not episoded_count:
+        console.print("[red]Error: No episodes found for this title")
+        return None
+
     console.print(f"\n[green]Episodes count: [red]{episoded_count}")
 
     # Display episodes list and get user selection
@@ -140,18 +161,117 @@ def download_series(
     if len(list_episode_select) == 1 and last_command != "*":
         obj_episode = scrape_serie.selectEpisode(1, list_episode_select[0] - 1)
         path, _ = download_episode(
-            obj_episode, list_episode_select[0] - 1, scrape_serie, video_source
+            obj_episode, 1, list_episode_select[0], scrape_serie, video_source
         )
         return path
 
     # Download all other episodes selected
     else:
         kill_handler = False
+        last_path = None
         for i_episode in list_episode_select:
             if kill_handler:
                 break
             obj_episode = scrape_serie.selectEpisode(1, i_episode - 1)
-            _, kill_handler = download_episode(
-                obj_episode, i_episode - 1, scrape_serie, video_source
+            last_path, kill_handler = download_episode(
+                obj_episode, 1, i_episode, scrape_serie, video_source
             )
+
+        return last_path
+
+
+def stream_film(select_title: Entries):
+    """
+    Streams a film using the provided Entries information.
+    """
+    scrape_serie = new_scraper(select_title.id, select_title.slug or select_title.name)
+    scrape_serie.is_series = False
+
+    obj_episode = scrape_serie.selectEpisode(1, 0)
+    if obj_episode is None:
+        console.print("[red]Error: No episode available for this title")
+        return None
+
+    return stream_episode(obj_episode, 1, 1, scrape_serie)
+
+
+def stream_episode(
+    obj_episode,
+    index_season_selected,
+    index_episode_selected,
+    scrape_serie,
+    video_source=None,
+):
+    """
+    Streams a specific episode from the specified season.
+    """
+    from StreamingCommunity.streaming.session import stream_content
+
+    if obj_episode is None:
+        console.print("[red]Error: No episode available for this title")
+        return None
+
+    if video_source is None:
+        video_source = VideoSourceAnime(site_constants.FULL_URL)
+
+    start_message()
+    console.print(
+        f"\n[yellow]Streaming: [red]{site_constants.SITE_NAME} → [cyan]{scrape_serie.series_name} [white]\\ [magenta]{obj_episode.name} ([cyan]S{index_season_selected}E{index_episode_selected})\n"
+    )
+
+    # ``prefer_mp4=False`` resolves the HLS master playlist
+    video_source.get_embed(obj_episode.id, False)
+    master_playlist = video_source.master_playlist
+    if not master_playlist:
+        console.print("[red]Error: No master playlist found")
+        return None
+
+    player = os.environ.get("STREAMING_PLAYER") or None
+    port = int(os.environ.get("STREAMING_PORT", "0"))
+
+    stream_content(
+        playlist_url=master_playlist,
+        headers={"User-Agent": get_userAgent()},
+        preferred_player=player,
+        port=port,
+    )
+
+    return master_playlist
+
+
+def stream_series(
+    select_title: Entries,
+    season_selection: str | None = None,
+    episode_selection: str | None = None,
+    scrape_serie=None,
+):
+    """
+    Stream an entire series episode by episode.
+    """
+    start_message()
+    if scrape_serie is None:
+        scrape_serie = new_scraper(
+            select_title.id, select_title.slug or select_title.name
+        )
+
+    episodes_count = scrape_serie.get_count_episodes()
+    if not episodes_count:
+        console.print("[red]Error: No episodes found for this title")
+        return None
+
+    if episode_selection is None:
+        last_command = msg.ask(
+            "\n[cyan]Insert media [red]index [yellow]or [red]* [cyan]to stream all media [yellow]or [red]1-2 [cyan]or [red]3-* [cyan]for a range of media"
+        )
+    else:
+        last_command = episode_selection
+        console.print(
+            f"\n[cyan]Using provided episode selection: [yellow]{episode_selection}"
+        )
+
+    list_episode_select = manage_selection(last_command, episodes_count)
+
+    for i_episode in list_episode_select:
+        obj_episode = scrape_serie.selectEpisode(1, i_episode - 1)
+        stream_episode(obj_episode, 1, i_episode, scrape_serie)
 

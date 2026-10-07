@@ -4,7 +4,10 @@ from __future__ import annotations
 
 # Internal utilities
 from StreamingCommunity.services._base import Entries
-from StreamingCommunity.services._base.music_downloader import music_output_path
+from StreamingCommunity.services._base.music_downloader import (
+    TrackDownloadReporter,
+    music_output_path,
+)
 from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.http_client import create_client, get_userAgent
 
@@ -28,20 +31,29 @@ def download_track(entry: Entries) -> str | None:
 
     console.print(f"\n[yellow]Download: [red]musicmp3 [cyan]{entry.name}")
 
+    reporter = TrackDownloadReporter(entry)
+    reporter.start()
+
     try:
         with create_client(
             headers=STREAM_HEADERS, timeout=60, follow_redirects=True
         ) as client:
             with client.stream("GET", stream_url) as response:
                 response.raise_for_status()
+                total = int(response.headers.get("Content-Length") or 0)
+                downloaded = 0
                 with open(output_path, "wb") as f:
                     for chunk in response.iter_bytes(chunk_size=8192):
                         if chunk:
                             f.write(chunk)
+                            downloaded += len(chunk)
+                            reporter.progress(downloaded, total)
     except Exception as e:
         console.print(f"[red]Error downloading {entry.name}: {e}")
+        reporter.complete(success=False, error=str(e))
         return None
 
+    reporter.complete(success=True, path=output_path)
     console.print(f"[green]Downloaded: [white]{output_path}")
     return output_path
 

@@ -77,6 +77,15 @@ class OsteApp(App):
         width: 1fr;
         margin-right: 1;
     }
+
+    .flow-root #music-mode {
+        width: 1fr;
+        margin-bottom: 1;
+    }
+
+    .flow-root #music-query {
+        margin-bottom: 1;
+    }
     """
 
     def on_mount(self) -> None:

@@ -13,7 +13,6 @@ from textual.widgets import (
     Button,
     DataTable,
     Footer,
-    Header,
     Label,
     LoadingIndicator,
 )
@@ -22,8 +21,17 @@ from textual.widgets.data_table import RowKey
 from StreamingCommunity.source.utils.tracker import download_tracker
 
 from ..providers.base import ServiceProvider
+from ..widgets import Header
 from ..workers import prepare_download_context
 from .log import LogPanel
+
+# How each queue item kind is reported to the download tracker.
+MEDIA_TYPES = {
+    "film": "Film",
+    "episode": "Episode",
+    "track": "Track",
+    "album": "Album",
+}
 
 
 class QueueScreen(Screen):
@@ -103,7 +111,7 @@ class QueueScreen(Screen):
 
             if item.get("mode") == "download":
                 label = item["label"]
-                media_type = "Episode" if item.get("kind") == "episode" else "Film"
+                media_type = MEDIA_TYPES.get(item.get("kind"), "Film")
                 download_id = prepare_download_context(
                     label,
                     site=self.provider.name,
@@ -141,8 +149,15 @@ class QueueScreen(Screen):
         self.app.call_from_thread(self._all_done)
 
     def _run_download(self, item: dict[str, Any], download_id: str) -> None:
-        if item.get("kind") == "film":
+        kind = item.get("kind")
+        if kind == "film":
+            # Also the atomic (torrent) entry point: the provider routes to the
+            # movie or series folder itself.
             result = self.provider.download_film(item["entry"])
+        elif kind == "track":
+            result = self.provider.download_track(item["entry"])
+        elif kind == "album":
+            result = self.provider.download_album(item["entry"])
         else:
             result = self.provider.download_episode(
                 item["obj_episode"],
@@ -152,7 +167,8 @@ class QueueScreen(Screen):
             )
         # HLS.start() already records completion in download_tracker; only a
         # None return (nothing produced) needs an explicit failure here.
-        if result is None:
+        # download_album is the one downloader that reports success as a bool.
+        if result is None or (kind == "album" and result is False):
             try:
                 download_tracker.complete_download(
                     download_id, success=False, error="Nessun output prodotto"

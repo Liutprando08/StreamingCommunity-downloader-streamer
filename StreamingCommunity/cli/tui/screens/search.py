@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Vertical
@@ -10,15 +12,16 @@ from textual.screen import Screen
 from textual.widgets import (
     DataTable,
     Footer,
-    Header,
     Input,
     Label,
     LoadingIndicator,
     Static,
 )
 
-from ..providers.base import ServiceProvider
+from ..providers.base import MusicProvider, ServiceProvider
+from ..widgets import Header
 from .detail import DetailScreen
+from .music import MusicScreen
 
 
 class SearchScreen(Screen):
@@ -47,8 +50,17 @@ class SearchScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        # Music providers have their own mode/drill-down screen.
+        if getattr(self.provider, "flow", "episode") == "music":
+            # switch_screen replaces SearchScreen; push+pop would pop the
+            # MusicScreen we just pushed.
+            provider = cast(MusicProvider, self.provider)
+            self.app.switch_screen(MusicScreen(provider))
+            return
+
         table = self.query_one("#results", DataTable)
-        table.add_columns("Nome", "Tipo", "Anno", "IMDB")
+        columns = self.provider.result_columns()
+        table.add_columns(*[header for header, _attr in columns])
         table.cursor_type = "row"
         self._show_loader(False)
 
@@ -87,15 +99,16 @@ class SearchScreen(Screen):
 
         def apply(results):
             self._entries = results
+            columns = self.provider.result_columns()
             table = self.query_one("#results", DataTable)
             table.clear()
             self._rows = {}
             for idx, entry in enumerate(results):
                 row_key = table.add_row(
-                    getattr(entry, "name", "") or "",
-                    str(getattr(entry, "type", "") or ""),
-                    str(getattr(entry, "year", "") or ""),
-                    str(getattr(entry, "imdb_id", "") or ""),
+                    *[
+                        str(getattr(entry, attr, "") or "")
+                        for _, attr in columns
+                    ],
                     key=str(idx),
                 )
                 self._rows[idx] = row_key

@@ -11,7 +11,6 @@ from textual.widgets import (
     Button,
     DataTable,
     Footer,
-    Header,
     Input,
     Label,
     LoadingIndicator,
@@ -22,6 +21,7 @@ from textual.widgets.data_table import RowKey
 from ..flow import SeasonBatch
 from ..parse import parse_ranges
 from ..providers.base import ServiceProvider
+from ..widgets import Header
 from .episodes import EpisodesScreen
 
 

@@ -114,8 +114,18 @@ def _find_video_file(download_dir: str) -> str | None:
     return candidates[0]
 
 
-def _download_impl(select_title, is_movie: bool) -> str | None:
-    """Common download logic for both films and series."""
+def _download_impl(
+    select_title, is_movie: bool, prompt_dub: bool = True
+) -> str | None:
+    """Common download logic for both films and series.
+
+    Args:
+        select_title: the torrent Entries picked from the search results.
+        is_movie: True to store under MOVIE_FOLDER, False under SERIES_FOLDER.
+        prompt_dub: Set to False by non-interactive callers (e.g. the TUI).
+            The Italian audio dub flow asks questions on stdin, which would
+            block a GUI worker thread forever.
+    """
     from StreamingCommunity.services.torrent import _torrent_results
 
     torrent = _torrent_results.get(select_title.id)
@@ -142,21 +152,25 @@ def _download_impl(select_title, is_movie: bool) -> str | None:
         console.print(f"[green]Download completed: {result}")
 
         video_file = _find_new_video(before, result) or _find_video_file(result)
-        if video_file:
+        if video_file and prompt_dub:
             from StreamingCommunity.services.torrent.audio_dub import prompt_audio_dub
 
             dubbed = prompt_audio_dub(select_title, video_file)
             if dubbed:
                 console.print(f"[green]Dubbed version: {dubbed}")
+        elif video_file:
+            console.print(
+                "[dim]Italian audio dub skipped (interactive prompt unavailable)."
+            )
     else:
         console.print("[red]Download failed or timed out.")
 
     return result
 
 
-def download_film(select_title) -> str | None:
+def download_film(select_title, prompt_dub: bool = True) -> str | None:
     """Download a torrent for a film."""
-    return _download_impl(select_title, is_movie=True)
+    return _download_impl(select_title, is_movie=True, prompt_dub=prompt_dub)
 
 
 def download_series(
@@ -164,6 +178,7 @@ def download_series(
     season_selection: str | None = None,
     episode_selection: str | None = None,
     scrape_serie=None,
+    prompt_dub: bool = True,
 ) -> str | None:
     """Download a torrent for a series."""
-    return _download_impl(select_title, is_movie=False)
+    return _download_impl(select_title, is_movie=False, prompt_dub=prompt_dub)

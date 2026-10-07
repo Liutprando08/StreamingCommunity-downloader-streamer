@@ -1,6 +1,7 @@
 import unittest
 
 from StreamingCommunity.services._base.object import Season
+from StreamingCommunity.services.animeunity.scrapper import ScrapeSerieAnime
 from StreamingCommunity.services.streamingcommunity.scrapper import GetSerieInfo
 
 
@@ -83,6 +84,77 @@ class TestGetNumberSeason(unittest.TestCase):
         g = GetSerieInfo("tt0000000", "Test")
         g._get_embed_json = stub
         self.assertEqual(g.getNumberSeason(), 0)
+
+
+class FakeAnimeScraper(ScrapeSerieAnime):
+    """AnimeUnity scraper with the HTTP layer replaced by a static payload."""
+
+    def __init__(self, episodes=None):
+        super().__init__("https://example.invalid")
+        self.setup(None, 1, "Test Anime")
+        self._payload = episodes or []
+        self.season_requests = []
+
+    def _fetch_all_episodes(self, season_number=1):
+        self.season_requests.append(season_number)
+        self._episodes_by_season[season_number] = self._payload
+        if season_number == 1 or self.episodes_cache is None:
+            self.episodes_cache = self._payload
+
+
+def _raw(count):
+    return [{"id": 100 + n, "number": n, "title": f"Ep {n}"} for n in range(1, count + 1)]
+
+
+class TestAnimeUnityScraper(unittest.TestCase):
+    def test_getNumberSeason_registers_single_season(self):
+        s = FakeAnimeScraper(_raw(3))
+        self.assertEqual(s.getNumberSeason(), 1)
+        self.assertEqual([x.number for x in s.seasons_manager.seasons], [1])
+        # idempotent: does not append a second season
+        s.getNumberSeason()
+        self.assertEqual(len(s.seasons_manager.seasons), 1)
+
+    def test_getEpisodeSeasons_returns_all_episodes(self):
+        s = FakeAnimeScraper(_raw(5))
+        self.assertEqual([e.number for e in s.getEpisodeSeasons(1)], [1, 2, 3, 4, 5])
+
+    def test_episode_names_come_from_payload(self):
+        s = FakeAnimeScraper(_raw(1))
+        self.assertEqual(s.getEpisodeSeasons(1)[0].name, "Ep 1")
+
+    def test_episode_name_falls_back_to_number(self):
+        s = FakeAnimeScraper([{"id": 7, "number": 3}])
+        self.assertEqual(s.getEpisodeSeasons(1)[0].name, "Episode 3")
+
+    def test_get_count_episodes(self):
+        self.assertEqual(FakeAnimeScraper(_raw(12)).get_count_episodes(), 12)
+
+    def test_get_count_episodes_returns_none_on_failure(self):
+        class Broken(FakeAnimeScraper):
+            def _fetch_all_episodes(self, season_number=1):
+                self._episodes_by_season[season_number] = None
+
+        self.assertIsNone(Broken().get_count_episodes())
+
+    def test_getEpisodeSeasons_is_idempotent_and_caches(self):
+        s = FakeAnimeScraper(_raw(4))
+        first = s.getEpisodeSeasons(1)
+        second = s.getEpisodeSeasons(1)
+        self.assertEqual(len(first), len(second))
+        self.assertEqual(s.season_requests, [1])
+
+    def test_selectEpisode_uses_season_and_index(self):
+        s = FakeAnimeScraper(_raw(3))
+        ep = s.selectEpisode(1, 2)
+        self.assertEqual(ep.number, 3)
+        self.assertIsNone(s.selectEpisode(1, 99))
+
+    def test_setup_without_name_leaves_series_name_defined(self):
+        s = FakeAnimeScraper()
+        s.setup(None, 1, None)
+        self.assertEqual(s.series_name, "")
+        self.assertFalse(s.is_series)
 
 
 if __name__ == "__main__":
