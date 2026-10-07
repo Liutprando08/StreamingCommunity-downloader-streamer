@@ -1,9 +1,10 @@
-# 22.06.26 - Rewritten for streaming-community.fans (vixsrc.to API)
+# 22.06.26 - StreamingCommunity via vidxgo host, legacy vixsrc API kept as fallback
 
 from __future__ import annotations
 
 import os
 import os as _os
+import re
 from typing import Any
 
 # External library
@@ -24,8 +25,8 @@ from StreamingCommunity.services._base.tv_download_manager import (
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager, os_manager, start_message
-from StreamingCommunity.utils.http_client import create_client, get_userAgent
 from StreamingCommunity.utils.console.shared import console
+from StreamingCommunity.utils.http_client import create_client, get_userAgent
 
 # Logic
 from .scrapper import GetSerieInfo
@@ -35,9 +36,59 @@ msg = Prompt()
 extension_output = config_manager.config.get("PROCESS", "extension")
 headers = {"user-agent": get_userAgent()}
 VIXSRC_API = "https://vixsrc.to/api"
+VIDXGO_BASE = "https://v.vidxgo.co"
 
 
-def _get_playlist_url(
+def _normalize_imdb(imdb_id: str | None) -> str | None:
+    """Return the numeric IMDB identifier expected by the vidxgo host."""
+    if not imdb_id:
+        return None
+    match = re.search(r"(\d+)", str(imdb_id))
+    return match.group(1) if match else None
+
+
+def _get_vidxgo_headers() -> dict[str, str]:
+    return {
+        "user-agent": get_userAgent(),
+        "referer": f"{VIDXGO_BASE}/",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "cross-site",
+    }
+
+
+def _get_vidxgo_playlist_url(
+    imdb_id: str | None,
+    is_series: bool,
+    season: int | None,
+    episode: int | None,
+) -> str | None:
+    numeric = _normalize_imdb(imdb_id)
+    if not numeric:
+        return None
+
+    api_url = (
+        f"{VIDXGO_BASE}/t/{numeric}/{season}/{episode}"
+        if is_series
+        else f"{VIDXGO_BASE}/t/{numeric}"
+    )
+
+    try:
+        response = create_client().get(api_url)
+        response.raise_for_status()
+        data = response.json()
+    except (HTTPError, ValueError) as e:
+        console.print(f"[yellow]vidxgo error: {e}")
+        return None
+
+    master_playlist = data.get("url") if isinstance(data, dict) else None
+    if not master_playlist:
+        console.print("[yellow]No playlist found in vidxgo response")
+        return None
+    return master_playlist
+
+
+def _get_vixsrc_playlist_url(
     imdb_id: str | None,
     is_series: bool,
     season: int | None = None,
@@ -69,6 +120,20 @@ def _get_playlist_url(
     return vs.get_playlist()
 
 
+def _get_playlist_url(
+    imdb_id: str | None,
+    is_series: bool,
+    season: int | None = None,
+    episode: int | None = None,
+) -> str | None:
+    playlist = _get_vidxgo_playlist_url(imdb_id, is_series, season, episode)
+    if playlist:
+        return playlist
+
+    console.print("[yellow]vidxgo unavailable, falling back to vixsrc")
+    return _get_vixsrc_playlist_url(imdb_id, is_series, season, episode)
+
+
 def download_film(select_title: Entries) -> tuple[str | None, Any] | None:
     start_message()
     console.print(
@@ -91,7 +156,9 @@ def download_film(select_title: Entries) -> tuple[str | None, Any] | None:
     )
 
     return HLS_Downloader(
-        m3u8_url=master_playlist, output_path=os.path.join(mp4_path, mp4_name)
+        m3u8_url=master_playlist,
+        output_path=os.path.join(mp4_path, mp4_name),
+        headers=_get_vidxgo_headers(),
     ).start()
 
 
@@ -118,7 +185,9 @@ def download_episode(
     )
 
     return HLS_Downloader(
-        m3u8_url=master_playlist, output_path=os.path.join(mp4_path, mp4_name)
+        m3u8_url=master_playlist,
+        output_path=os.path.join(mp4_path, mp4_name),
+        headers=_get_vidxgo_headers(),
     ).start()
 
 
@@ -135,7 +204,7 @@ def download_series(
         return
 
     if scrape_serie is None:
-        scrape_serie = GetSerieInfo(imdb_id, select_season.name)
+        scrape_serie = GetSerieInfo(imdb_id, select_season.name, url=select_season.url)
         scrape_serie.getNumberSeason()
     seasons_count = len(scrape_serie.seasons_manager)
 
@@ -185,7 +254,7 @@ def stream_film(select_title: Entries):
 
     stream_content(
         playlist_url=master_playlist,
-        headers={"User-Agent": get_userAgent()},
+        headers=_get_vidxgo_headers(),
         preferred_player=player,
         port=port,
     )
@@ -213,7 +282,7 @@ def stream_episode(
 
     stream_content(
         playlist_url=master_playlist,
-        headers={"User-Agent": get_userAgent()},
+        headers=_get_vidxgo_headers(),
         preferred_player=player,
         port=port,
     )
@@ -232,7 +301,7 @@ def stream_series(
         return
 
     if scrape_serie is None:
-        scrape_serie = GetSerieInfo(imdb_id, select_season.name)
+        scrape_serie = GetSerieInfo(imdb_id, select_season.name, url=select_season.url)
         scrape_serie.getNumberSeason()
     seasons_count = len(scrape_serie.seasons_manager)
 

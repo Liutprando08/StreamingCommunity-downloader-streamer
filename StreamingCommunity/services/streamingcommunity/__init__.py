@@ -24,17 +24,70 @@ from .downloader import download_film, download_series, stream_film, stream_seri
 # Variable
 indice = 0
 _useFor = "Film_Serie"
-
+IMDB_RE = re.compile(r"tt(\d+)")
 
 msg = Prompt()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 
 
-def title_search(query: str) -> int:
-    entries_manager.clear()
-    table_show_manager.clear()
+def _build_entry(item: dict) -> Entries | None:
+    """Build an Entries row from a `/api/v1/web/archive` API item."""
+    title_id = item.get("id") or item.get("legacyId")
+    slug = item.get("slug")
+    if not title_id or not slug:
+        return None
 
+    kind = item.get("kind") or ""
+    media_type = "tv" if kind == "series" else "film"
+
+    entry = Entries(
+        id=int(title_id),
+        name=item.get("title") or slug.replace("-", " ").title(),
+        type=media_type,
+        url=f"{site_constants.FULL_URL}/titles/{title_id}-{slug}-streaming",
+        slug=slug,
+        year=str(item.get("year") or ""),
+        imdb_id=item.get("imdbId") or "",
+    )
+    entry.size = ""
+    entry.score = str(item.get("rating") or "")
+    entry.desc = item.get("plot") or ""
+    entry.provider_language = ""
+    return entry
+
+
+def _search_archive(query: str) -> int | None:
+    """Primary search through the Next.js JSON API.
+
+    Returns the number of results, or None when the API is unavailable so the
+    caller can fall back to the legacy HTML scraper.
+    """
+    search_url = f"{site_constants.FULL_URL}/api/v1/web/archive"
+    params = {"q": query, "limit": 30, "count": 1}
+
+    try:
+        console.print(f"[cyan]Searching: [yellow]{search_url}")
+        response = create_client().get(search_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+    except (HTTPError, ValueError) as e:
+        console.print(
+            f"[red]Site: {site_constants.SITE_NAME}, archive search error: {e}"
+        )
+        return None
+
+    items = data.get("items") if isinstance(data, dict) else []
+    for item in items:
+        entry = _build_entry(item)
+        if entry:
+            entries_manager.add(entry)
+
+    return len(entries_manager)
+
+
+def _search_legacy_dle(query: str) -> int:
+    """Fallback: legacy DLE HTML search page scraping."""
     search_url = f"{site_constants.FULL_URL}/index.php?do=search"
     headers = {
         "user-agent": get_userAgent(),
@@ -68,7 +121,7 @@ def title_search(query: str) -> int:
             href = link.get("href", "")
             if not isinstance(href, str):
                 continue
-            match = re.search(r"/titles/(\d+)-(.*?)\.html", href)
+            match = re.search(r"/titles/(\d+)-(.*?)(?:\.html|-streaming)", href)
             if not match:
                 continue
 
@@ -92,11 +145,12 @@ def title_search(query: str) -> int:
                 if poster_match:
                     imdb_id = poster_match.group(1)
 
-            entry = Entries.__new__(Entries)
-            entry.id = int(title_id)
-            entry.name = name
-            entry.type = media_type
-            entry.url = title_url
+            entry = Entries(
+                id=int(title_id),
+                name=name,
+                type=media_type,
+                url=title_url,
+            )
             entry.size = ""
             entry.score = ""
             entry.desc = ""
@@ -111,6 +165,17 @@ def title_search(query: str) -> int:
             continue
 
     return len(entries_manager)
+
+
+def title_search(query: str) -> int:
+    entries_manager.clear()
+    table_show_manager.clear()
+
+    count = _search_archive(query)
+    if count is not None:
+        return count
+
+    return _search_legacy_dle(query)
 
 
 def process_search_result(select_title, selections=None, scrape_serie=None):

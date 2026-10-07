@@ -1,8 +1,19 @@
+import json
 import unittest
 
 from StreamingCommunity.services._base.object import Season
 from StreamingCommunity.services.animeunity.scrapper import ScrapeSerieAnime
-from StreamingCommunity.services.streamingcommunity.scrapper import GetSerieInfo
+from StreamingCommunity.services.streamingcommunity.scrapper import (
+    GetSerieInfo,
+    extract_seasons_from_rsc,
+)
+
+
+def rsc_html(seasons):
+    """Build an RSC-styled HTML payload carrying the given seasons."""
+    payload = json.dumps({"kind": "series", "seasons": seasons})
+    chunk = json.dumps(payload)
+    return f'<script>self.__next_f.push([1,{chunk}]);</script>'
 
 
 class StubEmbed:
@@ -84,6 +95,76 @@ class TestGetNumberSeason(unittest.TestCase):
         g = GetSerieInfo("tt0000000", "Test")
         g._get_embed_json = stub
         self.assertEqual(g.getNumberSeason(), 0)
+
+
+class TestExtractSeasonsFromRSC(unittest.TestCase):
+    def test_returns_parsed_seasons(self):
+        seasons = [
+            {
+                "number": 1,
+                "name": "Stagione 1",
+                "episodes": [
+                    {"number": 1, "title": "Pilota"},
+                    {"number": 2, "title": "Biscotti"},
+                ],
+            },
+            {"number": 2, "name": "Stagione 2", "episodes": []},
+        ]
+        parsed = extract_seasons_from_rsc(rsc_html(seasons))
+        self.assertEqual([s["number"] for s in parsed], [1, 2])
+        self.assertEqual(parsed[0]["episodes"][0]["title"], "Pilota")
+
+    def test_no_rsc_payload_returns_empty(self):
+        self.assertEqual(extract_seasons_from_rsc("<html></html>"), [])
+
+
+class FakeResponse:
+    def __init__(self, text):
+        self.text = text
+
+    def raise_for_status(self):
+        pass
+
+
+class FakeClient:
+    def __init__(self, text):
+        self._text = text
+
+    def get(self, url):
+        return FakeResponse(self._text)
+
+
+class TestTitlePageScraping(unittest.TestCase):
+    def make_fixture(self):
+        seasons = [
+            {
+                "number": 1,
+                "name": "Stagione 1",
+                "episodes": [
+                    {"number": 1, "title": "Pilota"},
+                    {"number": 2, "title": "Biscotti"},
+                ],
+            },
+            {"number": 2, "name": "Stagione 2", "episodes": []},
+        ]
+        g = GetSerieInfo("tt0000000", "Test", url="https://example.invalid/sc")
+        g._client = FakeClient(rsc_html(seasons))
+        return g
+
+    def test_getNumberSeason_from_title_page(self):
+        g = self.make_fixture()
+        self.assertEqual(g.getNumberSeason(), 2)
+
+    def test_getEpisodeSeasons_from_title_page(self):
+        g = self.make_fixture()
+        eps = g.getEpisodeSeasons(1)
+        self.assertEqual([e.number for e in eps], [1, 2])
+        self.assertEqual(eps[0].name, "Pilota")
+
+    def test_getNumberSeason_idempotent(self):
+        g = self.make_fixture()
+        self.assertEqual(g.getNumberSeason(), 2)
+        self.assertEqual(g.getNumberSeason(), 2)
 
 
 class FakeAnimeScraper(ScrapeSerieAnime):

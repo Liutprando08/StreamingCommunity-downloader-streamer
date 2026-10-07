@@ -57,7 +57,7 @@ class StreamingCommunityProvider:
             GetSerieInfo,
         )
 
-        return GetSerieInfo(entry.imdb_id, entry.name)
+        return GetSerieInfo(entry.imdb_id, entry.name, url=entry.url)
 
     def seasons(self, scraper: Any) -> list[Any]:
         scraper.getNumberSeason()
