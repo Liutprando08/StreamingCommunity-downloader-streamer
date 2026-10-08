@@ -19,27 +19,39 @@ from .torrent import TorrentProvider
 
 class ProviderRegistry:
     def __init__(self) -> None:
-        self._providers: dict[str, ServiceProvider] = {}
+        self._providers: dict[
+            str, ServiceProvider | MusicProvider | TorrentProvider
+        ] = {}
+
+    def register_Torrent(self, provider: TorrentProvider) -> None:
+        self._providers[getattr(provider, "alias", provider.name)] = provider
+
+    def register_Music(self, provider: MusicProvider) -> None:
+        self._providers[getattr(provider, "alias", provider.name)] = provider
 
     def register(self, provider: ServiceProvider) -> None:
         self._providers[getattr(provider, "alias", provider.name)] = provider
 
-    def all(self) -> list[ServiceProvider]:
+    def all(self) -> list[ServiceProvider | MusicProvider | TorrentProvider]:
         return list(self._providers.values())
 
-    def get(self, alias: str) -> ServiceProvider | None:
+    def get(
+        self, alias: str
+    ) -> ServiceProvider | None | MusicProvider | TorrentProvider:
         return self._providers.get(alias)
 
-    def by_flow(self, flow: str) -> list[ServiceProvider]:
+    def by_flow(
+        self, flow: str
+    ) -> list[ServiceProvider | MusicProvider | TorrentProvider]:
         return [p for p in self._providers.values() if getattr(p, "flow", None) == flow]
 
 
 registry = ProviderRegistry()
 registry.register(StreamingCommunityProvider())
 registry.register(AnimeunityProvider())
-registry.register(TorrentProvider())
-registry.register(Musicmp3Provider())
-registry.register(Goldenmp3Provider())
+registry.register_Torrent(TorrentProvider())
+registry.register_Music(Musicmp3Provider())
+registry.register_Music(Goldenmp3Provider())
 
 __all__ = [
     "ServiceProvider",

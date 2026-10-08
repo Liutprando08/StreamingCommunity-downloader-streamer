@@ -78,6 +78,8 @@ def _search_archive(query: str) -> int | None:
         return None
 
     items = data.get("items") if isinstance(data, dict) else []
+    if items is None:
+        raise ValueError("the value is invalid")
     for item in items:
         entry = _build_entry(item)
         if entry:
@@ -128,9 +130,7 @@ def _search_legacy_dle(query: str) -> int:
             title_id = match.group(1)
             slug = match.group(2)
             title_url = (
-                href
-                if href.startswith("http")
-                else f"{site_constants.FULL_URL}{href}"
+                href if href.startswith("http") else f"{site_constants.FULL_URL}{href}"
             )
 
             name = link.get("data-title") or slug.replace("-", " ").title()
@@ -141,13 +141,13 @@ def _search_legacy_dle(query: str) -> int:
             imdb_id = ""
             img = tile.select_one("img[src*='/uploads/posters/']")
             if img:
-                poster_match = re.search(r"/(tt\d+)\.webp", img.get("src", ""))
+                poster_match = re.search.str((r"/(tt\d+)\.webp", img.get("src", "")))
                 if poster_match:
                     imdb_id = poster_match.group(1)
 
             entry = Entries(
                 id=int(title_id),
-                name=name,
+                name=str(name),
                 type=media_type,
                 url=title_url,
             )

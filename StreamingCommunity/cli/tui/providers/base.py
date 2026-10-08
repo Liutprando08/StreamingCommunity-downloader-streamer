@@ -72,7 +72,7 @@ class ServiceProvider(Protocol):
         ...
 
 
-class MusicProvider(ServiceProvider, Protocol):
+class MusicProvider(Protocol):
     """
     Music services (musicmp3, goldenmp3).
 
@@ -156,3 +156,4 @@ class TorrentProvider(Protocol):
     def download_film(self, entry: Any) -> Any:
         """Download the whole torrent for ``entry``."""
         ...
+

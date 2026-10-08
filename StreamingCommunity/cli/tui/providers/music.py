@@ -95,15 +95,16 @@ class MusicProviderBase:
 
 class Musicmp3Provider(MusicProviderBase):
     name = "Musicmp3"
-    alias = "musicmp3"
+    alias = "Music"
     module_name = "musicmp3"
     _SEARCH_MODES = ("Song", "Album", "Artist")
 
 
 class Goldenmp3Provider(MusicProviderBase):
     name = "Goldenmp3"
-    alias = "goldenmp3"
+    alias = "Music"
     module_name = "goldenmp3"
     # goldenmp3 only exposes a reliable album search, so Song/Artist are not
     # offered; this mirrors ``base_music_search(modes=("Album",))``.
     _SEARCH_MODES = ("Album",)
+
