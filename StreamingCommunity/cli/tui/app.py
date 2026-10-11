@@ -3,93 +3,56 @@
 from __future__ import annotations
 
 from textual.app import App
+from rich.terminal_theme import TerminalTheme
 
 from .console_bridge import bridge
 from .screens.home import HomeScreen
+
+# ANSI → 24-bit mapping used by Textual's line filters. Markup strings in the
+# screens carry explicit Catppuccin hexes (Textual resolves named markup colours
+# like ``[cyan]`` to their raw ANSI RGB values, bypassing this mapping); this
+# theme is the fallback for any colour that still reaches the terminal as an
+# ANSI index, keeping those in Catppuccin Mocha tones as well.
+_CATPPUCCIN_ANSI = TerminalTheme(
+    background=(24, 24, 37),  # mantle    #181825
+    foreground=(205, 214, 244),  # text    #cdd6f4
+    normal=[
+        (17, 17, 27),  # black          #11111b
+        (243, 139, 168),  # red         #f38ba8
+        (166, 227, 161),  # green       #a6e3a1
+        (249, 226, 175),  # yellow      #f9e2af
+        (137, 180, 250),  # blue        #89b4fa
+        (203, 166, 247),  # magenta     #cba6f7
+        (137, 220, 235),  # cyan        #89dceb
+        (205, 214, 244),  # white       #cdd6f4
+    ],
+    bright=[
+        (88, 91, 112),  # bright black  #585b70
+        (243, 139, 168),  # bright red
+        (166, 227, 161),  # bright green
+        (249, 226, 175),  # bright yellow
+        (137, 180, 250),  # bright blue
+        (203, 166, 247),  # bright magenta
+        (137, 220, 235),  # bright cyan
+        (230, 233, 239),  # bright white #e6e9ef
+    ],
+)
 
 
 class OsteApp(App):
     TITLE = "OSTE"
     SUB_TITLE = "you are gonna be king of the pirates"
 
-    CSS = """
-    Screen {
-        background: #12111a;
-    }
-
-    HomeScreen .home-root {
-        width: 1fr;
-        height: 1fr;
-        border: solid white;
-        layout:   horizontal;
-        content-align: center middle;
-    }
-
-    HomeScreen #sidebar {
-        width: 34;
-        height: 100%;
-        border-right: solid gray;
-    }
-
-    HomeScreen #sidebar OptionList {
-        height: 1fr;
-        border: none;
-    }
-
-    HomeScreen #main-content {
-        width: 1fr;
-        height: 100%;
-        }
-  
-  #home-title-view {
-        width: 1fr;
-        height: 1fr;  
-        content-align: center middle;
-    }
-
-    .flow-root {
-        height: 1fr;
-        padding: 1 2;
-    }
-
-    .flow-root #table-box {
-        height: 1fr;
-        border: round $accent;
-        padding: 1;
-    }
-
-    .flow-root #table-box DataTable {
-        height: 1fr;
-    }
-
-    .flow-root #queue-log {
-        height: 6;
-        border: round $primary;
-        margin-top: 1;
-    }
-
-    .flow-root Horizontal {
-        height: auto;
-        margin: 1 0;
-    }
-
-    .flow-root Horizontal Input {
-        width: 1fr;
-        margin-right: 1;
-    }
-
-    .flow-root #music-mode {
-        width: 1fr;
-        margin-bottom: 1;
-    }
-
-    .flow-root #music-query {
-        margin-bottom: 1;
-    }
-    """
+    # All styling lives in the external stylesheet next to this module.
+    CSS_PATH = "theme.tcss"
 
     def on_mount(self) -> None:
         from StreamingCommunity.utils import config_manager
+
+        # Built-in Catppuccin Mocha theme for all widgets (buttons, inputs,
+        # footer, focus…) plus the matching ANSI mapping for text markup.
+        self.theme = "catppuccin-mocha"
+        self.ansi_theme_dark = _CATPPUCCIN_ANSI
 
         config_manager.config.set_key("DEFAULT", "show_message", False)
         from StreamingCommunity.source.utils.tracker import context_tracker

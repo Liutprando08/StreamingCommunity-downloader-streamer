@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import html as html_module
+import json
 import re
 
 # External library
@@ -213,3 +215,84 @@ def search(
         selections=selections,
         scrape_serie=scrape_serie,
     )
+
+
+# ── Full synopsis ─────────────────────────────────────────────────────────
+#
+# The archive API truncates ``plot`` to 200 characters (mid-word), and the
+# visible ``<p class="tc-plot">`` on the title page is ellipsised too. The
+# untouched TMDB overview the page was built from still lives in the page's
+# Next.js flight payload, so we dig it out from there.
+
+_FLIGHT_PUSH_RE = re.compile(
+    r'self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)', re.S
+)
+_PLOT_PARAGRAPH_RE = re.compile(r'<p class="tc-plot">(.*?)</p>', re.S)
+
+# Successful synopsis lookups, keyed by title URL.
+_description_cache: dict[str, str] = {}
+
+
+def _plot_from_payload(payload: str, slug: str) -> str | None:
+    """Return the full ``plot`` of the item identified by ``slug``."""
+    if not payload or not slug:
+        return None
+    decoder = json.JSONDecoder()
+    for match in re.finditer(re.escape(f'"slug":"{slug}"'), payload):
+        key_at = payload.find('"plot":', match.end())
+        if key_at == -1:
+            continue
+        try:
+            value, _ = decoder.raw_decode(payload[key_at + len('"plot":') :])
+        except ValueError:
+            continue
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _plot_from_paragraph(page: str) -> str | None:
+    """Fallback: the (elliptical) synopsis shown on the title page."""
+    match = _PLOT_PARAGRAPH_RE.search(page)
+    if not match:
+        return None
+    text = html_module.unescape(re.sub(r"<[^>]+>", "", match.group(1))).strip()
+    return text.rstrip("…").strip() or None
+
+
+def _extract_plot(page: str, slug: str) -> str | None:
+    """Extract the full synopsis from a title page, API-truncation-proof."""
+    payload = []
+    for match in _FLIGHT_PUSH_RE.finditer(page):
+        try:
+            payload.append(json.loads(match.group(1)))
+        except ValueError:
+            continue
+    return _plot_from_payload("".join(payload), slug) or _plot_from_paragraph(page)
+
+
+def get_full_description(entry: Entries) -> str | None:
+    """Fetch the complete synopsis for ``entry`` from its title page.
+
+    Returns ``None`` when the page has no slug/url or the request/parse
+    fails, so callers can keep the (truncated) API description as fallback.
+    Successful lookups are cached for the lifetime of the process.
+    """
+    url = getattr(entry, "url", None)
+    slug = getattr(entry, "slug", None)
+    if not url or not slug:
+        return None
+    if url in _description_cache:
+        return _description_cache[url]
+    try:
+        response = create_client().get(url)
+        response.raise_for_status()
+    except HTTPError:
+        return None
+    except Exception:
+        return None
+    description = _extract_plot(response.text or "", slug)
+    if description:
+        _description_cache[url] = description
+    return description
+

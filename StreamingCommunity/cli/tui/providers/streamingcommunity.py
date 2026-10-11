@@ -52,6 +52,14 @@ class StreamingCommunityProvider:
     def is_series(self, entry: Any) -> bool:
         return str(getattr(entry, "type", "")).lower() in self._SERIES_TYPES
 
+    def entry_description(self, entry: Any) -> str | None:
+        """Return the complete synopsis for ``entry``.
+
+        The archive API truncates ``plot`` to 200 characters, so this reads
+        the full text from the title page instead.
+        """
+        return self._module().get_full_description(entry)
+
     def new_series_scraper(self, entry: Any) -> Any:
         from StreamingCommunity.services.streamingcommunity.scrapper import (
             GetSerieInfo,

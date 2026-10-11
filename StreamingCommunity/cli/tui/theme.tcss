@@ -1,0 +1,278 @@
+/*
+ * OSTE TUI theme.
+ *
+ * Colours live here as CSS variables so screens stay free of magic hex
+ * values. Loaded by OsteApp via ``CSS_PATH``.
+ *
+ * The app runs on Textual's built-in "catppuccin-mocha" theme; the values
+ * below are the matching Catppuccin Mocha tokens so custom panels, borders
+ * and accents stay coherent with the widgets driven by the theme.
+ */
+
+$oste-bg: #181825; /* mantle    */
+$oste-panel: #313244; /* surface0 */
+$oste-border: #585b70; /* surface2 */
+$oste-accent: #cba6f7; /* mauve     */
+$oste-text: #cdd6f4; /* text     */
+$oste-muted: #7f849c; /* overlay1 */
+
+Screen {
+    background: $oste-bg;
+}
+
+/* ── Home ────────────────────────────────────────────────────────────── */
+HomeScreen .home-root {
+    width: 1fr;
+    height: 1fr;
+    border: solid $oste-border;
+    layout: horizontal;
+    content-align: center middle;
+}
+
+HomeScreen #sidebar {
+    width: 34;
+    height: 100%;
+    border-right: solid $oste-border;
+    background: $oste-panel;
+}
+
+HomeScreen #sidebar OptionList {
+    height: 1fr;
+    border: none;
+    background: transparent;
+}
+
+HomeScreen #main-content {
+    width: 1fr;
+    height: 100%;
+}
+
+HomeScreen #home-title-view {
+    width: 1fr;
+    height: 1fr;
+    content-align: center middle;
+}
+
+/* ── Shared flow screens (search / detail / seasons / episodes / …) ──── */
+.flow-root {
+    height: 1fr;
+    padding: 1 2;
+}
+
+.flow-root #table-box {
+    height: 1fr;
+    border: round $oste-accent;
+    padding: 1;
+}
+
+.flow-root #table-box DataTable {
+    height: 1fr;
+}
+
+/* Consistent table headers across search / seasons / episodes / music. */
+DataTable > .datatable--header {
+    background: $oste-panel;
+    color: $oste-accent;
+    text-style: bold;
+}
+
+DataTable > .datatable--header-cursor {
+    background: $oste-border;
+    color: $oste-text;
+}
+
+.flow-root #queue-log {
+    height: 6;
+    border: round $primary;
+    margin-top: 1;
+}
+
+.flow-root Horizontal {
+    height: auto;
+    margin: 1 0;
+}
+
+.flow-root Horizontal Input {
+    width: 1fr;
+    margin-right: 1;
+}
+
+.flow-root Horizontal Button {
+    margin-left: 1;
+}
+
+.flow-root #music-mode {
+    width: 1fr;
+    margin-bottom: 1;
+}
+
+.flow-root #music-query {
+    margin-bottom: 1;
+}
+
+/* ── Search (query bar + results / preview split) ────────────────────── */
+.flow-root #search-title {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.flow-root #search-status {
+    height: auto;
+}
+
+.flow-root #search-split {
+    height: 1fr;
+    margin: 1 0 0 0;
+}
+
+.flow-root #search-split #table-box {
+    width: 2fr;
+}
+
+.flow-root #preview-container {
+    width: 1fr;
+    height: 1fr;
+    border: round $oste-border;
+    background: $oste-panel;
+    padding: 0 1;
+    margin-left: 1;
+}
+
+.flow-root #preview-box {
+    height: 1fr;
+    padding: 1;
+    overflow-y: auto;
+}
+
+.flow-root #search-preview {
+    height: auto;
+}
+
+.flow-root #preview-actions {
+    height: auto;
+    margin: 0 0 1 0;
+}
+
+/* ── Detail (title metadata + actions split) ─────────────────────────── */
+.flow-root #detail-heading {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.flow-root #detail-split {
+    height: 1fr;
+    margin: 1 0 0 0;
+}
+
+.flow-root #info-box {
+    width: 2fr;
+    height: 1fr;
+    border: round $oste-accent;
+    padding: 1 2;
+    overflow-y: auto;
+}
+
+.flow-root #entry-title {
+    height: auto;
+    text-style: bold;
+}
+
+.flow-root #entry-badges {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.flow-root #entry-desc {
+    height: auto;
+    margin: 1 0;
+}
+
+.flow-root #entry-details {
+    height: auto;
+}
+
+.flow-root #actions-box {
+    width: 1fr;
+    height: 1fr;
+    border: round $oste-border;
+    background: $oste-panel;
+    padding: 1;
+    margin-left: 1;
+}
+
+.flow-root #actions-title {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.flow-root #actions-box Button {
+    width: 100%;
+    margin: 0 0 1 0;
+}
+
+.flow-root #actions-hint {
+    height: auto;
+    margin-top: 1;
+}
+
+/* ── Selection screens (seasons / episodes split) ────────────────────── */
+.flow-root .select-split {
+    height: 1fr;
+    margin: 1 0 0 0;
+}
+
+.flow-root .select-split #table-box {
+    width: 2fr;
+}
+
+.flow-root .select-card {
+    width: 1fr;
+    height: 1fr;
+    border: round $oste-border;
+    background: $oste-panel;
+    padding: 0 1;
+    margin-left: 1;
+}
+
+.flow-root .select-card .select-card-box {
+    height: 1fr;
+    padding: 1;
+    overflow-y: auto;
+}
+
+.flow-root .select-card .select-preview {
+    height: auto;
+}
+
+.flow-root .select-card .select-actions {
+    height: auto;
+    margin: 0 0 1 0;
+}
+
+/* ── Queue (download/stream progress) ─────────────────────────────────── */
+.flow-root #queue-summary {
+    height: auto;
+    margin: 1 0 0 0;
+}
+
+/* ── Activity (live downloads + history) ─────────────────────────────── */
+.flow-root .activity-heading {
+    text-style: bold;
+    margin-top: 1;
+}
+
+.flow-root .activity-box {
+    height: 1fr;
+    min-height: 4;
+    border: round $oste-accent;
+    padding: 0 1;
+}
+
+.flow-root .activity-box DataTable {
+    height: 1fr;
+}
+
+.flow-root #activity-status {
+    height: auto;
+    margin-top: 1;
+}

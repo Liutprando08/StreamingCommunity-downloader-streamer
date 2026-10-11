@@ -1,5 +1,9 @@
 # Download/stream queue: processes the items sequentially in a worker and
 # reflects live progress from the shared download_tracker.
+#
+# Top bar has the queue title and a live overall progress summary; the table
+# lists every job with its progress bar/status/speed, and a console log shows
+# the underlying downloader output.
 
 from __future__ import annotations
 
@@ -15,11 +19,13 @@ from textual.widgets import (
     Footer,
     Label,
     LoadingIndicator,
+    Static,
 )
 from textual.widgets.data_table import RowKey
 
 from StreamingCommunity.source.utils.tracker import download_tracker
 
+from ..formatting import progress_bar, status_badge
 from ..providers.base import ServiceProvider
 from ..widgets import Header
 from ..workers import prepare_download_context
@@ -37,6 +43,11 @@ MEDIA_TYPES = {
 class QueueScreen(Screen):
     BINDINGS = [("escape", "back", "Indietro")]
 
+    # Monotonic count of finished queues. A queue that dismisses itself when
+    # done can complete entirely inside the click that opened it, so callers
+    # (tests) watch this instead of trying to catch the transient screen.
+    completed = 0
+
     def __init__(
         self,
         provider: ServiceProvider,
@@ -53,13 +64,15 @@ class QueueScreen(Screen):
 
         self._id_by_row: dict[int, str | None] = {}
         self._active_row: int | None = None
+        self._done = 0
         self._finished = False
         self._timer = None
 
     def compose(self) -> ComposeResult:
         yield Header()
         with Vertical(classes="flow-root"):
-            yield Label(f"[bold cyan]{self.title}[/]", id="queue-title")
+            yield Label(f"[bold #89dceb]{self.title}[/]", id="queue-title")
+            yield Static("", id="queue-summary")
             with Horizontal(id="queue-actions"):
                 yield Button("Annulla", variant="error", id="cancel-btn", disabled=True)
                 yield Button("Torna indietro", id="back-btn")
@@ -74,7 +87,7 @@ class QueueScreen(Screen):
         table.add_column("▶", key="mar")
         table.add_column("Lavoro", key="job")
         table.add_column("Stato", key="status")
-        table.add_column("%", key="pct")
+        table.add_column("Avanzamento", key="pct")
         table.add_column("Vel.", key="speed")
         table.add_column("Dim.", key="size")
         table.cursor_type = "row"
@@ -83,7 +96,7 @@ class QueueScreen(Screen):
             table.add_row(
                 "·",
                 item.get("label", "?"),
-                "in coda",
+                "[dim]in coda[/dim]",
                 "",
                 "",
                 "",
@@ -92,6 +105,7 @@ class QueueScreen(Screen):
             self._id_by_row[idx] = None
 
         self.query_one("#queue-loader", LoadingIndicator).styles.display = "none"
+        self._update_summary()
         self._timer = self.set_interval(0.5, self._refresh)
         self.run_worker(
             self._process_items, group="queue", exclusive=True, thread=True
@@ -201,7 +215,9 @@ class QueueScreen(Screen):
         self._set_row_status(idx, "avvio...")
 
     def _set_row_status(self, idx: int, text: str) -> None:
-        self.query_one("#queue-table", DataTable).update_cell(RowKey(idx), "status", text)
+        self.query_one("#queue-table", DataTable).update_cell(
+            RowKey(idx), "status", text
+        )
 
     def _mark_done_row(self, idx: int) -> None:
         table = self.query_one("#queue-table", DataTable)
@@ -213,17 +229,36 @@ class QueueScreen(Screen):
                     marker = "✗"
                     break
         table.update_cell(RowKey(idx), "mar", marker)
+        self._done += 1
+        self._update_summary()
 
     def _all_done(self) -> None:
+        if self._finished:
+            return
         self._finished = True
+        QueueScreen.completed += 1
         self.query_one("#cancel-btn", Button).disabled = True
         self.query_one("#queue-loader", LoadingIndicator).styles.display = "none"
         total = len(self.items)
         self.query_one("#queue-title", Label).update(
-            f"[bold green]{self.title}[/] · completato ({total}/{total})"
+            f"[bold #a6e3a1]{self.title}[/] · completato ({total}/{total})"
         )
+        self._update_summary()
         if self.on_complete is not None:
             self.on_complete()
+
+    def _update_summary(self) -> None:
+        total = len(self.items)
+        percent = (self._done / total * 100.0) if total else 0.0
+        jobs = "lavoro" if total == 1 else "lavori"
+        if self._finished:
+            state = "completato" if total == 1 else "completati"
+        else:
+            state = "in corso"
+        self.query_one("#queue-summary", Static).update(
+            f"{progress_bar(percent)}   "
+            f"[dim]{self._done}/{total} {jobs} {state}[/]"
+        )
 
     def _refresh(self) -> None:
         active = download_tracker.get_active_downloads()
@@ -241,11 +276,15 @@ class QueueScreen(Screen):
                 if info is None:
                     continue
                 status = info.get("status", "done")
-                table.update_cell(RowKey(idx), "status", str(status))
-                table.update_cell(RowKey(idx), "pct", str(info.get("progress", "")))
+                table.update_cell(RowKey(idx), "status", status_badge(status))
+                table.update_cell(
+                    RowKey(idx), "pct", progress_bar(info.get("progress", 0))
+                )
             else:
-                table.update_cell(RowKey(idx), "status", str(info.get("status", "")))
-                table.update_cell(RowKey(idx), "pct", str(info.get("progress", "")))
+                table.update_cell(RowKey(idx), "status", status_badge(info.get("status")))
+                table.update_cell(
+                    RowKey(idx), "pct", progress_bar(info.get("progress", 0))
+                )
                 table.update_cell(RowKey(idx), "speed", str(info.get("speed", "")))
                 table.update_cell(RowKey(idx), "size", str(info.get("size", "")))
 

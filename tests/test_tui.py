@@ -1,16 +1,31 @@
 import inspect
+import json
+import os
+import tempfile
 import time
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
-from textual.widgets import DataTable, Input, OptionList, Select
+from textual.screen import Screen
+from textual.widgets import DataTable, Input, OptionList, Select, Static
+from textual.widgets.data_table import RowKey
 
 import StreamingCommunity.cli.tui.providers.torrent
 import StreamingCommunity.services.torrent.downloader
 from StreamingCommunity.cli.tui.app import OsteApp
+from StreamingCommunity.cli.tui.formatting import (
+    detail_lines,
+    entry_info,
+    escape_markup,
+    format_time,
+    progress_bar,
+    status_badge,
+)
 from StreamingCommunity.cli.tui.parse import parse_ranges
 from StreamingCommunity.cli.tui.providers import registry
 from StreamingCommunity.cli.tui.providers.animeunity import AnimeunityProvider
+from StreamingCommunity.cli.tui.screens.activity import ActivityScreen
 from StreamingCommunity.cli.tui.screens.detail import DetailScreen
 from StreamingCommunity.cli.tui.screens.episodes import EpisodesScreen
 from StreamingCommunity.cli.tui.screens.home import HomeScreen
@@ -23,6 +38,7 @@ from StreamingCommunity.cli.tui.screens.music import (
 from StreamingCommunity.cli.tui.screens.queue import QueueScreen
 from StreamingCommunity.cli.tui.screens.seasons import SeasonsScreen
 from StreamingCommunity.cli.tui.screens.search import SearchScreen
+from StreamingCommunity.cli.tui.widgets import SelectableTable
 from StreamingCommunity.source.utils.tracker import download_tracker
 
 
@@ -321,7 +337,8 @@ class TestTuiHomeNavigation(unittest.IsolatedAsyncioTestCase):
             ol = _active(pilot).query_one("#menu-list", OptionList)
             ol.focus()
             await _settle(pilot)
-            ol.highlighted = len(registry.all())
+            # providers + "Attività (Download)" precede "Esci"
+            ol.highlighted = len(registry.all()) + 1
             await _settle(pilot)
             await pilot.press("enter")
             await _settle(pilot)
@@ -414,6 +431,37 @@ class TestTuiFilmFlow(unittest.IsolatedAsyncioTestCase):
                 await _settle(pilot, 8)
 
 
+class TestTuiQueueLayout(unittest.IsolatedAsyncioTestCase):
+    async def _open_film_queue(self, pilot, provider):
+        pilot.app.push_screen(
+            DetailScreen(provider, FakeEntry("Film X"), is_series=False)
+        )
+        await _settle(pilot)
+        await pilot.click("#download-btn")
+        return await _wait_queue_done(pilot)
+
+    async def test_summary_tracks_completion(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            queue = await self._open_film_queue(pilot, provider)
+            summary = str(queue.query_one("#queue-summary", Static).content)
+            self.assertIn("1/1", summary)
+            self.assertIn("completato", summary)
+            self.assertIn("100.0%", summary)
+
+    async def test_row_shows_progress_and_badge_after_refresh(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            queue = await self._open_film_queue(pilot, provider)
+            queue._refresh()
+            await _settle(pilot)
+            table = queue.query_one("#queue-table", DataTable)
+            row = table.get_row(RowKey(0))
+            # columns: mar, job, status, avanzamento, vel, dim
+            self.assertIn("completato", str(row[2]))
+            self.assertIn("100.0%", str(row[3]))
+
+
 class TestTuiSeriesFlow(unittest.IsolatedAsyncioTestCase):
     def _detail(self, provider):
         return DetailScreen(
@@ -446,10 +494,15 @@ class TestTuiSeriesFlow(unittest.IsolatedAsyncioTestCase):
         return await _wait_for(pilot, episodes_loaded)
 
     async def _enqueue(self, pilot):
+        # A series queue dismisses itself on completion, and `click` may already
+        # have run the whole queue to completion before we can look, so wait on
+        # QueueScreen's completion counter instead of catching the screen.
+        before = QueueScreen.completed
         await pilot.click("#select-all")
         await _settle(pilot, 3)
         await pilot.click("#confirm-btn")
-        await _wait_queue_done(pilot)
+        await _wait_for(pilot, lambda: QueueScreen.completed > before)
+        await _settle(pilot, 3)
 
     async def test_single_season_download(self):
         provider = FakeProvider()
@@ -502,6 +555,56 @@ class TestTuiSeriesFlow(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(episodes, EpisodesScreen)
             await self._enqueue(pilot)
 
+    async def test_seasons_split_layout_structure(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._to_seasons(pilot, provider)
+            for selector in (
+                "#seasons-split",
+                "#season-preview-container",
+                "#season-preview",
+            ):
+                self.assertEqual(len(screen.query(selector)), 1, selector)
+            # Confirm/back live inside the selection card now.
+            self.assertEqual(len(screen.query("#seasons-actions #confirm-btn")), 1)
+            self.assertEqual(len(screen.query("#seasons-actions #back-btn")), 1)
+
+    async def test_seasons_preview_tracks_highlight_and_selection(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            seasons = await self._to_seasons(pilot, provider)
+            preview = seasons.query_one("#season-preview", Static)
+            self.assertIn("Serie Y", str(preview.content))
+            # Moving the cursor refreshes the highlighted season.
+            seasons.query_one("#season-table", SelectableTable).move_cursor(row=1)
+            await _settle(pilot)
+            self.assertIn("S2", str(preview.content))
+            # Selection is reflected in the card footer.
+            seasons._apply_ranges("2,3")
+            await _settle(pilot)
+            self.assertIn("2/3", str(preview.content))
+
+    async def test_episodes_split_layout_and_preview(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            seasons = await self._to_seasons(pilot, provider)
+            seasons._apply_ranges("1")
+            await _settle(pilot)
+            await pilot.click("#confirm-btn")
+            episodes = await self._wait_episodes(pilot)
+            for selector in (
+                "#episodes-split",
+                "#episode-preview-container",
+                "#episode-preview",
+            ):
+                self.assertEqual(len(episodes.query(selector)), 1, selector)
+            preview = episodes.query_one("#episode-preview", Static)
+            self.assertIn("Serie Y", str(preview.content))
+            self.assertIn("S1", str(preview.content))
+            episodes.query_one("#episodes-table", SelectableTable).move_cursor(row=1)
+            await _settle(pilot)
+            self.assertIn("Ep2", str(preview.content))
+
 
 class TestMusicProviders(unittest.TestCase):
     def test_registry_lookup(self):
@@ -518,9 +621,29 @@ class TestMusicProviders(unittest.TestCase):
             self.assertFalse(provider.supports_seasons, alias)
 
     def test_by_flow_isolation(self):
-        self.assertEqual([p.name for p in registry.by_flow("episode")],
-                         ["Streamingcommunity", "Animeunity"])
-        self.assertEqual([p.name for p in registry.by_flow("atomic")], ["Torrent"])
+        self.assertEqual(
+            [p.name for p in registry.by_flow("episode")],
+            [
+                "Streamingcommunity",
+                "Animeunity",
+                "Raiplay",
+                "Mediaset Infinity",
+                "Guardaserie",
+                "Discovery EU",
+                "Discovery US",
+                "Pluto TV",
+                "Realtime",
+                "Dmax",
+                "Nove",
+                "Food Network",
+                "Home Garden TV",
+                "Crunchyroll",
+            ],
+        )
+        self.assertEqual(
+            [p.name for p in registry.by_flow("atomic")],
+            ["Torrent", "YouTube", "MostraGuarda", "Ipersphera"],
+        )
         self.assertEqual([p.name for p in registry.by_flow("music")],
                          ["Musicmp3", "Goldenmp3"])
 
@@ -566,6 +689,190 @@ class TestMusicProviders(unittest.TestCase):
         self.assertEqual(provider.drilldown(artist)[0], "albums")
         self.assertEqual(provider.drilldown(album)[0], "tracks")
         self.assertIsNone(provider.drilldown(song))
+
+
+class TestProviderRegistry(unittest.TestCase):
+    """The sidebar is rendered from ``registry.all()``, so a silent alias
+    collision (which used to drop a whole provider) must never come back."""
+
+    def test_all_providers_registered(self):
+        self.assertEqual(
+            sorted(p.name for p in registry.all()),
+            [
+                "Animeunity",
+                "Crunchyroll",
+                "Discovery EU",
+                "Discovery US",
+                "Dmax",
+                "Food Network",
+                "Goldenmp3",
+                "Guardaserie",
+                "Home Garden TV",
+                "Ipersphera",
+                "Mediaset Infinity",
+                "MostraGuarda",
+                "Musicmp3",
+                "Nove",
+                "Pluto TV",
+                "Raiplay",
+                "Realtime",
+                "Streamingcommunity",
+                "Torrent",
+                "YouTube",
+            ],
+        )
+
+    def test_aliases_are_unique(self):
+        aliases = [getattr(p, "alias", p.name) for p in registry.all()]
+        self.assertEqual(len(aliases), len(set(aliases)), aliases)
+
+    def test_flows_are_known(self):
+        for provider in registry.all():
+            self.assertIn(provider.flow, {"episode", "music", "atomic"}, provider.name)
+
+    def test_duplicate_alias_rejected(self):
+        from StreamingCommunity.cli.tui.providers import ProviderRegistry
+
+        registry_under_test = ProviderRegistry()
+        registry_under_test.register(registry.get("musicmp3"))
+        with self.assertRaises(ValueError):
+            registry_under_test.register(registry.get("musicmp3"))
+
+
+class TestTvServiceProviders(unittest.TestCase):
+    """The Film/Serie TV services added on top of streamingcommunity."""
+
+    # Services that ship a film downloader and can surface film entries.
+    WITH_FILMS = ("raiplay", "mediasetinfinity", "crunchyroll")
+    # Services with no film path: every result walks the seasons flow.
+    SERIES_ONLY = (
+        "guardaserie",
+        "discoveryeu",
+        "discoveryus",
+        "plutotv",
+        "realtime",
+        "dmax",
+        "nove",
+        "foodnetwork",
+        "homegardentv",
+    )
+    ALL = WITH_FILMS + SERIES_ONLY
+
+    def test_registry_metadata(self):
+        expected = {
+            "raiplay": ("Raiplay", "Film_Serie"),
+            "mediasetinfinity": ("Mediaset Infinity", "Film_Serie"),
+            "guardaserie": ("Guardaserie", "Serie"),
+            "discoveryeu": ("Discovery EU", "Film_Serie"),
+            "discoveryus": ("Discovery US", "Film_Serie"),
+            "plutotv": ("Pluto TV", "Serie"),
+            "realtime": ("Realtime", "Serie"),
+            "dmax": ("Dmax", "Serie"),
+            "nove": ("Nove", "Serie"),
+            "foodnetwork": ("Food Network", "Serie"),
+            "homegardentv": ("Home Garden TV", "Serie"),
+            "crunchyroll": ("Crunchyroll", "Anime"),
+        }
+        for alias, (name, category) in expected.items():
+            provider = registry.get(alias)
+            self.assertIsNotNone(provider, alias)
+            self.assertEqual(provider.name, name, alias)
+            self.assertEqual(provider.category, category, alias)
+            self.assertEqual(provider.flow, "episode", alias)
+            self.assertTrue(provider.supports_seasons, alias)
+            self.assertFalse(provider.supports_streaming, alias)
+
+    def test_implements_episode_protocol(self):
+        for alias in self.ALL:
+            provider = registry.get(alias)
+            for attr in (
+                "search",
+                "result_columns",
+                "is_series",
+                "new_series_scraper",
+                "seasons",
+                "episodes",
+                "download_film",
+                "download_episode",
+            ):
+                self.assertTrue(callable(getattr(provider, attr, None)), (alias, attr))
+
+    def test_columns_include_name(self):
+        for alias in self.ALL:
+            values = dict(registry.get(alias).result_columns()).values()
+            self.assertIn("name", values, alias)
+
+    def test_is_series_routing(self):
+        film = FakeEntry("Film", type_="film")
+        movie = FakeEntry("Movie", type_="movie")
+        tv = FakeEntry("Show", type_="tv")
+
+        for alias in self.WITH_FILMS:
+            provider = registry.get(alias)
+            self.assertFalse(provider.is_series(film), alias)
+            self.assertFalse(provider.is_series(movie), alias)
+            self.assertTrue(provider.is_series(tv), alias)
+
+        for alias in self.SERIES_ONLY:
+            provider = registry.get(alias)
+            self.assertTrue(provider.is_series(film), alias)
+            self.assertTrue(provider.is_series(tv), alias)
+
+    def test_seasons_and_episodes_delegate_to_scraper(self):
+        scraper = SimpleNamespace(
+            seasons_manager=SimpleNamespace(
+                seasons=[SimpleNamespace(number=1, name="S1")]
+            ),
+            getNumberSeason=lambda: 1,
+            getEpisodeSeasons=lambda s: [SimpleNamespace(number=1, name="Ep1")],
+        )
+        for alias in self.ALL:
+            provider = registry.get(alias)
+            self.assertEqual(provider.seasons(scraper)[0].number, 1, alias)
+            self.assertEqual(provider.episodes(scraper, 1)[0].name, "Ep1", alias)
+
+    def test_stream_not_offered(self):
+        provider = registry.get("raiplay")
+        self.assertIsNone(provider.stream_film(FakeEntry("X")))
+        self.assertIsNone(provider.stream_episode())
+
+
+class TestFilmServiceProviders(unittest.TestCase):
+    """The single-video services (YouTube, MostraGuarda, Ipersphera)."""
+
+    def test_registry_metadata(self):
+        expected = {
+            "youtube": ("YouTube", "Film_Serie"),
+            "mostraguarda": ("MostraGuarda", "Film"),
+            "ipersphera": ("Ipersphera", "Film_Serie"),
+        }
+        for alias, (name, category) in expected.items():
+            provider = registry.get(alias)
+            self.assertIsNotNone(provider, alias)
+            self.assertEqual(provider.name, name, alias)
+            self.assertEqual(provider.category, category, alias)
+            self.assertEqual(provider.flow, "atomic", alias)
+            self.assertFalse(provider.supports_seasons, alias)
+            self.assertFalse(provider.supports_streaming, alias)
+
+    def test_implements_atomic_protocol(self):
+        for alias in ("youtube", "mostraguarda", "ipersphera"):
+            provider = registry.get(alias)
+            for attr in ("search", "result_columns", "is_series", "download_film"):
+                self.assertTrue(callable(getattr(provider, attr, None)), (alias, attr))
+
+    def test_every_result_is_a_single_download(self):
+        for alias in ("youtube", "mostraguarda", "ipersphera"):
+            provider = registry.get(alias)
+            for media_type in ("film", "movie", "tv", "serie", None):
+                entry = FakeEntry("X", type_=media_type)
+                self.assertFalse(provider.is_series(entry), (alias, media_type))
+
+    def test_youtube_columns_show_duration_and_channel(self):
+        values = dict(registry.get("youtube").result_columns()).values()
+        self.assertIn("name", values)
+        self.assertIn("size", values)
+        self.assertIn("desc", values)
 
 
 class TestTorrentProviders(unittest.TestCase):
@@ -731,6 +1038,553 @@ class TestTuiMusicFlow(unittest.IsolatedAsyncioTestCase):
                 table.get_row("1")[0], "\u2713", "row 1 should be marked selected"
             )
             self.assertEqual(table.get_row("0")[0], " ")
+
+
+class TestFormatting(unittest.TestCase):
+    def test_format_time_of_timestamp(self):
+        self.assertEqual(format_time(0), "-")
+        self.assertRegex(format_time(1_700_000_000), r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
+
+    def test_format_time_passthrough(self):
+        self.assertEqual(format_time("n/a"), "n/a")
+        self.assertEqual(format_time(None), "-")
+
+    def test_progress_bar_bounds_and_clamping(self):
+        self.assertEqual(progress_bar(0), "░" * 10 + "   0.0%")
+        self.assertEqual(progress_bar(100), "█" * 10 + " 100.0%")
+        self.assertEqual(progress_bar("bogus"), "░" * 10 + "   0.0%")
+        self.assertEqual(progress_bar(-5), "░" * 10 + "   0.0%")
+        self.assertEqual(progress_bar(250), "█" * 10 + " 100.0%")
+
+    def test_status_badge_categories(self):
+        self.assertIn("in corso", status_badge("downloading"))
+        self.assertIn("completato", status_badge("completed"))
+        self.assertIn("annullato", status_badge("cancelling..."))
+        self.assertIn("scaduto", status_badge("timed_out"))
+        self.assertIn("errore", status_badge("failed"))
+
+    def test_detail_lines_aligns_and_filters(self):
+        lines = detail_lines([("Anno", "2020"), ("ID", "tt1"), ("Vuoto", "")])
+        self.assertEqual(len(lines), 2)  # blank value dropped
+        # Labels are padded to the widest one (Anno/ID -> width 4).
+        self.assertEqual(lines[0], "[dim]Anno[/]  [#cdd6f4]2020[/]")
+        self.assertEqual(lines[1], "[dim]ID  [/]  [#cdd6f4]tt1[/]")
+
+    def test_detail_lines_empty(self):
+        self.assertEqual(detail_lines([]), [])
+        self.assertEqual(detail_lines([("x", None)]), [])
+
+    def test_detail_lines_escapes_markup(self):
+        lines = detail_lines([("Trama", "un [testo] strano")])
+        self.assertEqual(lines[0], r"[dim]Trama[/]  [#cdd6f4]un \[testo] strano[/]")
+
+    def test_escape_markup(self):
+        self.assertEqual(escape_markup("a[b]c"), r"a\[b]c")
+        self.assertEqual(escape_markup(None), "None")
+
+    def test_entry_info_collects_all_attributes(self):
+        entry = FakeEntry("X", year="2020", score="9.0", slug="x", url="http://x")
+        pairs = dict(
+            entry_info(entry, columns=(("Nome", "name"), ("Anno", "year")))
+        )
+        self.assertEqual(pairs["Nome"], "X")
+        self.assertEqual(pairs["Anno"], "2020")
+        self.assertEqual(pairs["Punteggio"], "9.0")
+        self.assertEqual(pairs["Slug"], "x")
+        self.assertEqual(pairs["URL"], "http://x")
+        self.assertEqual(pairs["Tipo"], "film")
+
+    def test_entry_info_respects_exclude(self):
+        entry = FakeEntry("X", score="9.0")
+        labels = [label for label, _ in entry_info(entry, exclude={"name"})]
+        self.assertNotIn("Nome", labels)
+        self.assertIn("Punteggio", labels)
+
+
+
+
+class TestSelectableTable(unittest.IsolatedAsyncioTestCase):
+    async def _open(self, pilot, columns=("A", "B")):
+        class _Host(Screen):
+            def compose(inner):
+                yield SelectableTable(columns, id="t")
+
+        pilot.app.push_screen(_Host())
+        await _settle(pilot)
+        return _active(pilot).query_one("#t", SelectableTable)
+
+    async def test_set_rows_and_toggle_marker(self):
+        async with OsteApp().run_test(size=(80, 24)) as pilot:
+            table = await self._open(pilot)
+            table.set_rows([("a1", "b1"), ("a2", "b2")])
+            await pilot.pause()
+            self.assertEqual(table.count, 2)
+            self.assertEqual(table.get_row("0")[0], " ")
+            table.toggle(1)
+            await pilot.pause()
+            self.assertEqual(table.get_row("1")[0], "✓")
+            self.assertEqual(table.get_row("0")[0], " ")
+            self.assertEqual(table.selected, {1})
+            table.toggle(1)
+            await pilot.pause()
+            self.assertEqual(table.selected, set())
+
+    async def test_select_all_none_and_invert(self):
+        async with OsteApp().run_test(size=(80, 24)) as pilot:
+            table = await self._open(pilot)
+            table.set_rows([(f"a{i}", f"b{i}") for i in range(1, 6)])
+            await pilot.pause()
+            table.select_all()
+            self.assertEqual(table.selected, {0, 1, 2, 3, 4})
+            table.invert()
+            self.assertEqual(table.selected, set())
+            table.set_selected({0})
+            table.invert()
+            self.assertEqual(table.selected, {1, 2, 3, 4})
+            table.select_none()
+            self.assertEqual(table.selected, set())
+            for index in range(5):
+                self.assertEqual(table.get_row(str(index))[0], " ")
+
+    async def test_apply_range_is_one_based(self):
+        async with OsteApp().run_test(size=(80, 24)) as pilot:
+            table = await self._open(pilot)
+            table.set_rows([(f"a{i}", f"b{i}") for i in range(1, 6)])
+            await pilot.pause()
+            table.apply_range("1,3-4")
+            self.assertEqual(table.selected, {0, 2, 3})
+            table.apply_range("*")
+            self.assertEqual(table.selected, {0, 1, 2, 3, 4})
+
+    async def test_set_rows_resets_selection(self):
+        async with OsteApp().run_test(size=(80, 24)) as pilot:
+            table = await self._open(pilot)
+            table.set_rows([(f"a{i}", f"b{i}") for i in range(1, 4)])
+            await pilot.pause()
+            table.select_all()
+            table.set_rows([(f"c{i}", f"d{i}") for i in range(1, 4)])
+            await pilot.pause()
+            self.assertEqual(table.selected, set())
+            self.assertEqual(table.count, 3)
+
+
+class TestTuiActivity(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self._path_patch = mock.patch.object(
+            download_tracker,
+            "_history_path",
+            return_value=os.path.join(self._tmp, "history.json"),
+        )
+        self._path_patch.start()
+        self._saved = (
+            dict(download_tracker.downloads),
+            list(download_tracker.history),
+            dict(download_tracker.stop_events),
+            dict(download_tracker.active_processes),
+        )
+
+    def tearDown(self):
+        download_tracker.downloads.clear()
+        download_tracker.downloads.update(self._saved[0])
+        download_tracker.history.clear()
+        download_tracker.history.extend(self._saved[1])
+        download_tracker.stop_events.clear()
+        download_tracker.stop_events.update(self._saved[2])
+        download_tracker.active_processes.clear()
+        download_tracker.active_processes.update(self._saved[3])
+        self._path_patch.stop()
+
+    async def _open(self, pilot):
+        pilot.app.push_screen(ActivityScreen())
+        await _settle(pilot)
+        return _active(pilot)
+
+    async def test_home_has_activity_entry(self):
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            ol = _active(pilot).query_one("#menu-list", OptionList)
+            prompts = [
+                str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)
+            ]
+            self.assertTrue(any("Attività" in p for p in prompts))
+
+    async def test_home_opens_activity(self):
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            ol = _active(pilot).query_one("#menu-list", OptionList)
+            ol.focus()
+            await _settle(pilot)
+            ol.highlighted = len(registry.all())
+            await _settle(pilot)
+            await pilot.press("enter")
+            await _settle(pilot)
+            self.assertIsInstance(_active(pilot), ActivityScreen)
+            await pilot.click("#back-btn")
+            await _settle(pilot)
+            self.assertIsInstance(_active(pilot), HomeScreen)
+
+    async def test_lists_active_and_history(self):
+        download_tracker.downloads.clear()
+        download_tracker.history.clear()
+        download_tracker.start_download(
+            "active-1", "Active Movie", "Streamingcommunity", "Film"
+        )
+        download_tracker.update_progress(
+            "active-1", "video", 42.0, "2MB/s", "10MB/20MB"
+        )
+        download_tracker.start_download(
+            "done-1", "Done Movie", "Streamingcommunity", "Film"
+        )
+        download_tracker.complete_download("done-1", success=True, path="/x.mp4")
+
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot)
+            active = screen.query_one("#active-table", DataTable)
+            history = screen.query_one("#history-table", DataTable)
+            self.assertEqual(active.row_count, 1)
+            self.assertEqual(history.row_count, 1)
+            self.assertIn("Active Movie", str(active.get_row("active-1")[1]))
+            self.assertIn("Done Movie", str(history.get_row("0")[1]))
+
+    async def test_history_with_duplicate_or_missing_ids_does_not_crash(self):
+        download_tracker.downloads.clear()
+        download_tracker.history.clear()
+        download_tracker.history.extend(
+            [
+                {"title": "No id A", "status": "completed", "end_time": 1.0},
+                {"title": "No id B", "status": "failed", "end_time": 2.0},
+                {"id": "dup", "title": "Dup A", "status": "completed", "end_time": 3.0},
+                {"id": "dup", "title": "Dup B", "status": "completed", "end_time": 4.0},
+            ]
+        )
+
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot)
+            self.assertEqual(
+                screen.query_one("#history-table", DataTable).row_count, 4
+            )
+
+    async def test_cancel_requests_stop(self):
+        download_tracker.downloads.clear()
+        download_tracker.history.clear()
+        download_tracker.start_download(
+            "cancel-1", "Cancel Me", "Streamingcommunity", "Film"
+        )
+
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot)
+            table = screen.query_one("#active-table", DataTable)
+            table.focus()
+            table.move_cursor(row=0)
+            await _settle(pilot)
+            await pilot.click("#cancel-btn")
+            await _settle(pilot)
+            self.assertTrue(download_tracker.is_stopped("cancel-1"))
+
+    async def test_clear_history(self):
+        download_tracker.downloads.clear()
+        download_tracker.history.clear()
+        download_tracker.history.append(
+            {
+                "id": "h1",
+                "title": "Old",
+                "status": "completed",
+                "type": "Film",
+                "size": "1B",
+                "path": "/old.mp4",
+                "end_time": 1_700_000_000,
+            }
+        )
+
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot)
+            self.assertEqual(
+                screen.query_one("#history-table", DataTable).row_count, 1
+            )
+            await pilot.click("#clear-btn")
+            await _settle(pilot)
+            self.assertEqual(len(download_tracker.history), 0)
+            self.assertEqual(
+                screen.query_one("#history-table", DataTable).row_count, 0
+            )
+
+
+class TestTuiSearchLayout(unittest.IsolatedAsyncioTestCase):
+    async def _open(self, pilot, provider):
+        pilot.app.push_screen(SearchScreen(provider))
+        await _settle(pilot)
+        return _active(pilot)
+
+    async def _search(self, pilot, screen, query="fake", via_button=False):
+        field = screen.query_one("#search-input", Input)
+        field.value = query
+        field.focus()
+        await _settle(pilot)
+        if via_button:
+            await pilot.click("#search-btn")
+        else:
+            await pilot.press("enter")
+
+        async def loaded():
+            active = _active(pilot)
+            if isinstance(active, SearchScreen) and active._entries:
+                return active
+            return None
+
+        return await _wait_for(pilot, loaded)
+
+    async def test_split_layout_structure(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot, provider)
+            for selector in (
+                "#search-split",
+                "#table-box",
+                "#preview-container",
+                "#search-preview",
+                "#preview-open-btn",
+            ):
+                self.assertEqual(len(screen.query(selector)), 1, selector)
+
+    async def test_results_populate_preview(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot, provider)
+            screen = await self._search(pilot, screen)
+            preview = screen.query_one("#search-preview", Static)
+            self.assertIn("Fake Film", str(preview.content))
+
+    async def test_highlight_updates_preview(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot, provider)
+            screen = await self._search(pilot, screen)
+            screen.query_one("#results", DataTable).move_cursor(row=1)
+            await _settle(pilot)
+            preview = screen.query_one("#search-preview", Static)
+            self.assertIn("Fake Serie", str(preview.content))
+            self.assertIn("Serie", str(preview.content))
+
+    async def test_search_button_runs_query(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot, provider)
+            screen = await self._search(pilot, screen, via_button=True)
+            self.assertEqual(len(screen._entries), 2)
+
+    async def test_preview_button_opens_detail(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot, provider)
+            screen = await self._search(pilot, screen)
+            screen.query_one("#results", DataTable).move_cursor(row=0)
+            await _settle(pilot)
+            await pilot.click("#preview-open-btn")
+            await _settle(pilot)
+            self.assertIsInstance(_active(pilot), DetailScreen)
+
+
+class TestTuiDetailLayout(unittest.IsolatedAsyncioTestCase):
+    def _detail(self, provider, entry):
+        return DetailScreen(provider, entry, is_series=provider.is_series(entry))
+
+    async def test_split_layout_structure(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(self._detail(provider, FakeEntry("Film X")))
+            await _settle(pilot)
+            screen = _active(pilot)
+            for selector in (
+                "#detail-split",
+                "#info-box",
+                "#actions-box",
+                "#entry-title",
+                "#entry-badges",
+                "#entry-details",
+            ):
+                self.assertEqual(len(screen.query(selector)), 1, selector)
+
+    async def test_shows_title_and_provider_metadata(self):
+        provider = FakeProvider()
+        entry = FakeEntry("Film X", year="1999", imdb_id="tt999")
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(self._detail(provider, entry))
+            await _settle(pilot)
+            screen = _active(pilot)
+            self.assertIn(
+                "Film X", str(screen.query_one("#entry-title", Static).content)
+            )
+            badges = str(screen.query_one("#entry-badges", Static).content)
+            self.assertIn("Film", badges)
+            self.assertIn("Streamingcommunity", badges)
+            details = str(screen.query_one("#entry-details", Static).content)
+            self.assertIn("1999", details)
+            self.assertIn("tt999", details)
+
+    async def test_series_badge(self):
+        provider = FakeProvider()
+        entry = FakeEntry("Serie Y", type_="tv")
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(self._detail(provider, entry))
+            await _settle(pilot)
+            screen = _active(pilot)
+            self.assertIn(
+                "Serie", str(screen.query_one("#entry-badges", Static).content)
+            )
+
+    async def test_description_shown_when_present(self):
+        provider = FakeProvider()
+        entry = FakeEntry("Film X", desc="Una trama epica.")
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(self._detail(provider, entry))
+            await _settle(pilot)
+            screen = _active(pilot)
+            self.assertIn(
+                "Una trama epica.",
+                str(screen.query_one("#entry-desc", Static).content),
+            )
+
+    async def test_description_hidden_when_absent(self):
+        provider = FakeProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(self._detail(provider, FakeEntry("Film X")))
+            await _settle(pilot)
+            screen = _active(pilot)
+            self.assertFalse(screen.query_one("#entry-desc", Static).display)
+
+    async def test_shows_all_entry_fields(self):
+        provider = FakeProvider()
+        entry = FakeEntry(
+            "Film X",
+            year="1999",
+            imdb_id="tt999",
+            score="9.1",
+            slug="film-x",
+            url="http://example/film-x",
+        )
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(self._detail(provider, entry))
+            await _settle(pilot)
+            screen = _active(pilot)
+            details = str(screen.query_one("#entry-details", Static).content)
+            for token in (
+                "1999",
+                "tt999",
+                "9.1",
+                "film-x",
+                "http://example/film-x",
+                "Punteggio",
+                "Slug",
+                "URL",
+            ):
+                self.assertIn(token, details, token)
+
+    async def test_description_markup_is_escaped(self):
+        provider = FakeProvider()
+        entry = FakeEntry("Film X", desc="Un [capolavoro] assoluto.")
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(self._detail(provider, entry))
+            await _settle(pilot)
+            screen = _active(pilot)
+            content = str(screen.query_one("#entry-desc", Static).content)
+            self.assertIn(r"\[capolavoro]", content)
+            self.assertIn("assoluto.", content)
+
+    async def test_full_description_replaces_truncated(self):
+        class DescribedProvider(FakeProvider):
+            def entry_description(self, entry):
+                return "Trama completa e dettagliata. " * 20
+
+        provider = DescribedProvider()
+        entry = FakeEntry("Film X", desc="trama tronca")
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(self._detail(provider, entry))
+            await _settle(pilot)
+
+            async def updated():
+                widget = pilot.app.screen.query_one("#entry-desc", Static)
+                return "Trama completa e dettagliata." in str(widget.content)
+
+            await _wait_for(pilot, updated)
+            screen = _active(pilot)
+            self.assertEqual(screen.query_one("#entry-desc", Static).display, True)
+
+    async def test_keeps_api_description_without_enricher(self):
+        provider = FakeProvider()  # no entry_description capability
+        entry = FakeEntry("Film X", desc="trama dell'api")
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(self._detail(provider, entry))
+            await _settle(pilot)
+            content = str(
+                _active(pilot).query_one("#entry-desc", Static).content
+            )
+            self.assertIn("trama dell'api", content)
+
+
+
+    async def test_torrent_metadata_columns(self):
+        provider = FakeTorrentProvider()
+        entry = provider.search("x")[0]
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(self._detail(provider, entry))
+            await _settle(pilot)
+            screen = _active(pilot)
+            details = str(screen.query_one("#entry-details", Static).content)
+            self.assertIn("Seed", details)
+            # Torrent provider does not stream, so its button is absent.
+            self.assertEqual(len(screen.query("#stream-btn")), 0)
+
+
+class TestFullDescription(unittest.TestCase):
+    """The site truncates the plot; the detail page recovers the full one."""
+
+    @staticmethod
+    def _page(slug, items, paragraph=None):
+        scripts = []
+        for slug_value, plot in items:
+            inner = json.dumps(
+                {"slug": slug_value, "plot": plot}, separators=(",", ":")
+            )
+            scripts.append(
+                "<script>self.__next_f.push([1," + json.dumps(inner) + "])</script>"
+            )
+        page = "<html>" + "".join(scripts)
+        if paragraph is not None:
+            page += f'<p class="tc-plot">{paragraph}</p>'
+        return page + "</html>"
+
+    def test_extracts_full_plot_by_slug(self):
+        from StreamingCommunity.services.streamingcommunity import _extract_plot
+
+        full = "Trama completa e dettagliata. " * 30
+        page = self._page(
+            "matrix",
+            [("other-movie", "Trama di un altro film."), ("matrix", full)],
+        )
+        self.assertEqual(_extract_plot(page, "matrix"), full.strip())
+
+    def test_ignores_null_plot_and_uses_paragraph(self):
+        from StreamingCommunity.services.streamingcommunity import _extract_plot
+
+        page = self._page("matrix", [("matrix", None)], paragraph="Trama breve…")
+        self.assertEqual(_extract_plot(page, "matrix"), "Trama breve")
+
+    def test_returns_none_without_plot(self):
+        from StreamingCommunity.services.streamingcommunity import _extract_plot
+
+        self.assertIsNone(_extract_plot("<html></html>", "matrix"))
+
+    def test_plot_from_payload_keeps_inner_quotes(self):
+        from StreamingCommunity.services.streamingcommunity import (
+            _plot_from_payload,
+        )
+
+        payload = json.dumps(
+            {"slug": "x", "plot": 'un "capolavoro" assoluto'},
+            separators=(",", ":"),
+        )
+        self.assertEqual(
+            _plot_from_payload(payload, "x"), 'un "capolavoro" assoluto'
+        )
 
 
 class TestTuiTorrentFlow(unittest.IsolatedAsyncioTestCase):

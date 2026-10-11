@@ -22,9 +22,8 @@ from textual.widgets import (
 )
 from textual.widgets.data_table import RowKey
 
-from ..parse import parse_ranges
 from ..providers.base import MusicProvider
-from ..widgets import Header
+from ..widgets import Header, SelectableTable
 from .queue import QueueScreen
 
 LEVEL_SEARCH = "search"
@@ -54,10 +53,15 @@ class MusicScreen(Screen):
         # Breadcrumb of (level, entries, context) restored by "back".
         self._history: list[tuple[str, list, object]] = []
         self._parent_entry = None
-        self._selected: set[int] = set()
+        self._table: SelectableTable | None = None
+
+    @property
+    def _selected(self) -> set[int]:
+        return self._table.selected if self._table is not None else set()
 
     # ── layout ────────────────────────────────────────────────────────────
     def compose(self) -> ComposeResult:
+        headers = ("N", *[header for header, _attr in self.provider.result_columns()])
         yield Header()
         with Vertical(classes="flow-root"):
             yield Label("", id="music-title")
@@ -70,7 +74,7 @@ class MusicScreen(Screen):
                 placeholder="Insert the title (ex. Nirvana)", id="music-query"
             )
             with Container(id="table-box"):
-                yield DataTable(id="music-table")
+                yield SelectableTable(headers, id="music-table")
                 yield LoadingIndicator(id="music-loader")
             with Horizontal(id="music-actions"):
                 yield Input(placeholder="Range tracce es. 1,3-5,*", id="track-range")
@@ -87,7 +91,8 @@ class MusicScreen(Screen):
             self._mode = modes[0]
             self.query_one("#music-mode", Select).value = modes[0]
 
-        self.query_one("#music-table", DataTable).cursor_type = "row"
+        self._table = self.query_one("#music-table", SelectableTable)
+        self._table.ensure_columns()
         self._show_loader(False)
         self._apply_level()
 
@@ -105,7 +110,7 @@ class MusicScreen(Screen):
         if not at_search:
             # Only focus once the box is visible: focusing a display:none
             # widget is silently dropped by Textual.
-            self.query_one("#music-table", DataTable).focus()
+            self.query_one("#music-table", SelectableTable).focus()
 
         if at_search:
             self._set_title(f"Music · {self.provider.name}")
@@ -117,51 +122,45 @@ class MusicScreen(Screen):
                 f"{self.provider.name} · {getattr(self._parent_entry, 'name', '')} · Tracce"
             )
             self._set_status(
-                f"[green]{len(self._entries)} tracce. Invio per selezionare."
+                f"[#a6e3a1]{len(self._entries)} tracce. Invio per selezionare."
             )
         elif self._level == LEVEL_ALBUMS:
             self._set_title(
                 f"{self.provider.name} · {getattr(self._parent_entry, 'name', '')} · Album"
             )
             self._set_status(
-                f"[green]{len(self._entries)} album. Invio per aprire le tracce."
+                f"[#a6e3a1]{len(self._entries)} album. Invio per aprire le tracce."
             )
         else:
             self._set_title(f"Music · {self.provider.name} · {self._mode}")
             self._set_status(
-                f"[green]{len(self._entries)} risultato/i. Invio per aprire."
+                f"[#a6e3a1]{len(self._entries)} risultato/i. Invio per aprire."
             )
 
     def _fill_table(self) -> None:
-        table = self.query_one("#music-table", DataTable)
+        if self._table is None:
+            return
         columns = self.provider.result_columns()
-        # columns=True is required: clear() alone keeps explicit column keys,
-        # so a second fill would raise DuplicateKey and kill the screen.
-        table.clear(columns=True)
-        # Sel/N mirror the episodes screen: they drive the range selection.
-        table.add_column("Sel", key="sel")
-        table.add_column("N", key="num")
-        for header, _attr in columns:
-            table.add_column(header)
-        for i, entry in enumerate(self._entries):
-            table.add_row(
-                "✓" if i in self._selected else " ",
-                str(i + 1),
+        # ``set_rows`` clears the selection and the marker column is owned by
+        # SelectableTable, so no DuplicateKey and no stale ticks.
+        self._table.set_rows(
+            (
+                str(index + 1),
                 *[str(getattr(entry, attr, "") or "") for _, attr in columns],
-                key=str(i),
             )
-        table.cursor_type = "row"
+            for index, entry in enumerate(self._entries)
+        )
 
     def _show_loader(self, visible: bool) -> None:
         self.query_one("#music-loader", LoadingIndicator).styles.display = (
             "block" if visible else "none"
         )
-        self.query_one("#music-table", DataTable).styles.display = (
+        self.query_one("#music-table", SelectableTable).styles.display = (
             "none" if visible else "block"
         )
 
     def _set_title(self, text: str) -> None:
-        self.query_one("#music-title", Label).update(f"[bold cyan]{text}[/]")
+        self.query_one("#music-title", Label).update(f"[bold #89dceb]{text}[/]")
 
     def _set_status(self, text: str) -> None:
         self.query_one("#music-status", Static).update(text)
@@ -176,7 +175,7 @@ class MusicScreen(Screen):
         select = self.query_one("#music-mode", Select)
         self._mode = str(select.value) if select.value is not None else ""
 
-        self._set_status("[yellow]Ricerca in corso...")
+        self._set_status("[#f9e2af]Ricerca in corso...")
         self._show_loader(True)
         self._history.clear()
 
@@ -194,7 +193,7 @@ class MusicScreen(Screen):
             results = self.provider.search(query, mode)
         except Exception as exc:
             self.app.call_from_thread(
-                self._set_status, f"[red]Errore ricerca: {exc}"
+                self._set_status, f"[#f38ba8]Errore ricerca: {exc}"
             )
             self.app.call_from_thread(self._show_loader, False)
             return
@@ -203,14 +202,13 @@ class MusicScreen(Screen):
             self._level = LEVEL_RESULTS
             self._entries = list(results)
             self._parent_entry = None
-            self._selected.clear()
             # Restore visibility before filling/focusing: Textual silently
             # drops focus() on a display:none widget.
             self._show_loader(False)
             self._fill_table()
             self._apply_level()
             if not self._entries:
-                self._set_status("[yellow]Nessun risultato trovato.")
+                self._set_status("[#f9e2af]Nessun risultato trovato.")
 
         self.app.call_from_thread(apply)
 
@@ -220,7 +218,6 @@ class MusicScreen(Screen):
         self._level = level
         self._entries = list(entries)
         self._parent_entry = context
-        self._selected.clear()
         self._fill_table()
         self._apply_level()
 
@@ -252,50 +249,49 @@ class MusicScreen(Screen):
         level, items = target
         if not items:
             self._set_status(
-                f"[yellow]Nessun contenuto per {getattr(entry, 'name', '?')}."
+                f"[#f9e2af]Nessun contenuto per {getattr(entry, 'name', '?')}."
             )
             return
         self._push_level(level, items, entry)
 
     # ── track selection ───────────────────────────────────────────────────
     def _toggle(self, index: int) -> None:
-        table = self.query_one("#music-table", DataTable)
-        if index in self._selected:
-            self._selected.discard(index)
-        else:
-            self._selected.add(index)
-        self._sync_selection()
+        if self._table is not None:
+            self._table.toggle(index)
 
     def _sync_selection(self) -> None:
-        table = self.query_one("#music-table", DataTable)
-        for i in range(len(self._entries)):
-            marker = "✓" if i in self._selected else " "
-            table.update_cell(RowKey(str(i)), "sel", marker)
+        if self._table is not None:
+            self._table.refresh_markers()
+
+    @on(SelectableTable.SelectionChanged, "#music-table")
+    def _on_selection(self, event: SelectableTable.SelectionChanged) -> None:
+        if self._level != LEVEL_TRACKS:
+            return
+        total = event.table.count
+        self._set_status(
+            f"[#a6e3a1]{len(event.selected)}/{total} tracce selezionate."
+        )
 
     @on(Input.Submitted, "#track-range")
     def _on_range(self, event: Input.Submitted) -> None:
         if self._level != LEVEL_TRACKS:
             return
-        for n in parse_ranges(event.value, max_count=len(self._entries)):
-            self._selected.add(n - 1)
-        self._sync_selection()
-        self._set_status(f"[green]{len(self._selected)} tracce selezionate.")
+        if self._table is not None:
+            self._table.apply_range(event.value)
 
     @on(Button.Pressed, "#select-all")
     def _select_all(self) -> None:
         if self._level != LEVEL_TRACKS:
             return
-        self._selected = set(range(len(self._entries)))
-        self._sync_selection()
-        self._set_status(f"[green]{len(self._selected)} tracce selezionate.")
+        if self._table is not None:
+            self._table.select_all()
 
     @on(Button.Pressed, "#select-none")
     def _select_none(self) -> None:
         if self._level != LEVEL_TRACKS:
             return
-        self._selected.clear()
-        self._sync_selection()
-        self._set_status("[green]0 tracce selezionate.")
+        if self._table is not None:
+            self._table.select_none()
 
     @on(Button.Pressed, "#confirm-btn")
     def _confirm(self) -> None:
@@ -303,11 +299,10 @@ class MusicScreen(Screen):
             return
         if not self._entries:
             return
-        if not self._selected:
-            self._selected = set(range(len(self._entries)))
+        selected = self._selected or set(range(len(self._entries)))
 
         album = getattr(self._parent_entry, "name", "") or "Album"
-        tracks = [self._entries[i] for i in sorted(self._selected)]
+        tracks = [self._entries[i] for i in sorted(selected)]
         self._enqueue_tracks(tracks, title=album)
 
     def _enqueue_tracks(self, tracks: list, title: str) -> None:
@@ -338,7 +333,6 @@ class MusicScreen(Screen):
             self._level = LEVEL_SEARCH
             self._entries = []
             self._parent_entry = None
-            self._selected.clear()
             self._fill_table()
             self._apply_level()
             return
@@ -347,7 +341,6 @@ class MusicScreen(Screen):
         self._level = level
         self._entries = entries
         self._parent_entry = context
-        self._selected.clear()
         self._fill_table()
         self._apply_level()
 

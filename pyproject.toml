@@ -57,6 +57,7 @@ StreamingCommunity = [
   "**/*.txt",
   "**/*.json",
   "**/*.yaml",
+  "**/*.tcss",
   "cli/**/*.py",
   "core/**/*.py",
   "player/**/*.py",
