@@ -51,7 +51,5 @@ class HomeScreen(Screen):
         providers = registry.all()
         if event.option_index < len(providers):
             self.app.push_screen(SearchScreen(providers[event.option_index]))
-        elif event.option_index == len(providers):
-            self.app.push_screen(ActivityScreen())
         else:
             self.app.exit()
