@@ -148,24 +148,27 @@ def _download_impl(
     before = _snapshot_files(downloader.download_path)
     result = downloader.download_magnet(torrent.magnet_url)
 
-    if result:
-        console.print(f"[green]Download completed: {result}")
-
-        video_file = _find_new_video(before, result) or _find_video_file(result)
-        if video_file and prompt_dub:
-            from StreamingCommunity.services.torrent.audio_dub import prompt_audio_dub
-
-            dubbed = prompt_audio_dub(select_title, video_file)
-            if dubbed:
-                console.print(f"[green]Dubbed version: {dubbed}")
-        elif video_file:
-            console.print(
-                "[dim]Italian audio dub skipped (interactive prompt unavailable)."
-            )
-    else:
+    if not result:
         console.print("[red]Download failed or timed out.")
+        return None
 
-    return result
+    console.print(f"[green]Download completed: {result}")
+
+    video_file = _find_new_video(before, result) or _find_video_file(result)
+    if video_file and prompt_dub:
+        from StreamingCommunity.services.torrent.audio_dub import prompt_audio_dub
+
+        dubbed = prompt_audio_dub(select_title, video_file)
+        if dubbed:
+            console.print(f"[green]Dubbed version: {dubbed}")
+    elif video_file:
+        console.print(
+            "[dim]Italian audio dub skipped (interactive prompt unavailable)."
+        )
+
+    # Return the produced video file rather than the download directory: the
+    # TUI needs the actual file path to run the Italian audio mux afterwards.
+    return video_file
 
 
 def download_film(select_title, prompt_dub: bool = True) -> str | None:

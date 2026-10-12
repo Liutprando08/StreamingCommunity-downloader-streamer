@@ -64,6 +64,7 @@ class QueueScreen(Screen):
 
         self._id_by_row: dict[int, str | None] = {}
         self._active_row: int | None = None
+        self._status_override: dict[int, str] = {}
         self._done = 0
         self._finished = False
         self._timer = None
@@ -135,7 +136,7 @@ class QueueScreen(Screen):
                 )
                 self.app.call_from_thread(self._bind_id, idx, download_id)
                 try:
-                    self._run_download(item, download_id)
+                    self._run_download(idx, item, download_id)
                 except Exception as exc:
                     self.app.call_from_thread(
                         self._set_row_status, idx, f"errore: {exc}"
@@ -162,12 +163,13 @@ class QueueScreen(Screen):
 
         self.app.call_from_thread(self._all_done)
 
-    def _run_download(self, item: dict[str, Any], download_id: str) -> None:
+    def _run_download(self, idx: int, item: dict[str, Any], download_id: str) -> None:
         kind = item.get("kind")
         if kind == "film":
             # Also the atomic (torrent) entry point: the provider routes to the
             # movie or series folder itself.
             result = self.provider.download_film(item["entry"])
+            self._maybe_dub(idx, item, result)
         elif kind == "track":
             result = self.provider.download_track(item["entry"])
         elif kind == "album":
@@ -189,6 +191,39 @@ class QueueScreen(Screen):
                 )
             except Exception:
                 pass
+
+    def _maybe_dub(self, idx: int, item: dict[str, Any], video_path: Any) -> None:
+        """Mux the Italian audio picked before enqueueing, if any.
+
+        Runs after a successful torrent download. ``video_path`` is the file
+        returned by the torrent downloader. A failure here is non-fatal: the
+        torrent itself already downloaded fine.
+        """
+        source = item.get("dub_entry")
+        if source is None or not video_path:
+            return
+        dub = getattr(self.provider, "dub_audio", None)
+        if not callable(dub):
+            return
+
+        self.app.call_from_thread(
+            self._set_status_override, idx, "[#f9e2af]audio ITA..."
+        )
+        try:
+            dubbed = dub(item["entry"], str(video_path), source)
+        except Exception as exc:
+            self.app.call_from_thread(
+                self._set_status_override, idx, f"[#f38ba8]dub errore: {exc}"
+            )
+            return
+        if dubbed:
+            self.app.call_from_thread(
+                self._set_status_override, idx, "[#a6e3a1]audio ITA ✓"
+            )
+        else:
+            self.app.call_from_thread(
+                self._set_status_override, idx, "[#f9e2af]dub non riuscito"
+            )
 
     def _run_stream(self, item: dict[str, Any]) -> None:
         if item.get("kind") == "film":
@@ -218,6 +253,11 @@ class QueueScreen(Screen):
         self.query_one("#queue-table", DataTable).update_cell(
             RowKey(idx), "status", text
         )
+
+    def _set_status_override(self, idx: int, text: str) -> None:
+        """Status that wins over the tracker polling (used during the dub)."""
+        self._status_override[idx] = text
+        self._set_row_status(idx, text)
 
     def _mark_done_row(self, idx: int) -> None:
         table = self.query_one("#queue-table", DataTable)
@@ -276,12 +316,21 @@ class QueueScreen(Screen):
                 if info is None:
                     continue
                 status = info.get("status", "done")
-                table.update_cell(RowKey(idx), "status", status_badge(status))
+                table.update_cell(
+                    RowKey(idx),
+                    "status",
+                    self._status_override.get(idx) or status_badge(status),
+                )
                 table.update_cell(
                     RowKey(idx), "pct", progress_bar(info.get("progress", 0))
                 )
             else:
-                table.update_cell(RowKey(idx), "status", status_badge(info.get("status")))
+                table.update_cell(
+                    RowKey(idx),
+                    "status",
+                    self._status_override.get(idx)
+                    or status_badge(info.get("status")),
+                )
                 table.update_cell(
                     RowKey(idx), "pct", progress_bar(info.get("progress", 0))
                 )

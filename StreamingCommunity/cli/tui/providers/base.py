@@ -132,6 +132,11 @@ class TorrentProvider(Protocol):
     A torrent result is an opaque magnet link, not an episode list, so the
     atomic flow downloads whatever the user picked in one go. ``download_film``
     decides the destination folder from ``is_series(entry)``.
+
+    Torrents may optionally gain an Italian audio track taken from
+    StreamingCommunity. Providers that support it set ``supports_dub = True``
+    and expose ``search_audio_sources`` / ``dub_audio``; the detail screen then
+    offers an opt-in switch and the AudioSource screen picks the source.
     """
 
     name: str
@@ -155,5 +160,13 @@ class TorrentProvider(Protocol):
 
     def download_film(self, entry: Any) -> Any:
         """Download the whole torrent for ``entry``."""
+        ...
+
+    def search_audio_sources(self, query: str) -> list[Any]:
+        """Search StreamingCommunity for Italian-audio sources (optional)."""
+        ...
+
+    def dub_audio(self, entry: Any, video_path: str, audio_entry: Any) -> Any:
+        """Mux an Italian audio source onto ``video_path`` (optional)."""
         ...
 

@@ -210,9 +210,28 @@ DataTable > .datatable--header-cursor {
     margin: 0 0 1 0;
 }
 
-.flow-root #actions-hint {
+.flow-root #dub-row {
     height: auto;
-    margin-top: 1;
+    align: center middle;
+    padding: 0 0 1 0;
+}
+
+.flow-root #dub-label {
+    margin-right: 1;
+}
+
+.flow-root #audio-title {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.flow-root #audio-status {
+    height: auto;
+}
+
+.flow-root #audio-actions {
+    height: auto;
+    margin: 1 0 0 0;
 }
 
 /* ── Selection screens (seasons / episodes split) ────────────────────── */

@@ -19,6 +19,10 @@ class TorrentProvider:
     flow = "atomic"
     supports_streaming = False
     supports_seasons = False
+    # The TUI can add the Italian audio from StreamingCommunity after the
+    # download: it gathers the source in its own screens instead of the CLI's
+    # stdin prompts, then runs the mux in the queue worker.
+    supports_dub = True
 
     _SERIES_TYPES = {"tv"}
 
@@ -65,7 +69,24 @@ class TorrentProvider:
     def download_film(self, entry: Any) -> Any:
         downloader = self._downloader()
         # prompt_dub=False: the Italian audio dub flow asks questions on stdin,
-        # which would block this TUI worker thread forever.
+        # which would block this TUI worker thread forever. The TUI runs its own
+        # non-interactive dub via ``dub_audio`` instead.
         if self.is_series(entry):
             return downloader.download_series(entry, prompt_dub=False)
         return downloader.download_film(entry, prompt_dub=False)
+
+    def search_audio_sources(self, query: str) -> list[Any]:
+        """Search StreamingCommunity for the Italian audio source."""
+        from StreamingCommunity.services.torrent.audio_dub import (
+            search_audio_sources,
+        )
+
+        return search_audio_sources(query)
+
+    def dub_audio(self, entry: Any, video_path: str, audio_entry: Any) -> Any:
+        """Download ``audio_entry`` audio and mux it onto ``video_path``."""
+        from StreamingCommunity.services.torrent.audio_dub import (
+            dub_audio_from_source,
+        )
+
+        return dub_audio_from_source(entry, video_path, audio_entry)

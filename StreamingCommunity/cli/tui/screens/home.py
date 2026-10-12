@@ -32,8 +32,7 @@ class HomeScreen(Screen):
         with Container(classes="home-root"):
             with Container(id="sidebar"):
                 # Manteniamo la tua logica originale per il menu
-                options = [f"{p.name} ({p.category})" for p in registry.all()]
-                options.append("Attività (Download)")
+                options = [f"{p.name}" for p in registry.all()]
                 options.append("Esci")
                 yield OptionList(*options, id="menu-list")
             with Container(id="main-content"):

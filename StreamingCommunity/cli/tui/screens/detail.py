@@ -9,11 +9,12 @@ from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Static
+from textual.widgets import Button, Footer, Static, Switch
 
 from ..formatting import detail_lines, entry_info, escape_markup
 from ..providers.base import ServiceProvider
 from ..widgets import Header
+from .audio_source import AudioSourceScreen
 from .queue import QueueScreen
 from .seasons import SeasonsScreen
 
@@ -41,6 +42,12 @@ class DetailScreen(Screen):
                     yield Static("", id="entry-details")
                 with Vertical(id="actions-box"):
                     yield Static("[bold #89dceb]Azioni[/]", id="actions-title")
+                    if getattr(self.provider, "supports_dub", False):
+                        with Horizontal(id="dub-row"):
+                            yield Static(
+                                "[dim]Aggiungi audio ITA[/]", id="dub-label"
+                            )
+                            yield Switch(id="dub-switch")
                     yield Button("Scarica", variant="primary", id="download-btn")
                     if can_stream:
                         yield Button("Streaming", variant="success", id="stream-btn")
@@ -164,6 +171,14 @@ class DetailScreen(Screen):
             self.app.push_screen(SeasonsScreen(self.provider, self.entry, mode=mode))
             return
 
+        # Torrents can borrow the Italian audio from StreamingCommunity: pick
+        # the source here (non-interactively for the worker) before enqueueing.
+        if mode == "download" and self._dub_enabled():
+            self.app.push_screen(
+                AudioSourceScreen(self.provider, self.entry, mode=mode)
+            )
+            return
+
         items = [
             {
                 "kind": "film",
@@ -174,6 +189,14 @@ class DetailScreen(Screen):
         ]
         title = f"{mode.capitalize()} · {name}"
         self.app.push_screen(QueueScreen(self.provider, items, title=title))
+
+    def _dub_enabled(self) -> bool:
+        if not getattr(self.provider, "supports_dub", False):
+            return False
+        try:
+            return bool(self.query_one("#dub-switch", Switch).value)
+        except NoMatches:
+            return False
 
     def action_back(self) -> None:
         self.app.pop_screen()

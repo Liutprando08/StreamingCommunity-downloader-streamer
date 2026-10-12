@@ -13,7 +13,7 @@ from rich.prompt import Prompt
 
 # Internal utilities
 from StreamingCommunity.utils import TVShowManager, config_manager, os_manager
-from StreamingCommunity.services._base import EntriesManager, Entries
+from StreamingCommunity.services._base import Entries
 from StreamingCommunity.torrent.muxer import TorrentMuxer
 from StreamingCommunity.utils.console.shared import console
 
@@ -64,21 +64,26 @@ def _parse_season_episode(title: str) -> tuple:
     return season, episode
 
 
-def _search_streamingcommunity(query: str) -> int:
+def search_audio_sources(query: str) -> list[Entries]:
     """
-    Search StreamingCommunity for a title by name.
-    Returns number of results found. Entries are in _sc_entries.
+    Search StreamingCommunity for a title and return the raw results.
+
+    Non-interactive (no terminal table, no stdin): used by the TUI, which
+    renders its own picker and cannot block on the rich prompt.
     """
+    from StreamingCommunity.services.streamingcommunity import entries_manager as _sc_em
     from StreamingCommunity.services.streamingcommunity import (
         title_search as sc_title_search,
     )
 
-    return sc_title_search(query)
+    _sc_em.clear()
+    sc_title_search(query)
+    return list(_sc_em.media_list)
 
 
-def _display_results(entries_manager: EntriesManager) -> Optional[Entries]:
-    """Display search results and let user pick one."""
-    if not entries_manager.media_list:
+def _display_results(entries: list[Entries]) -> Optional[Entries]:
+    """Display search results and let the user pick one (CLI only)."""
+    if not entries:
         return None
 
     table_show_manager = TVShowManager()
@@ -90,7 +95,7 @@ def _display_results(entries_manager: EntriesManager) -> Optional[Entries]:
     }
     table_show_manager.add_column(column_info)
 
-    for i, entry in enumerate(entries_manager.media_list):
+    for i, entry in enumerate(entries):
         table_show_manager.add_tv_show(
             {
                 "Index": str(i),
@@ -101,7 +106,7 @@ def _display_results(entries_manager: EntriesManager) -> Optional[Entries]:
         )
 
     last_command = table_show_manager.run(
-        force_int_input=True, max_int_input=len(entries_manager.media_list)
+        force_int_input=True, max_int_input=len(entries)
     )
     table_show_manager.clear()
 
@@ -110,8 +115,8 @@ def _display_results(entries_manager: EntriesManager) -> Optional[Entries]:
 
     try:
         idx = int(last_command)
-        if 0 <= idx < len(entries_manager.media_list):
-            return entries_manager.media_list[idx]
+        if 0 <= idx < len(entries):
+            return entries[idx]
     except (ValueError, IndexError):
         pass
 
@@ -119,7 +124,7 @@ def _display_results(entries_manager: EntriesManager) -> Optional[Entries]:
     return None
 
 
-def _download_streaming_content(
+def download_streaming_audio(
     entry: Entries,
     base_dir: Optional[str] = None,
     season: Optional[int] = None,
@@ -190,6 +195,82 @@ def _download_streaming_content(
     return None
 
 
+def mux_italian_audio(
+    torrent_video_path: str, audio_path: str
+) -> Optional[str]:
+    """
+    Mux ``audio_path`` onto ``torrent_video_path`` as an Italian track.
+
+    Produces ``<base>_ita.<ext>`` next to the torrent video, removes the
+    temporary audio and (only on success) the original torrent video.
+    Returns the dubbed path or None.
+    """
+    if not torrent_video_path or not os.path.isfile(torrent_video_path):
+        return None
+    if not audio_path or not os.path.isfile(audio_path):
+        return None
+
+    torrent_dir = os.path.dirname(torrent_video_path)
+    torrent_base = os.path.splitext(os.path.basename(torrent_video_path))[0]
+    extension_output = _get_extension_output()
+    dubbed_path = os.path.join(torrent_dir, f"{torrent_base}_ita.{extension_output}")
+
+    muxer = TorrentMuxer()
+    result = muxer.mux_video_audio(torrent_video_path, audio_path, dubbed_path)
+
+    # Always drop the temporary streaming download.
+    try:
+        os.remove(audio_path)
+        temp_dir = os.path.dirname(audio_path)
+        if os.path.isdir(temp_dir) and not os.listdir(temp_dir):
+            os.rmdir(temp_dir)
+    except Exception as e:
+        log.debug("Cleanup failed: %s", e)
+
+    # Only remove the original once the dubbed file actually exists.
+    if result and os.path.isfile(result):
+        try:
+            os.remove(torrent_video_path)
+        except Exception as e:
+            log.debug("Failed to remove original: %s", e)
+
+    return result
+
+
+def dub_audio_from_source(
+    select_title, torrent_video_path: str, source_entry: Entries
+) -> Optional[str]:
+    """
+    Non-interactive dub: download the Italian audio for ``source_entry`` and
+    mux it onto ``torrent_video_path``.
+
+    Used by the TUI, where the user has already picked the StreamingCommunity
+    source before the download was enqueued.
+    """
+    if not torrent_video_path or not os.path.isfile(torrent_video_path):
+        return None
+    if source_entry is None:
+        return None
+
+    season, episode = _parse_season_episode(str(getattr(select_title, "name", "")))
+    is_series = str(getattr(select_title, "type", "")).lower() in (
+        "tv",
+        "serie",
+        "show",
+    )
+
+    streaming_path = download_streaming_audio(
+        source_entry,
+        base_dir=os.path.dirname(torrent_video_path),
+        season=season if is_series else None,
+        episode=episode if is_series else None,
+    )
+    if not streaming_path:
+        return None
+
+    return mux_italian_audio(torrent_video_path, streaming_path)
+
+
 def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
     """
     After torrent download, prompt user for Italian audio dubbing.
@@ -231,62 +312,16 @@ def prompt_audio_dub(select_title, torrent_video_path: str) -> Optional[str]:
 
     console.print(f"\n[cyan]Searching StreamingCommunity for: [yellow]{query}")
 
-    from StreamingCommunity.services.streamingcommunity import entries_manager as _sc_em
-    from StreamingCommunity.services.streamingcommunity import (
-        title_search as sc_title_search,
-    )
-
-    _sc_em.clear()
-    count = sc_title_search(query)
-
-    if count == 0:
+    entries = search_audio_sources(query)
+    if not entries:
         console.print("[yellow]No results found on StreamingCommunity")
         return None
 
-    picked = _display_results(_sc_em)
+    picked = _display_results(entries)
     if not picked:
         console.print("[yellow]Selection cancelled")
         return None
 
     console.print(f"[cyan]Selected: [yellow]{getattr(picked, 'name', 'unknown')}")
 
-    season, episode = _parse_season_episode(str(getattr(select_title, "name", "")))
-    is_series = str(getattr(select_title, "type", "")).lower() in (
-        "tv",
-        "serie",
-        "show",
-    )
-
-    streaming_path = _download_streaming_content(
-        picked,
-        base_dir=os.path.dirname(torrent_video_path),
-        season=season if is_series else None,
-        episode=episode if is_series else None,
-    )
-    if not streaming_path:
-        return None
-
-    torrent_dir = os.path.dirname(torrent_video_path)
-    torrent_base = os.path.splitext(os.path.basename(torrent_video_path))[0]
-    extension_output = _get_extension_output()
-    dubbed_filename = f"{torrent_base}_ita.{extension_output}"
-    dubbed_path = os.path.join(torrent_dir, dubbed_filename)
-
-    muxer = TorrentMuxer()
-    result = muxer.mux_video_audio(torrent_video_path, streaming_path, dubbed_path)
-
-    try:
-        os.remove(streaming_path)
-        temp_dir = os.path.dirname(streaming_path)
-        if os.path.isdir(temp_dir) and not os.listdir(temp_dir):
-            os.rmdir(temp_dir)
-    except Exception as e:
-        log.debug("Cleanup failed: %s", e)
-
-    if result and os.path.isfile(torrent_video_path):
-        try:
-            os.remove(torrent_video_path)
-        except Exception as e:
-            log.debug("Failed to remove original: %s", e)
-
-    return result
+    return dub_audio_from_source(select_title, torrent_video_path, picked)
