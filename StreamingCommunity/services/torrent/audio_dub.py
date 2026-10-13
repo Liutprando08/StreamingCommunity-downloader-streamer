@@ -137,6 +137,7 @@ def download_streaming_audio(
     """
     from StreamingCommunity.services.streamingcommunity.downloader import (
         _get_playlist_url,
+        _get_vidxgo_headers,
     )
     from StreamingCommunity.core.downloader import HLS_Downloader
 
@@ -175,6 +176,7 @@ def download_streaming_audio(
         m3u8_url=playlist_url,
         output_path=output_path,
         audio_only=True,
+        headers=_get_vidxgo_headers(),
     ).start()
 
     if result and os.path.isfile(output_path):
@@ -186,6 +188,7 @@ def download_streaming_audio(
         m3u8_url=playlist_url,
         output_path=output_path,
         audio_only=False,
+        headers=_get_vidxgo_headers(),
     ).start()
 
     if result and os.path.isfile(output_path):

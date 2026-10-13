@@ -47,7 +47,6 @@ class AudioSourceScreen(Screen):
         self.mode = mode
         self._entries: list[Any] = []
         self._highlighted: int | None = None
-        self._auto = False
 
     def compose(self) -> ComposeResult:
         target = getattr(self.entry, "name", "") or "Sconosciuto"
@@ -79,13 +78,7 @@ class AudioSourceScreen(Screen):
         table.add_columns(*[header for header, _attr in self._columns()])
         table.cursor_type = "row"
         self._show_loader(False)
-
-        if self._auto_mux():
-            self._auto = True
-            query = self.query_one("#audio-query", Input).value.strip()
-            self._run_search(query)
-        else:
-            self.query_one("#audio-query", Input).focus()
+        self.query_one("#audio-query", Input).focus()
 
     def _auto_mux(self) -> bool:
         try:
@@ -173,8 +166,6 @@ class AudioSourceScreen(Screen):
             self._set_status(
                 f"[#a6e3a1]{len(self._entries)} risultato/i. Invio per usare questo audio."
             )
-            if self._auto:
-                self._pick(0)
 
         self.app.call_from_thread(apply)
 
