@@ -47,7 +47,13 @@ class DetailScreen(Screen):
                             yield Static(
                                 "[dim]Aggiungi audio ITA[/]", id="dub-label"
                             )
-                            yield Switch(id="dub-switch")
+                            try:
+                                from StreamingCommunity.torrent.config import TorrentConfig
+                                from StreamingCommunity.utils import config_manager
+                                auto = bool(TorrentConfig(config_manager).auto_mux)
+                            except Exception:
+                                auto = False
+                            yield Switch(id="dub-switch", value=auto)
                     yield Button("Scarica", variant="primary", id="download-btn")
                     if can_stream:
                         yield Button("Streaming", variant="success", id="stream-btn")
@@ -193,6 +199,15 @@ class DetailScreen(Screen):
     def _dub_enabled(self) -> bool:
         if not getattr(self.provider, "supports_dub", False):
             return False
+        # Check if auto_mux is enabled in config
+        try:
+            from StreamingCommunity.torrent.config import TorrentConfig
+            from StreamingCommunity.utils import config_manager
+
+            if bool(TorrentConfig(config_manager).auto_mux):
+                return True
+        except Exception:
+            pass
         try:
             return bool(self.query_one("#dub-switch", Switch).value)
         except NoMatches:
