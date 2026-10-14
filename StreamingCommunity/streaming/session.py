@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import signal
+import threading
 
 from StreamingCommunity.utils.console.shared import console
 
@@ -79,6 +80,13 @@ class StreamSession:
         console.print("[dim]Streaming session ended")
 
     def _install_signal_handlers(self):
+        # ``signal.signal`` only works on the main thread: the TUI runs the
+        # stream in a worker thread, so skip installing the SIGINT handler there
+        # instead of crashing with "signal only works in main thread".
+        if threading.current_thread() is not threading.main_thread():
+            logger.debug("Skipping SIGINT handler (not on main thread)")
+            return
+
         self._original_sigint = signal.getsignal(signal.SIGINT)
 
         def handler(signum, frame):

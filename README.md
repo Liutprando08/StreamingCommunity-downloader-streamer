@@ -605,6 +605,22 @@ python -m StreamingCommunity --stream --player vlc --stream-port 8080
 - **vlc** - Network caching for smoother streams
 - **ffplay** - Lightweight fallback from FFmpeg
 
+Players are auto-detected from your `PATH` **and** the common per-OS install
+locations, so a Homebrew/macOS-bundle install is found even when it is not on
+`PATH` (e.g. when the app is launched from Finder).
+
+#### Installing a player
+
+| OS | Command |
+|----|---------|
+| macOS | `brew install mpv` (or install [VLC.app](https://www.videolan.org/vlc/)) |
+| Windows | `scoop install mpv` / `choco install mpv`, or install VLC |
+| Linux | `sudo apt install mpv` / `sudo dnf install mpv` / `sudo pacman -S mpv` |
+
+If you see *"No media player found"*, install one of the players above or point
+the app at an existing binary via `--player` (CLI) / `STREAMING_PLAYER`
+(environment variable).
+
 ---
 
 ## Related Projects
