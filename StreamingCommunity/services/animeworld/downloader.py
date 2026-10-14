@@ -145,3 +145,4 @@ def download_series(select_title: Entries, season_selection: str = None, episode
                 break
             obj_episode = episodes[i_episode-1]
             _, kill_handler = download_episode(obj_episode, i_episode-1, scrape_serie)
+    return True

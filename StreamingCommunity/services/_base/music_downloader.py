@@ -73,16 +73,21 @@ class TrackDownloadReporter:
         )
 
 
-def music_filename(entry: Entries) -> str:
+def music_filename(entry: Entries, extension: str = ".mp3") -> str:
     """
-    Build a sanitized .mp3 filename for a track entry.
+    Build a sanitized filename for a track entry.
+
+    ``extension`` defaults to ``.mp3`` (musicmp3/goldenmp3); services that
+    stream other containers pass the right one (e.g. ``.m4a`` or ``.flac``).
     """
+    if not extension.startswith("."):
+        extension = f".{extension}"
     artist = str(getattr(entry, "artist", "") or getattr(entry, "album_artist", "") or "Unknown")
     name = str(getattr(entry, "name", "") or "track")
-    return f"{os_manager.get_sanitize_file(artist)} - {os_manager.get_sanitize_file(name)}.mp3"
+    return f"{os_manager.get_sanitize_file(artist)} - {os_manager.get_sanitize_file(name)}{extension}"
 
 
-def music_output_path(entry: Entries) -> str:
+def music_output_path(entry: Entries, extension: str = ".mp3") -> str:
     """
     Build the output folder based on artist / album metadata.
     """
@@ -95,4 +100,4 @@ def music_output_path(entry: Entries) -> str:
         folder = os.path.join(folder, os_manager.get_sanitize_file(album))
 
     os_manager.create_path(folder)
-    return os.path.join(folder, music_filename(entry))
+    return os.path.join(folder, music_filename(entry, extension))

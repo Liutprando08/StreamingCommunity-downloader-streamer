@@ -123,7 +123,7 @@ def download_series(
         )
 
     # Use the process_season_selection function
-    process_season_selection(
+    return process_season_selection(
         scrape_serie=scrape_serie,
         seasons_count=seasons_count,
         season_selection=season_selection,

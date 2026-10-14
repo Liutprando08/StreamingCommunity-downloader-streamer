@@ -610,10 +610,11 @@ class TestMusicProviders(unittest.TestCase):
     def test_registry_lookup(self):
         self.assertEqual(registry.get("musicmp3").name, "Musicmp3")
         self.assertEqual(registry.get("goldenmp3").name, "Goldenmp3")
+        self.assertEqual(registry.get("monochrome").name, "Monochrome")
         self.assertIsNone(registry.get("does-not-exist"))
 
     def test_flow_and_flags(self):
-        for alias in ("musicmp3", "goldenmp3"):
+        for alias in ("musicmp3", "goldenmp3", "monochrome"):
             provider = registry.get(alias)
             self.assertEqual(provider.flow, "music", alias)
             self.assertEqual(provider.category, "Music", alias)
@@ -645,13 +646,15 @@ class TestMusicProviders(unittest.TestCase):
             ["Torrent", "YouTube", "MostraGuarda", "Ipersphera"],
         )
         self.assertEqual([p.name for p in registry.by_flow("music")],
-                         ["Musicmp3", "Goldenmp3"])
+                         ["Musicmp3", "Goldenmp3", "Monochrome"])
 
     def test_search_modes(self):
         self.assertEqual(registry.get("musicmp3").search_modes(),
                          ("Song", "Album", "Artist"))
         # Goldenmp3 only ships albums.
         self.assertEqual(registry.get("goldenmp3").search_modes(), ("Album",))
+        self.assertEqual(registry.get("monochrome").search_modes(),
+                         ("Song", "Album", "Artist"))
 
     def test_music_columns_cover_track_metadata(self):
         columns = dict(registry.get("musicmp3").result_columns())
@@ -710,6 +713,7 @@ class TestProviderRegistry(unittest.TestCase):
                 "Home Garden TV",
                 "Ipersphera",
                 "Mediaset Infinity",
+                "Monochrome",
                 "MostraGuarda",
                 "Musicmp3",
                 "Nove",

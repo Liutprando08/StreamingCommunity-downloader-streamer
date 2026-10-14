@@ -28,7 +28,7 @@ def process_season_selection(scrape_serie: Any, seasons_count: int, season_selec
     """
     if seasons_count == 0:
         console.print("[red]No seasons found for this series")
-        return
+        return False
 
     # If season_selection is provided, use it instead of asking for input
     if season_selection is None:
@@ -68,7 +68,7 @@ def process_season_selection(scrape_serie: Any, seasons_count: int, season_selec
         if is_manual_input:
             list_season_select = validate_selection(list_selection, available_numbers)
         else:
-            return
+            return False
     
     # Loop through the selected seasons and download episodes
     for season_number in list_season_select:
@@ -87,7 +87,7 @@ def process_season_selection(scrape_serie: Any, seasons_count: int, season_selec
             download_all=download_all,
             episode_selection=episode_selection if not download_all else None
         )
-
+    return True
 
 def process_episode_download(index_season_selected: int, scrape_serie: Any, download_video_callback: Callable, download_all: bool = False, episode_selection: Optional[str] = None) -> None:
     """

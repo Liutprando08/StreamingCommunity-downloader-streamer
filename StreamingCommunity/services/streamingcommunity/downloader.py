@@ -222,7 +222,7 @@ def download_series(
             episode_selection=episode_selection,
         )
 
-    process_season_selection(
+    return process_season_selection(
         scrape_serie=scrape_serie,
         seasons_count=seasons_count,
         season_selection=season_selection,
@@ -319,7 +319,7 @@ def stream_series(
             episode_selection=episode_selection,
         )
 
-    process_season_selection(
+    return process_season_selection(
         scrape_serie=scrape_serie,
         seasons_count=seasons_count,
         season_selection=season_selection,

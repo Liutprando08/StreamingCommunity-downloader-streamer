@@ -264,6 +264,9 @@ def setup_argument_parser(search_functions):
     )
     parser.add_argument("--site", type=str, help="Site by name or index")
     parser.add_argument(
+        "--tui", action="store_true", help="Start the interactive TUI"
+    )
+    parser.add_argument(
         "--global", action="store_true", help="Global search across sites"
     )
     parser.add_argument(
@@ -441,6 +444,16 @@ def main():
         search_functions = load_search_functions()
         parser = setup_argument_parser(search_functions)
         args = parser.parse_args()
+
+        # Launch the interactive TUI when requested
+        if getattr(args, "tui", False):
+            try:
+                from StreamingCommunity.cli.tui import run as run_tui
+            except ImportError as e:
+                console.print(f"[red]TUI dependencies are missing: {e}")
+                return
+            run_tui()
+            return
 
         # Handle auto-update
         if args.update:

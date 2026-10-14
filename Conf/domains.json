@@ -59,5 +59,8 @@
     },
     "goldenmp3": {
         "full_url": "https://www.goldenmp3.ru"
+    },
+    "monochrome": {
+        "full_url": "https://monochrome.st"
     }
 }

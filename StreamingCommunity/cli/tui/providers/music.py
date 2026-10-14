@@ -108,3 +108,9 @@ class Goldenmp3Provider(MusicProviderBase):
     # offered; this mirrors ``base_music_search(modes=("Album",))``.
     _SEARCH_MODES = ("Album",)
 
+
+class MonochromeProvider(MusicProviderBase):
+    name = "Monochrome"
+    alias = "monochrome"
+    module_name = "monochrome"
+    _SEARCH_MODES = ("Song", "Album", "Artist")

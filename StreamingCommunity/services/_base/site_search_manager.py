@@ -161,6 +161,8 @@ def base_process_search_result(
         if result is None:
             console.print("[red]Series download failed.")
             return False
+        if result is False:
+            return False
         return True
 
     # Handle films

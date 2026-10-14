@@ -174,7 +174,7 @@ def download_series(dict_serie: Entries, season_selection: str = None, episode_s
         )
 
     # Use the process_season_selection function with try-catch for season lookup
-    process_season_selection(
+    return process_season_selection(
         scrape_serie=scrape_serie,
         seasons_count=seasons_count,
         season_selection=season_selection,

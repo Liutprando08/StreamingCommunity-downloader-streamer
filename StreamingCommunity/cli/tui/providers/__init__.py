@@ -13,7 +13,7 @@ from __future__ import annotations
 from .animeunity import AnimeunityProvider
 from .base import MusicProvider, ServiceProvider
 from .films import IperspheraProvider, MostraGuardaProvider, YouTubeProvider
-from .music import Goldenmp3Provider, Musicmp3Provider
+from .music import Goldenmp3Provider, MonochromeProvider, Musicmp3Provider
 from .streamingcommunity import StreamingCommunityProvider
 from .torrent import TorrentProvider
 from .tv import (
@@ -65,6 +65,7 @@ registry.register(AnimeunityProvider())
 registry.register(TorrentProvider())
 registry.register(Musicmp3Provider())
 registry.register(Goldenmp3Provider())
+registry.register(MonochromeProvider())
 
 # Single-video services (atomic flow).
 registry.register(YouTubeProvider())
