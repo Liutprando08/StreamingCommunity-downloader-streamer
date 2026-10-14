@@ -30,7 +30,7 @@ def _app_binary_dir() -> Optional[str]:
     home = os.path.expanduser("~")
     system = _system()
     if system == "darwin":
-        return os.path.join(home, "Applications", "binary")
+        return os.path.join(home, "Applications", "binary", "/opt/homebrew/bin/")
     if system == "linux":
         return os.path.join(home, ".local", "bin", "binary")
     if system == "windows":
@@ -86,9 +86,7 @@ def _app_bundle_paths(name: str) -> list:
             os.path.join(r"C:\ProgramData", "chocolatey", "bin", exe),
         ]
         if name == "vlc":
-            candidates.append(
-                os.path.join(program_files, "VideoLAN", "VLC", "vlc.exe")
-            )
+            candidates.append(os.path.join(program_files, "VideoLAN", "VLC", "vlc.exe"))
             candidates.append(
                 os.path.join(program_files_x86, "VideoLAN", "VLC", "vlc.exe")
             )
