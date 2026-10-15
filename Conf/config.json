@@ -12,6 +12,7 @@
         "serie_folder_name": "Serie",
         "anime_folder_name": "Anime",
         "music_folder_name": "Music",
+        "manga_folder_name": "Manga",
         "map_episode_name": "%(episode_name) S%(season)E%(episode)",
         "add_siteName": false
     },

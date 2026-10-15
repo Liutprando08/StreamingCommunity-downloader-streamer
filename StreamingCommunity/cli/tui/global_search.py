@@ -9,9 +9,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeoutError
-from typing import Any, Iterable, Iterator
+from typing import Any
 
 from .providers import registry
 
