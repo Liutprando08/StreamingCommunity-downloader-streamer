@@ -569,6 +569,15 @@ class ConfigManager:
         except OSError as e:
             console.print(f"[red]Error saving domains configuration: {e}")
 
+    def save_remote_cdm(self) -> None:
+        """Save the remote CDM configuration to file."""
+        try:
+            with open(self.remote_cdm_path, "w") as f:
+                json.dump(self._remote_cdm_data, f, indent=4)
+
+        except OSError as e:
+            console.print(f"[red]Error saving remote cdm configuration: {e}")
+
 
 # Initialize the ConfigManager when the module is imported
 config_manager = ConfigManager()

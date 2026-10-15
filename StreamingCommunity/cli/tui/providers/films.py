@@ -15,6 +15,9 @@ from typing import Any
 class FilmProviderBase:
     flow = "atomic"
     category = "Film"
+    # These are generic single-video services rather than film/serie catalogs,
+    # so the home screen groups them under the "Altro" sector.
+    sector = "other"
     supports_streaming = False
     supports_seasons = False
 

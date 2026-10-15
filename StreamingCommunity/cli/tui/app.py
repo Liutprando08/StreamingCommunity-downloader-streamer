@@ -46,6 +46,10 @@ class OsteApp(App):
     # All styling lives in the external stylesheet next to this module.
     CSS_PATH = "theme.tcss"
 
+    # Global: works from any screen and, unlike a letter, is not swallowed by
+    # the focused Input on the home screen.
+    BINDINGS = [("f2", "open_settings", "Impostazioni")]
+
     def on_mount(self) -> None:
         from StreamingCommunity.utils import config_manager
 
@@ -64,6 +68,11 @@ class OsteApp(App):
 
     def on_unmount(self) -> None:
         bridge.restore()
+
+    def action_open_settings(self) -> None:
+        from .screens.settings import SettingsScreen
+
+        self.push_screen(SettingsScreen())
 
 
 def run() -> None:

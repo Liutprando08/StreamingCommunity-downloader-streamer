@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from functools import partial
+
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -39,7 +41,13 @@ class MusicScreen(Screen):
     # detaches the widget from the tree and silently stops message bubbling.
     RESERVED_ATTRS = ("_parent", "_context")
 
-    def __init__(self, provider: MusicProvider, **kwargs):
+    def __init__(
+        self,
+        provider: MusicProvider,
+        initial_query: str | None = None,
+        initial_mode: str | None = None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         for reserved in self.RESERVED_ATTRS:
             if reserved in vars(self):
@@ -47,6 +55,8 @@ class MusicScreen(Screen):
                     f"{reserved} is reserved by Textual; pick another name."
                 )
         self.provider = provider
+        self._initial_query = initial_query
+        self._initial_mode = initial_mode
         self._level = LEVEL_SEARCH
         self._mode = ""
         self._entries: list = []
@@ -91,10 +101,20 @@ class MusicScreen(Screen):
             self._mode = modes[0]
             self.query_one("#music-mode", Select).value = modes[0]
 
+        if self._initial_mode and self._initial_mode in modes:
+            self._mode = self._initial_mode
+            self.query_one("#music-mode", Select).value = self._initial_mode
+
         self._table = self.query_one("#music-table", SelectableTable)
         self._table.ensure_columns()
         self._show_loader(False)
         self._apply_level()
+
+        # Reached from a global search hit: run the query straight away so the
+        # user lands on the results level without retyping.
+        if self._initial_query:
+            self.query_one("#music-query", Input).value = self._initial_query
+            self._begin_search(self._initial_query, self._mode)
 
     # ── level rendering ───────────────────────────────────────────────────
     def _apply_level(self) -> None:
@@ -174,15 +194,15 @@ class MusicScreen(Screen):
 
         select = self.query_one("#music-mode", Select)
         self._mode = str(select.value) if select.value is not None else ""
+        self._begin_search(query, self._mode)
 
+    def _begin_search(self, query: str, mode: str) -> None:
         self._set_status("[#f9e2af]Ricerca in corso...")
         self._show_loader(True)
         self._history.clear()
 
-        from functools import partial
-
         self.run_worker(
-            partial(self._do_search, query, self._mode),
+            partial(self._do_search, query, mode),
             group="music-search",
             exclusive=True,
             thread=True,

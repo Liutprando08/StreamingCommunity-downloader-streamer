@@ -8,11 +8,12 @@ from types import SimpleNamespace
 from unittest import mock
 
 from textual.screen import Screen
-from textual.widgets import DataTable, Input, OptionList, Select, Static
+from textual.widgets import DataTable, Input, OptionList, Select, Static, Switch, Tree
 from textual.widgets.data_table import RowKey
 
 import StreamingCommunity.cli.tui.providers.torrent
 import StreamingCommunity.services.torrent.downloader
+from StreamingCommunity.cli.tui import global_search
 from StreamingCommunity.cli.tui.app import OsteApp
 from StreamingCommunity.cli.tui.formatting import (
     detail_lines,
@@ -38,8 +39,10 @@ from StreamingCommunity.cli.tui.screens.music import (
 from StreamingCommunity.cli.tui.screens.queue import QueueScreen
 from StreamingCommunity.cli.tui.screens.seasons import SeasonsScreen
 from StreamingCommunity.cli.tui.screens.search import SearchScreen
+from StreamingCommunity.cli.tui.screens.settings import SettingsScreen
 from StreamingCommunity.cli.tui.widgets import SelectableTable
 from StreamingCommunity.source.utils.tracker import download_tracker
+from StreamingCommunity.utils import config_manager
 
 
 class FakeEntry:
@@ -289,6 +292,77 @@ class TestParseRanges(unittest.TestCase):
         self.assertEqual(parse_ranges("x", max_count=4), [])
 
 
+class TestGlobalSearchEngine(unittest.TestCase):
+    """The cross-provider engine behind the home search box."""
+
+    def test_sector_of_by_category(self):
+        self.assertEqual(global_search.sector_of(FakeProvider()), "film")
+        self.assertEqual(global_search.sector_of(FakeMusicProvider()), "music")
+        self.assertEqual(global_search.sector_of(FakeTorrentProvider()), "film")
+
+    def test_sector_of_explicit_attribute_wins(self):
+        provider = FakeProvider()
+        provider.sector = "other"
+        self.assertEqual(global_search.sector_of(provider), "other")
+
+    def test_registry_sectors(self):
+        music = {p.name for p in global_search.providers_for_sector("music")}
+        self.assertEqual(music, {"Musicmp3", "Goldenmp3", "Monochrome"})
+        other = {p.name for p in global_search.providers_for_sector("other")}
+        self.assertEqual(other, {"YouTube", "MostraGuarda", "Ipersphera"})
+        film = {p.name for p in global_search.providers_for_sector("film")}
+        self.assertIn("Streamingcommunity", film)
+        self.assertIn("Torrent", film)
+        self.assertEqual(
+            len(global_search.providers_for_sector("all")), len(registry.all())
+        )
+
+    def test_aggregate_search_collects_and_tolerates_errors(self):
+        class BoomProvider:
+            name = "Boom"
+            category = "Film"
+            flow = "episode"
+
+            def search(self, query):
+                raise RuntimeError("down")
+
+        providers = [
+            FakeProvider(delay=0),
+            FakeMusicProvider(delay=0),
+            BoomProvider(),
+        ]
+        counts = {}
+        errors = []
+        for provider, entries, error in global_search.aggregate_search(
+            providers, "x"
+        ):
+            if error is not None:
+                errors.append(provider.name)
+            else:
+                counts[provider.name] = len(entries)
+
+        self.assertEqual(counts, {"Streamingcommunity": 2, "Fakemp3": 1})
+        self.assertEqual(errors, ["Boom"])
+
+    def test_aggregate_search_empty(self):
+        self.assertEqual(list(global_search.aggregate_search([], "x")), [])
+
+    def test_aggregate_search_timeout_returns_early(self):
+        class SlowProvider:
+            name = "Slow"
+            category = "Film"
+            flow = "episode"
+
+            def search(self, query):
+                time.sleep(1.0)
+                return [FakeEntry("Late")]
+
+        started = time.monotonic()
+        out = list(global_search.aggregate_search([SlowProvider()], "x", timeout=0.1))
+        self.assertLess(time.monotonic() - started, 0.8)
+        self.assertEqual(out, [])
+
+
 class TestTuiHomeNavigation(unittest.IsolatedAsyncioTestCase):
     async def test_home_to_search(self):
         async with OsteApp().run_test(size=(140, 40)) as pilot:
@@ -343,6 +417,241 @@ class TestTuiHomeNavigation(unittest.IsolatedAsyncioTestCase):
             await pilot.press("enter")
             await _settle(pilot)
             self.assertIsInstance(_active(pilot), HomeScreen)
+
+
+class TestTuiHomeGlobalSearch(unittest.IsolatedAsyncioTestCase):
+    """The global search box + sector tabs on the home screen."""
+
+    _PATCH = "StreamingCommunity.cli.tui.screens.home.providers_for_sector"
+
+    async def test_home_has_global_search_widgets(self):
+        async with OsteApp().run_test(size=(140, 50)) as pilot:
+            screen = _active(pilot)
+            for selector in ("#home-search", "#sector-tabs", "#home-results"):
+                self.assertEqual(len(screen.query(selector)), 1, selector)
+
+    async def test_global_search_populates_results(self):
+        provider = FakeProvider(delay=0)
+        with mock.patch(self._PATCH, return_value=[provider]):
+            async with OsteApp().run_test(size=(140, 50)) as pilot:
+                screen = _active(pilot)
+                field = screen.query_one("#home-search", Input)
+                field.value = "fake"
+                field.focus()
+                await _settle(pilot)
+                await pilot.press("enter")
+
+                table = screen.query_one("#home-results", DataTable)
+                await _wait_for(pilot, lambda: table.row_count >= 2)
+                self.assertEqual(table.row_count, 2)
+                self.assertEqual(len(screen._results), 2)
+
+    async def test_global_result_opens_detail(self):
+        provider = FakeProvider(delay=0)
+        with mock.patch(self._PATCH, return_value=[provider]):
+            async with OsteApp().run_test(size=(140, 50)) as pilot:
+                screen = _active(pilot)
+                field = screen.query_one("#home-search", Input)
+                field.value = "fake"
+                field.focus()
+                await _settle(pilot)
+                await pilot.press("enter")
+
+                table = screen.query_one("#home-results", DataTable)
+                await _wait_for(pilot, lambda: table.row_count >= 2)
+                table.focus()
+                table.move_cursor(row=0)
+                await _settle(pilot)
+                await pilot.press("enter")
+                await _settle(pilot)
+                self.assertIsInstance(_active(pilot), DetailScreen)
+
+    async def test_empty_query_warns(self):
+        async with OsteApp().run_test(size=(140, 50)) as pilot:
+            screen = _active(pilot)
+            field = screen.query_one("#home-search", Input)
+            field.value = "   "
+            field.focus()
+            await _settle(pilot)
+            await pilot.press("enter")
+            await _settle(pilot)
+            status = str(screen.query_one("#home-status", Static).content)
+            self.assertIn("Inserisci", status)
+
+    async def test_sector_tab_click_refocuses_search(self):
+        async with OsteApp().run_test(size=(140, 50)) as pilot:
+            screen = _active(pilot)
+            field = screen.query_one("#home-search", Input)
+            await pilot.click("#music")
+            await _settle(pilot)
+            self.assertEqual(screen._sector, "music")
+            # Clicking the tab must hand focus back to the query field.
+            self.assertEqual(pilot.app.focused, field)
+
+    async def test_results_visible_while_searching(self):
+        """The results table must not be hidden behind the loader."""
+        provider = FakeProvider(delay=0)
+        with mock.patch(self._PATCH, return_value=[provider]):
+            async with OsteApp().run_test(size=(140, 50)) as pilot:
+                screen = _active(pilot)
+                field = screen.query_one("#home-search", Input)
+                field.value = "fake"
+                field.focus()
+                await _settle(pilot)
+                await pilot.press("enter")
+                table = screen.query_one("#home-results", DataTable)
+                await _wait_for(pilot, lambda: table.row_count >= 2)
+                await _settle(pilot)
+                self.assertNotEqual(table.styles.display, "none")
+                # Regression: the results box once collapsed to a height of 0
+                # (the Tabs widget expanded to fill #home-top), so the rows
+                # existed but were invisible.
+                box = screen.query_one("#home-results-box")
+                self.assertGreater(table.size.height, 0)
+                self.assertGreater(box.size.height, 0)
+
+    async def test_results_box_hidden_until_search(self):
+        """The empty results box stays hidden until the user searches."""
+        provider = FakeProvider(delay=0)
+        with mock.patch(self._PATCH, return_value=[provider]):
+            async with OsteApp().run_test(size=(140, 50)) as pilot:
+                screen = _active(pilot)
+                await _settle(pilot)
+                box = screen.query_one("#home-results-box")
+                self.assertEqual(box.styles.display, "none")
+
+                field = screen.query_one("#home-search", Input)
+                field.value = "fake"
+                field.focus()
+                await _settle(pilot)
+                await pilot.click("#home-search-btn")
+                await _settle(pilot)
+                self.assertEqual(box.styles.display, "block")
+
+    async def test_sector_tabs_clear_of_search_bar(self):
+        """Tab labels must not sit flush against the search bar's border."""
+        async with OsteApp().run_test(size=(140, 50)) as pilot:
+            screen = _active(pilot)
+            await _settle(pilot)
+            bar = screen.query_one("#home-search-bar")
+            tabs = screen.query_one("#sector-tabs")
+            gap = tabs.region.y - (bar.region.y + bar.region.height)
+            self.assertGreaterEqual(gap, 1)
+
+
+def _find_tree_node(node, path):
+    for child in node.children:
+        if child.data and child.data[0] == path:
+            return child
+        found = _find_tree_node(child, path)
+        if found is not None:
+            return found
+    return None
+
+
+class TestTuiSettings(unittest.IsolatedAsyncioTestCase):
+    """The Conf/ editor reachable with the global ``f2`` binding."""
+
+    async def _open(self, pilot):
+        await _settle(pilot)
+        await pilot.press("f2")
+        await _settle(pilot)
+        return _active(pilot)
+
+    async def test_f2_opens_settings_from_home(self):
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            await _settle(pilot)
+            # The home screen focuses its search Input; f2 must still reach
+            # the app-level binding (a plain letter would be swallowed).
+            self.assertEqual(pilot.app.focused.id, "home-search")
+            await pilot.press("f2")
+            await _settle(pilot)
+            self.assertIsInstance(_active(pilot), SettingsScreen)
+
+    async def test_editor_loads_selected_value(self):
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot)
+            tree = screen.query_one("#settings-tree", Tree)
+            node = _find_tree_node(tree.root, ("OUTPUT", "movie_folder_name"))
+            self.assertIsNotNone(node)
+            tree.select_node(node)
+            await _settle(pilot)
+            field = screen.query_one("#settings-value", Input)
+            self.assertEqual(field.value, "Movie")
+            self.assertFalse(field.disabled)
+
+    async def test_boolean_leaf_uses_switch(self):
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot)
+            tree = screen.query_one("#settings-tree", Tree)
+            node = _find_tree_node(tree.root, ("DEFAULT", "fetch_domain_online"))
+            self.assertIsNotNone(node)
+            tree.select_node(node)
+            await _settle(pilot)
+            self.assertTrue(screen.query_one("#settings-switch", Switch).display)
+            self.assertFalse(screen.query_one("#settings-value", Input).display)
+
+    async def test_apply_updates_config_in_memory(self):
+        original = config_manager._config_data["OUTPUT"]["movie_folder_name"]
+        try:
+            async with OsteApp().run_test(size=(140, 40)) as pilot:
+                screen = await self._open(pilot)
+                tree = screen.query_one("#settings-tree", Tree)
+                node = _find_tree_node(tree.root, ("OUTPUT", "movie_folder_name"))
+                tree.select_node(node)
+                await _settle(pilot)
+                screen.query_one("#settings-value", Input).value = "TestMovie"
+                await _settle(pilot)
+                await pilot.click("#settings-apply")
+                await _settle(pilot)
+                self.assertEqual(
+                    config_manager._config_data["OUTPUT"]["movie_folder_name"],
+                    "TestMovie",
+                )
+        finally:
+            config_manager._config_data["OUTPUT"]["movie_folder_name"] = original
+            config_manager.cache.clear()
+
+    async def test_invalid_value_is_rejected(self):
+        original = config_manager._config_data["DOWNLOAD"]["thread_count"]
+        try:
+            async with OsteApp().run_test(size=(140, 40)) as pilot:
+                screen = await self._open(pilot)
+                tree = screen.query_one("#settings-tree", Tree)
+                node = _find_tree_node(tree.root, ("DOWNLOAD", "thread_count"))
+                tree.select_node(node)
+                await _settle(pilot)
+                screen.query_one("#settings-value", Input).value = "not-a-number"
+                await _settle(pilot)
+                await pilot.click("#settings-apply")
+                await _settle(pilot)
+                self.assertEqual(
+                    config_manager._config_data["DOWNLOAD"]["thread_count"], original
+                )
+                status = str(screen.query_one("#settings-status").render())
+                self.assertIn("non valido", status)
+        finally:
+            config_manager._config_data["DOWNLOAD"]["thread_count"] = original
+            config_manager.cache.clear()
+
+    async def test_save_calls_accessor_save_method(self):
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            await self._open(pilot)
+            with mock.patch.object(config_manager, "save_config") as save:
+                await pilot.click("#settings-save")
+                await _settle(pilot)
+                save.assert_called_once()
+
+    async def test_tab_switches_config_file(self):
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            screen = await self._open(pilot)
+            await pilot.click("#login")
+            await _settle(pilot)
+            self.assertEqual(screen._file_id, "login")
+            self.assertIs(screen._data(), config_manager._login_data)
+            tree = screen.query_one("#settings-tree", Tree)
+            labels = {str(child.label) for child in tree.root.children}
+            self.assertIn("TMDB", labels)
 
 
 class TestAnimeunityProvider(unittest.TestCase):
@@ -962,6 +1271,23 @@ class TestTuiMusicFlow(unittest.IsolatedAsyncioTestCase):
         async with OsteApp().run_test(size=(140, 40)) as pilot:
             screen = await self._open(pilot, provider)
             self.assertEqual(screen._level, LEVEL_SEARCH)
+
+    async def test_initial_query_autoruns(self):
+        provider = FakeMusicProvider()
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(
+                MusicScreen(provider, initial_query="fake", initial_mode="Album")
+            )
+            await _settle(pilot)
+            screen = await _wait_for(
+                pilot,
+                lambda: _active(pilot)
+                if isinstance(_active(pilot), MusicScreen)
+                and _active(pilot)._level == LEVEL_RESULTS
+                else None,
+            )
+            self.assertEqual(screen._mode, "Album")
+            self.assertEqual(len(screen._entries), 1)
 
     async def test_album_descends_to_tracks(self):
         provider = FakeMusicProvider()
