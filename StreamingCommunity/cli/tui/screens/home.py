@@ -57,8 +57,7 @@ class HomeScreen(Screen):
         yield Header()
         with Container(classes="home-root"):
             with Container(id="sidebar"):
-                options = [f"{p.name} ({p.category})" for p in registry.all()]
-                options.append("Attività")
+                options = [f"{p.name}" for p in registry.all()]
                 options.append("Esci")
                 yield OptionList(*options, id="menu-list")
             with Container(id="main-content"):
