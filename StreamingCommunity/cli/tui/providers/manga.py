@@ -11,6 +11,8 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
+from .base import service_search_lock
+
 
 def _chapter_sort_key(episode: Any) -> tuple[int, float]:
     """Sort chapters by number, keeping unparseable ones last and stable."""
@@ -55,10 +57,11 @@ class MangaWorldProvider:
 
     def search(self, query: str) -> list[Any]:
         service = self._module()
-        service.entries_manager.clear()
-        service.title_search(query)
-        service.entries_manager.sort_by_fuzzy_score(query)
-        return list(service.entries_manager.media_list)
+        with service_search_lock(self.alias):
+            service.entries_manager.clear()
+            service.title_search(query)
+            service.entries_manager.sort_by_fuzzy_score(query)
+            return list(service.entries_manager.media_list)
 
     def result_columns(self) -> tuple[tuple[str, str], ...]:
         return (

@@ -9,7 +9,10 @@ from rich.prompt import Prompt
 
 # Internal utilities
 from StreamingCommunity.services._base import Entries, EntriesManager
-from StreamingCommunity.services._base.site_search_manager import get_select_title
+from StreamingCommunity.services._base.site_search_manager import (
+    get_select_title,
+    populate_select_table,
+)
 from StreamingCommunity.utils import TVShowManager
 from StreamingCommunity.utils.console.shared import console
 
@@ -48,15 +51,14 @@ def select_tracks_to_download(
         console.print("[red]No tracks available.")
         return []
 
-    table_show_manager.clear()
-    get_select_title(table_show_manager, entries_manager)
+    # Populate the table and let ``run()`` prompt once for the `*` / range /
+    # index selection (its default ``force_int_input=False`` prompt already
+    # documents those). Driving the prompt here avoids a second, discarded
+    # selection prompt.
+    populate_select_table(table_show_manager, entries_manager)
+    last_command = table_show_manager.run()
 
-    last_command = msg.ask(
-        "\n[cyan]Insert track [red]index [yellow]or [red]* [cyan]to download all tracks "
-        "[yellow]or [red]1-3 [cyan]for a range of tracks [yellow]or [red]q [cyan]to cancel",
-    )
-
-    if last_command.lower() in ("q", "quit"):
+    if last_command is None or last_command.lower() in ("q", "quit"):
         console.print("\n[red]Selection cancelled.")
         return []
 
@@ -68,8 +70,11 @@ def select_tracks_to_download(
         if not part:
             continue
         if "-" in part:
-            start_s, end_s = part.split("-")
-            start, end = int(start_s), int(end_s)
+            bounds = part.split("-")
+            if len(bounds) != 2 or not all(b.isdigit() for b in bounds):
+                console.print(f"[red]Ignoring invalid selection: {part}")
+                continue
+            start, end = int(bounds[0]), int(bounds[1])
             for i in range(start, end + 1):
                 if 1 <= i <= len(entries_manager.media_list):
                     selected.append(entries_manager.media_list[i - 1])
@@ -231,7 +236,7 @@ def process_music_entry(
             ).lower()
             == "y"
         ):
-            return download_album_func(entry) is not None
+            return bool(download_album_func(entry))
 
         tracks = select_tracks_to_download(track_manager, table_show_manager)
         if not tracks:

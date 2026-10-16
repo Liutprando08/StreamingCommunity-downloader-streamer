@@ -135,6 +135,10 @@ class QueueScreen(Screen):
                     episode=item.get("episode") or 0,
                 )
                 self.app.call_from_thread(self._bind_id, idx, download_id)
+                # Downloaders that self-register (the HLS path) open their own
+                # tracker entry; torrent and single-video downloaders do not, so
+                # open a fallback entry here to keep the row/activity populated.
+                self._ensure_tracker_entry(download_id, label, media_type)
                 try:
                     self._run_download(idx, item, download_id)
                 except Exception as exc:
@@ -163,34 +167,81 @@ class QueueScreen(Screen):
 
         self.app.call_from_thread(self._all_done)
 
+    @staticmethod
+    def _result_path(result: Any) -> Any:
+        """Normalise a downloader return value to a bare path/``None``.
+
+        Single-video downloaders (YouTube, MostraGuarda) and a few episode
+        downloaders report the outcome as a ``(path, stopped)`` tuple, returning
+        a falsey path on failure. Collapsing the tuple to its path keeps the
+        ``result is None`` success check below accurate.
+        """
+        if isinstance(result, tuple):
+            return result[0] if result else None
+        return result
+
+    def _ensure_tracker_entry(
+        self, download_id: str, label: str, media_type: str
+    ) -> None:
+        """Open a fallback tracker entry for downloaders that don't self-register.
+
+        The HLS path registers itself (with the same id) via the N_m3u8 wrapper;
+        torrent and single-video downloaders don't, so without this their row
+        would stay on "avvio..." and never appear in the activity screen.
+        """
+        try:
+            if download_id in download_tracker.downloads:
+                return
+            download_tracker.start_download(
+                download_id, label, self.provider.name, media_type
+            )
+            download_tracker.update_status(download_id, "Downloading ...")
+        except Exception:
+            pass
+
     def _run_download(self, idx: int, item: dict[str, Any], download_id: str) -> None:
         kind = item.get("kind")
         if kind == "film":
             # Also the atomic (torrent) entry point: the provider routes to the
             # movie or series folder itself.
-            result = self.provider.download_film(item["entry"])
+            result = self._result_path(self.provider.download_film(item["entry"]))
             self._maybe_dub(idx, item, result)
         elif kind == "track":
-            result = self.provider.download_track(item["entry"])
+            result = self._result_path(self.provider.download_track(item["entry"]))
         elif kind == "album":
             result = self.provider.download_album(item["entry"])
         else:
-            result = self.provider.download_episode(
-                item["obj_episode"],
-                item["season"],
-                item["episode"],
-                item["scraper"],
+            result = self._result_path(
+                self.provider.download_episode(
+                    item["obj_episode"],
+                    item["season"],
+                    item["episode"],
+                    item["scraper"],
+                )
             )
-        # HLS.start() already records completion in download_tracker; only a
-        # None return (nothing produced) needs an explicit failure here.
-        # download_album is the one downloader that reports success as a bool.
-        if result is None or (kind == "album" and result is False):
+
+        failed = result is None or (kind == "album" and result is False)
+        if failed:
             try:
                 download_tracker.complete_download(
                     download_id, success=False, error="Nessun output prodotto"
                 )
             except Exception:
                 pass
+            return
+
+        # Downloaders that self-register (HLS) have already closed their entry,
+        # which makes this a no-op; the rest only have the fallback entry opened
+        # by ``_ensure_tracker_entry``, so close it here.
+        try:
+            if download_id in download_tracker.downloads:
+                download_tracker.complete_download(
+                    download_id,
+                    success=True,
+                    path=result if isinstance(result, str) else None,
+                )
+        except Exception:
+            pass
 
     def _maybe_dub(self, idx: int, item: dict[str, Any], video_path: Any) -> None:
         """Mux the Italian audio picked before enqueueing, if any.
@@ -238,6 +289,10 @@ class QueueScreen(Screen):
 
     # ── UI updates (always called from the message thread) ────────────────
     def _set_active_row(self, idx: int) -> None:
+        # The worker keeps running after the screen is popped, so every UI
+        # callback must tolerate being invoked on an unmounted screen.
+        if not self.is_mounted:
+            return
         table = self.query_one("#queue-table", DataTable)
         if self._active_row is not None:
             table.update_cell(RowKey(self._active_row), "mar", "·")
@@ -250,6 +305,8 @@ class QueueScreen(Screen):
         self._set_row_status(idx, "avvio...")
 
     def _set_row_status(self, idx: int, text: str) -> None:
+        if not self.is_mounted:
+            return
         self.query_one("#queue-table", DataTable).update_cell(
             RowKey(idx), "status", text
         )
@@ -260,6 +317,8 @@ class QueueScreen(Screen):
         self._set_row_status(idx, text)
 
     def _mark_done_row(self, idx: int) -> None:
+        if not self.is_mounted:
+            return
         table = self.query_one("#queue-table", DataTable)
         did = self._id_by_row.get(idx)
         marker = "✓"
@@ -277,17 +336,22 @@ class QueueScreen(Screen):
             return
         self._finished = True
         QueueScreen.completed += 1
-        self.query_one("#cancel-btn", Button).disabled = True
-        self.query_one("#queue-loader", LoadingIndicator).styles.display = "none"
-        total = len(self.items)
-        self.query_one("#queue-title", Label).update(
-            f"[bold #a6e3a1]{self.title}[/] · completato ({total}/{total})"
-        )
-        self._update_summary()
+        if self.is_mounted:
+            self.query_one("#cancel-btn", Button).disabled = True
+            self.query_one("#queue-loader", LoadingIndicator).styles.display = "none"
+            total = len(self.items)
+            self.query_one("#queue-title", Label).update(
+                f"[bold #a6e3a1]{self.title}[/] · completato ({total}/{total})"
+            )
+            self._update_summary()
+        # Still fire the completion callback even if the user navigated away,
+        # so a multi-season batch keeps walking its queue.
         if self.on_complete is not None:
             self.on_complete()
 
     def _update_summary(self) -> None:
+        if not self.is_mounted:
+            return
         total = len(self.items)
         percent = (self._done / total * 100.0) if total else 0.0
         jobs = "lavoro" if total == 1 else "lavori"

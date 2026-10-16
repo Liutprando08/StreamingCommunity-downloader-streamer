@@ -150,7 +150,7 @@ class AudioSourceScreen(Screen):
                 )
             self._show_loader(False)
             if not self._entries:
-                if self._auto:
+                if self._auto_mux():
                     self._set_status(
                         "[#f9e2af]Nessun risultato con auto_mux, procedo senza audio ITA."
                     )

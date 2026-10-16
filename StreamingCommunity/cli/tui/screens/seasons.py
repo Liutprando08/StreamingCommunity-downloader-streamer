@@ -214,9 +214,12 @@ class SeasonsScreen(Screen):
         selected = self._selected
         if not selected:
             selected = set(range(len(self._seasons)))
-        season_numbers = [
-            int(getattr(self._seasons[i], "number", i + 1)) for i in sorted(selected)
-        ]
+        season_numbers = []
+        for i in sorted(selected):
+            number = getattr(self._seasons[i], "number", None)
+            # ``getattr``'s default only covers a missing attribute, not a
+            # present-but-None one (some services omit the season number).
+            season_numbers.append(int(number) if number is not None else i + 1)
         batch = SeasonBatch(
             provider=self.provider,
             entry=self.entry,

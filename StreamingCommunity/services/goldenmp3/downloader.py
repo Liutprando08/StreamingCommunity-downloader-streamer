@@ -36,23 +36,27 @@ def download_track(entry: Entries) -> str | None:
     reporter = TrackDownloadReporter(entry)
     reporter.start()
 
+    if stream_url is None:
+        console.print(f"[red]No stream URL for {entry.name}")
+        reporter.complete(success=False, error="no stream url")
+        return None
+
     try:
-        if stream_url is not None:
-            with (
-                create_client(
-                    headers=STREAM_HEADERS, timeout=60, follow_redirects=True
-                ) as client,
-                client.stream("GET", stream_url) as response,
-            ):
-                response.raise_for_status()
-                total = int(response.headers.get("Content-Length") or 0)
-                downloaded = 0
-                with open(output_path, "wb") as f:
-                    for chunk in response.iter_bytes(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            reporter.progress(downloaded, total)
+        with (
+            create_client(
+                headers=STREAM_HEADERS, timeout=60, follow_redirects=True
+            ) as client,
+            client.stream("GET", stream_url) as response,
+        ):
+            response.raise_for_status()
+            total = int(response.headers.get("Content-Length") or 0)
+            downloaded = 0
+            with open(output_path, "wb") as f:
+                for chunk in response.iter_bytes(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        reporter.progress(downloaded, total)
     except HTTPError as e:
         console.print(f"[red]Error downloading {entry.name}: {e}")
         reporter.complete(success=False, error=str(e))

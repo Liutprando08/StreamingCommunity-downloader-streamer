@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .base import service_search_lock
+
 
 class TorrentProvider:
     name = "Torrent"
@@ -47,8 +49,9 @@ class TorrentProvider:
         # ``_torrent_results`` map keyed by entry.id, which download_film
         # re-reads. Do not sort: the service already orders by seeders.
         service = self._module()
-        service.title_search(query)
-        return list(service.entries_manager.media_list)
+        with service_search_lock(self.alias):
+            service.title_search(query)
+            return list(service.entries_manager.media_list)
 
     def result_columns(self) -> tuple[tuple[str, str], ...]:
         # Seeders / size / quality are what actually decides a torrent pick,

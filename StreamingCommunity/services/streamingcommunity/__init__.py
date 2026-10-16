@@ -81,7 +81,12 @@ def _search_archive(query: str) -> int | None:
 
     items = data.get("items") if isinstance(data, dict) else []
     if items is None:
-        raise ValueError("the value is invalid")
+        # Degraded API response: fall back to the legacy HTML scraper instead
+        # of raising (the caller only falls back on a ``None`` return).
+        console.print(
+            "[yellow]Archive API returned no items, falling back to HTML search"
+        )
+        return None
     for item in items:
         entry = _build_entry(item)
         if entry:
@@ -143,7 +148,7 @@ def _search_legacy_dle(query: str) -> int:
             imdb_id = ""
             img = tile.select_one("img[src*='/uploads/posters/']")
             if img:
-                poster_match = re.search.str((r"/(tt\d+)\.webp", img.get("src", "")))
+                poster_match = re.search(r"/(tt\d+)\.webp", img.get("src", ""))
                 if poster_match:
                     imdb_id = poster_match.group(1)
 

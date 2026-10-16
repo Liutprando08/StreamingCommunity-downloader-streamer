@@ -54,7 +54,7 @@ def search_albums(query: str) -> EntriesManager:
         if a is None:
             continue
         url = a.get("href", "")
-        if url is str and not url.startswith("/"):
+        if not url.startswith("/"):
             continue
 
         name_el = a.find("b")
@@ -105,10 +105,9 @@ def get_tracks(album: Entries) -> EntriesManager:
     Fetch the track list for a given goldenmp3 album entry.
     """
     manager = EntriesManager()
-    if album.url is not None:
-        html = _get(album.url)
-        if not html:
-            return manager
+    html = _get(album.url) if album.url else ""
+    if not html:
+        return manager
 
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table", class_="title_list")

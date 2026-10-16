@@ -10,6 +10,8 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
+from .base import service_search_lock
+
 
 class MusicProviderBase:
     flow = "music"
@@ -62,9 +64,10 @@ class MusicProviderBase:
         if title_search is None:
             return []
 
-        title_search(query)
-        service.entries_manager.sort_by_fuzzy_score(query)
-        return list(service.entries_manager.media_list)
+        with service_search_lock(self.module_name):
+            title_search(query)
+            service.entries_manager.sort_by_fuzzy_score(query)
+            return list(service.entries_manager.media_list)
 
     def albums(self, entry: Any) -> list[Any]:
         manager = self._module().get_albums(entry)

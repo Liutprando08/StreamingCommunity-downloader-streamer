@@ -20,6 +20,8 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
+from .base import service_search_lock
+
 
 class TvProviderBase:
     flow = "episode"
@@ -54,10 +56,21 @@ class TvProviderBase:
 
     def search(self, query: str) -> list[Any]:
         service = self._module()
-        service.entries_manager.clear()
-        service.title_search(query)
-        service.entries_manager.sort_by_fuzzy_score(query)
-        return list(service.entries_manager.media_list)
+        with service_search_lock(self.module_name):
+            service.entries_manager.clear()
+            service.title_search(query)
+            service.entries_manager.sort_by_fuzzy_score(query)
+            results = list(service.entries_manager.media_list)
+        if not self._downloads_films:
+            # These services ship no film downloader, so a movie entry can only
+            # lead to an empty seasons screen. Hide them entirely.
+            results = [
+                entry
+                for entry in results
+                if str(getattr(entry, "type", "") or "").lower()
+                not in self._FILM_TYPES
+            ]
+        return results
 
     def result_columns(self) -> tuple[tuple[str, str], ...]:
         return (

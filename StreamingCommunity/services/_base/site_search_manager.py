@@ -27,24 +27,14 @@ column_to_hide = [
 ]
 
 
-def get_select_title(table_show_manager, media_search_manager):
+def populate_select_table(table_show_manager, media_search_manager):
     """
-    Display a selection of titles and prompt the user to choose one.
+    Render ``media_search_manager``'s items into the console table manager.
 
-    Parameters:
-        table_show_manager: Manager for console table display.
-        media_search_manager: Manager holding the list of media items.
-
-    Returns:
-        Entries: The selected media item, or None if no selection is made or an error occurs.
+    Shared by the interactive pickers so a caller can display the list and then
+    drive its own prompt (single index vs. multi/range selection) without an
+    extra, discarded selection prompt.
     """
-    if not media_search_manager.media_list:
-        return None
-
-    if not media_search_manager.media_list:
-        console.print("\n[red]No media items available.")
-        return None
-
     first_media_item = media_search_manager.media_list[0]
     column_info = {"Index": {"color": available_colors[0]}}
 
@@ -78,6 +68,24 @@ def get_select_title(table_show_manager, media_search_manager):
                 continue
             media_dict[key.capitalize()] = str(getattr(media, key))
         table_show_manager.add_tv_show(media_dict)
+
+
+def get_select_title(table_show_manager, media_search_manager):
+    """
+    Display a selection of titles and prompt the user to choose one.
+
+    Parameters:
+        table_show_manager: Manager for console table display.
+        media_search_manager: Manager holding the list of media items.
+
+    Returns:
+        Entries: The selected media item, or None if no selection is made or an error occurs.
+    """
+    if not media_search_manager.media_list:
+        console.print("\n[red]No media items available.")
+        return None
+
+    populate_select_table(table_show_manager, media_search_manager)
 
     while True:
         last_command_str = table_show_manager.run(
@@ -238,15 +246,15 @@ def base_search(
             f"\n[purple]Insert a word to search in [green]{site_name}"
         ).strip()
 
+    # Handle empty input before hitting the site
+    if not actual_search_query:
+        return False
+
     # Search on database
     len_database = title_search_func(actual_search_query)
 
     # Sort results by fuzzy score
     media_search_manager.sort_by_fuzzy_score(actual_search_query)
-
-    # Handle empty input
-    if not actual_search_query:
-        return False
 
     # If only the database is needed, return the manager
     if get_onlyDatabase:

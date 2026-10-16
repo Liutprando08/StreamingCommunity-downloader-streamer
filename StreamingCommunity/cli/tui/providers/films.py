@@ -11,6 +11,8 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
+from .base import service_search_lock
+
 
 class FilmProviderBase:
     flow = "atomic"
@@ -42,10 +44,11 @@ class FilmProviderBase:
 
     def search(self, query: str) -> list[Any]:
         service = self._module()
-        service.entries_manager.clear()
-        service.title_search(query)
-        # Keep the service's own ordering (YouTube's is relevance-ranked).
-        return list(service.entries_manager.media_list)
+        with service_search_lock(self.module_name):
+            service.entries_manager.clear()
+            service.title_search(query)
+            # Keep the service's own ordering (YouTube's is relevance-ranked).
+            return list(service.entries_manager.media_list)
 
     def result_columns(self) -> tuple[tuple[str, str], ...]:
         return (

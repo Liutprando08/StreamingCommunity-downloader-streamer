@@ -14,7 +14,25 @@
 
 from __future__ import annotations
 
+import threading
 from typing import Any, Protocol
+
+# Every service keeps a module-level ``EntriesManager`` that ``title_search()``
+# clears and repopulates. The home global search and a search screen can hit the
+# same service concurrently, so serialise access to that shared manager with one
+# lock per service module.
+_search_locks: dict[str, threading.Lock] = {}
+_search_locks_guard = threading.Lock()
+
+
+def service_search_lock(module_name: str) -> threading.Lock:
+    """Return the per-service lock guarding its shared ``entries_manager``."""
+    with _search_locks_guard:
+        lock = _search_locks.get(module_name)
+        if lock is None:
+            lock = threading.Lock()
+            _search_locks[module_name] = lock
+        return lock
 
 
 class ServiceProvider(Protocol):

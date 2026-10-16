@@ -89,7 +89,8 @@ def title_search(query: str) -> int:
             is_series = (item.get("__typename") == "SeriesItem" or item.get("cardLink", {}).get("referenceType") == "series"or bool(item.get("seasons")))
             item_type = "tv" if is_series else "film"
         except Exception:
-            break
+            # Skip a malformed item instead of aborting the whole result set.
+            continue
 
         # Get date
         date = item.get("year") or ''
@@ -110,10 +111,14 @@ def title_search(query: str) -> int:
                 vertical_image = img
                 break
     
-        image_base_url = "https://img-prod-api2.mediasetplay.mediaset.it/api/images"
-        image_url = f"{image_base_url}/{vertical_image.get('engine', 'mse')}/v5/ita/{vertical_image.get('id', '')}/image_vertical/300/450"
-        if vertical_image.get("r", ""):
-            image_url += f"?r={vertical_image.get('r', '')}"
+        image_url = ""
+        if vertical_image is not None:
+            image_base_url = (
+                "https://img-prod-api2.mediasetplay.mediaset.it/api/images"
+            )
+            image_url = f"{image_base_url}/{vertical_image.get('engine', 'mse')}/v5/ita/{vertical_image.get('id', '')}/image_vertical/300/450"
+            if vertical_image.get("r", ""):
+                image_url += f"?r={vertical_image.get('r', '')}"
         
         entries_manager.add(Entries(
             id=item.get("guid", ""),
