@@ -95,3 +95,7 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Allow re-releasing an existing version (e.g. when re-cutting the
+          # same tag to refresh the binaries); skip files already on PyPI.
+          skip-existing: true
