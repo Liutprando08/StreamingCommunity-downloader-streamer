@@ -93,9 +93,8 @@ class HomeScreen(Screen):
         index = event.option_index
         if index < len(providers):
             self.app.push_screen(SearchScreen(providers[index]))
-        elif index == len(providers):
-            self.app.push_screen(ActivityScreen())
         else:
+            # Last entry is "Esci" (Activity lives on the `a` keybind).
             self.app.exit()
 
     # ── small helpers ─────────────────────────────────────────────────────

@@ -26,11 +26,19 @@
   - [PyPI](#pypi-recommended)
   - [Pre-built Binaries](#pre-built-binaries)
   - [Manual Clone](#manual-clone)
-  - [System Dependencies](#system-dependencies-linux--macos)
+  - [System Dependencies](#system-dependencies)
+  - [Update](#update)
 - [Quick Start](#quick-start)
+- [Interactive TUI](#interactive-tui)
+  - [Keyboard Shortcuts](#keyboard-shortcuts)
+  - [Settings](#settings)
+- [Supported Sites](#supported-sites)
 - [DNS Configuration](#dns-configuration)
 - [Downloaders](#downloaders)
+- [Music](#music)
+- [Manga](#manga)
 - [Configuration](#configuration)
+- [Configuration Files](#configuration-files)
 - [Usage Examples](#usage-examples)
 - [Global Search](#global-search)
 - [Torrent Downloads](#torrent-downloads)
@@ -38,7 +46,8 @@
 - [Automatic Link Updates](#automatic-link-updates)
 - [Advanced Features](#advanced-features)
 - [Streaming](#streaming)
-- [TO DO](#todo)
+- [Environment Variables](#environment-variables)
+- [Logs](#logs)
 - [Related Projects](#related-projects)
 
 ---
@@ -85,10 +94,25 @@ https://github.com/user-attachments/assets/a90a312a-72a4-4cce-a856-031805b4e019
 
 ```bash
 git clone https://github.com/Liutprando08/StreamingCommunity-downloader-streamer.git
-cd StreamingCommunity
-pip install -r requirements.txt
+cd StreamingCommunity-downloader-streamer
+pip install -e .
 python -m StreamingCommunity
 ```
+
+> Prefer [`uv`](https://docs.astral.sh/uv/)? `uv sync` installs the locked
+> dependencies from `uv.lock`, then `uv run python -m StreamingCommunity`.
+
+### System Dependencies
+
+Most features work out of the box, but a few shell out to external tools. Install
+them for full functionality:
+
+| Tool | Needed for | Install |
+|------|------------|---------|
+| **ffmpeg** / **ffprobe** | muxing, remuxing, audio/subtitle merge, NFO artwork, torrent dub | `apt install ffmpeg` · `brew install ffmpeg` · `choco install ffmpeg` |
+| **aria2c** | torrent downloads (auto-downloaded if missing) | `apt install aria2` · `brew install aria2` |
+| **mpv** / **vlc** / **ffplay** | `--stream` playback (one is enough) | see [Supported Players](#supported-players) |
+| **TMDB API key** | Kodi/Jellyfin/Emby metadata (optional) | see [Kodi/Jellyfin/Emby Metadata](#kodijellyfinemby-metadata) |
 
 ### Update
 
@@ -102,8 +126,106 @@ streamingcommunity -UP
 ## Quick Start
 
 ```bash
+# Classic interactive CLI (numbered site menu)
 python -m StreamingCommunity
+
+# Interactive TUI (recommended)
+python -m StreamingCommunity --tui
 ```
+
+> With no arguments the app opens the classic numbered CLI menu. Add `--tui` for
+> the full-screen terminal interface.
+
+---
+
+## Interactive TUI
+
+The Textual-based full-screen interface (codename **OSTE**) is the recommended way to browse, search and download. Start it with:
+
+```bash
+python -m StreamingCommunity --tui
+# or, from a clone:
+python tui.py
+```
+
+### Home screen
+
+- **Sidebar** — every supported site (plus **Esci** to quit). Select a site to open its dedicated search flow.
+- **Global search bar** — searches across all sites in the selected sector at once; results stream in live as each site replies.
+- **Sector tabs** — `Tutti`, `Film`, `Music`, `Altro` scope the global search (a site can declare an explicit sector, otherwise it is derived from its category).
+- **Status bar** — live progress while a search is running.
+
+### Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Enter` / **Cerca** | Run the search |
+| `/` | Focus the search box |
+| `d` | Toggle light/dark theme |
+| `a` | Open the **Activity** screen (live downloads + history) |
+| `F2` | Open **Settings** |
+| `Esc` | Go back |
+| `Tab` / arrows | Move focus / navigate lists |
+
+### Screens
+
+| Flow | Screens |
+|------|---------|
+| **Film / Serie / Anime** | Search → Season list → Episode list → Detail → Queue |
+| **Music** | Search (Song / Album / Artist) → Albums → Tracks → Queue |
+| **Manga** | Search → Volumes → Chapters (packaged as `.cbz`) |
+| **Single-video sites** (YouTube, MostraGuarda, Ipersphera) | Search → Detail → Queue |
+| **Torrent** | Search → Detail → (optional) audio source → Queue |
+| **Cross-cutting** | Activity, Queue (with embedded log panel), Settings |
+
+The **Queue** screen runs jobs sequentially, shows a progress bar/speed/status per item and streams the underlying downloader output in an embedded log panel.
+
+### Settings
+
+Press `F2` (available from any screen) to edit every file under `Conf/` without leaving the TUI:
+
+- Tabs for `config.json`, `login.json`, `domains.json` and `remote_cdm.json`.
+- A JSON tree on the left; pick a value to edit it on the right.
+- Booleans use a switch, lists are edited as JSON (`["a", "b"]`), numbers are validated, strings are free text.
+- **Applica** updates the value in memory, **Salva file** writes it to disk, **Ricarica** re-reads from disk.
+
+> See [Configuration Files](#configuration-files) for what each file contains.
+
+---
+
+## Supported Sites
+
+Run `python -m StreamingCommunity --help` to see the live list, or pick a site by
+name (`--site animeunity`) or index (`--site 1`).
+
+| # | Site | Type | TUI |
+|---|------|------|:---:|
+| 0 | StreamingCommunity | Film / Serie | ✅ |
+| 1 | AnimeUnity | Anime | ✅ |
+| 2 | MostraGuarda | Film | ✅ |
+| 3 | MediasetInfinity | Film / Serie | ✅ |
+| 4 | Guardaserie | Serie | ✅ |
+| 5 | RaiPlay | Film / Serie | ✅ |
+| 6 | AnimeWorld | Anime | — |
+| 7 | Crunchyroll | Anime | ✅ |
+| 8 | Realtime | Serie | ✅ |
+| 9 | Dmax | Serie | ✅ |
+| 10 | TubiTV | Serie | — |
+| 11 | Ipersphera | Film / Serie | ✅ |
+| 12 | DiscoveryUS | Film / Serie | ✅ |
+| 13 | DiscoveryEU | Film / Serie | ✅ |
+| 14 | Nove | Serie | ✅ |
+| 15 | FoodNetwork | Serie | ✅ |
+| 16 | HomeGardenTV | Serie | ✅ |
+| 17 | PlutoTV | Serie | ✅ |
+| 18 | Torrent | Film / Serie | ✅ |
+| 19 | YouTube | Film / Serie | ✅ |
+| 20 | Musicmp3 | Music | ✅ |
+| 21 | Goldenmp3 | Music | ✅ |
+| 22 | Monochrome | Music | ✅ |
+| 23 | MangaWorld | Manga | ✅ |
+
+> Sites marked `—` are available from the CLI but not yet surfaced in the TUI.
 
 ---
 
@@ -132,6 +254,59 @@ Use one of these DNS providers:
 
 ---
 
+## Music
+
+Search and download music from three services, via the TUI (recommended) or the CLI:
+
+| Service | Format | Notes |
+|---------|--------|-------|
+| **Musicmp3** | MP3 | Broad catalogue, ID3 tags |
+| **Goldenmp3** | MP3 | Alternative MP3 source |
+| **Monochrome** | AAC / M4A | **DRM-free** high-quality stream |
+
+### Search modes
+
+Each service supports three modes — `Song`, `Album`, `Artist`. Pick a mode in the TUI, run the query, then drill down:
+
+```
+Artist → Albums → Tracks → Queue
+Album  → Tracks → Queue
+Song   → (downloaded directly)
+```
+
+In the home **global search** the `Music` sector queries every music service at once using the `Song` mode.
+
+### Output
+
+Tracks are written under `OUTPUT.music_folder_name` (default `Music`), inside your normal download root:
+
+```json
+{
+    "OUTPUT": {
+        "music_folder_name": "Music"
+    }
+}
+```
+
+> **Monochrome** is fully DRM-free: its public endpoint serves plain `audio/mp4`
+> (AAC ~320 kbps), so no CDM or decryption is involved. FLAC is not offered by the
+> public endpoint.
+
+---
+
+## Manga
+
+**MangaWorld** is supported for manga downloads. Search a title, pick the volumes ("seasons") and chapters ("episodes"); each chapter is packaged into a `.cbz` archive.
+
+```bash
+python -m StreamingCommunity --site mangaworld --search "one piece"
+```
+
+> Manga has no streaming path, so the streaming button is hidden. Reach it from
+> the TUI sidebar or the `Altro` sector of the global search.
+
+---
+
 ## Configuration
 
 Key configuration parameters in `config.json`:
@@ -145,6 +320,7 @@ Key configuration parameters in `config.json`:
         "movie_folder_name": "Movie",
         "serie_folder_name": "Serie",
         "anime_folder_name": "Anime",
+        "music_folder_name": "Music",
         "map_episode_name": "%(episode_name) S%(season)E%(episode)",
         "add_siteName": false
     }
@@ -158,6 +334,7 @@ Key configuration parameters in `config.json`:
 - **`movie_folder_name`**: Subfolder name for movies (default: `"Movie"`)
 - **`serie_folder_name`**: Subfolder name for TV series (default: `"Serie"`)
 - **`anime_folder_name`**: Subfolder name for anime (default: `"Anime"`)
+- **`music_folder_name`**: Subfolder name for music (default: `"Music"`)
 
 - **`map_episode_name`**: Episode filename template
   - `%(tv_name)`: TV Show name
@@ -244,8 +421,10 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 
 ```json
 {
+{
     "PROCESS": {
         "generate_nfo": false,
+        "kodi_nfo": false,
         "use_gpu": false,
         "param_video": ["-c:v", "libx265", "-crf", "28", "-preset", "medium"],
         "param_audio": ["-c:a", "libopus", "-b:a", "128k"],
@@ -256,12 +435,16 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
         "merge_subtitle": true,
         "subtitle_disposition": false,
         "subtitle_disposition_language": ["forced-ita", "ita-forced"],
+        "sync_tolerance_ms": 45,
+        "sync_itsoffset_threshold_ms": 10,
+        "audio_resync": false,
         "extension": "mkv"
     }
 }
 ```
 
-- **`generate_nfo`**: Generate .nfo metadata file alongside the video (default: `false`)
+- **`generate_nfo`**: Generate a minimal .nfo metadata file alongside the video (default: `false`)
+- **`kodi_nfo`**: Generate full Kodi/Jellyfin/Emby `.nfo` + artwork via TMDB (see [Kodi/Jellyfin/Emby Metadata](#kodijellyfinemby-metadata)) (default: `false`)
 - **`use_gpu`**: Enable hardware acceleration (default: `false`)
 - **`param_video`**: FFmpeg video encoding parameters
   - Example: `["-c:v", "libx265", "-crf", "28", "-preset", "medium"]` (H.265/HEVC encoding)
@@ -274,7 +457,10 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 - **`merge_subtitle`**: Merge all subtitle tracks into a single output file (default: `true`)
 - **`subtitle_disposition`**: Automatically set default subtitle track (default: `false`)
 - **`subtitle_disposition_language`**: Languages to mark as default/forced
-  - Example: `["forced-ita", "ita-forced"]` for Italian forced subtitles
+  - Example: `["forced-ita", "ita-forced"]` (Italian and Italian forced subtitles)
+- **`sync_tolerance_ms`**: Audio/subtitle sync tolerance in milliseconds; offsets within this window are ignored (default: `45`)
+- **`sync_itsoffset_threshold_ms`**: MPEG-TS `itsoffset` correction threshold in milliseconds (default: `10`)
+- **`audio_resync`**: Re-align audio tracks when the sync drift exceeds the tolerance (default: `false`) for Italian forced subtitles
 - **`extension`**: Output file format (`"mkv"` or `"mp4"`)
 
 ### Request Settings
@@ -310,7 +496,8 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
         "close_console": true,
         "show_message": true,
         "show_device_info": true,
-        "fetch_domain_online": true
+        "fetch_domain_online": true,
+        "check_domain_on_start": true
     }
 }
 ```
@@ -318,7 +505,99 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 - **`close_console`**: Automatically close console after download completion (default: `true`)
 - **`show_message`**: Display debug messages (default: `true`)
 - **`show_device_info`**: Display device information (default: `true`)
-- **`fetch_domain_online`**: Automatically fetch latest domains from GitHub (default: `true`)
+- **`fetch_domain_online`**: Automatically fetch the latest `domains.json` from GitHub on startup (default: `true`)
+- **`check_domain_on_start`**: Verify the StreamingCommunity domain on every launch and update `domains.json` if it changed (default: `true`)
+
+### YouTube Settings
+
+```json
+{
+    "YOUTUBE": {
+        "format": "",
+        "max_height": 1080
+    }
+}
+```
+
+- **`format`**: yt-dlp format selector; empty string lets the app pick automatically (default: `""`)
+- **`max_height`**: Maximum video height in pixels (default: `1080`)
+
+---
+
+## Configuration Files
+
+`config.json` (above) is the main file, but three more live in `Conf/`:
+
+| File | Purpose |
+|------|---------|
+| `config.json` | App settings (all sections described above) |
+| `login.json` | Credentials / API keys for individual services |
+| `domains.json` | Base URLs for every site (auto-refreshed) |
+| `remote_cdm.json` | Remote CDM endpoints (only needed for DRM content) |
+
+All four can be edited directly, or from the TUI with <kbd>F2</kbd> (see [Settings](#settings)).
+
+### `login.json`
+
+Credentials and tokens for services that need them. Leave empty if unused:
+
+```json
+{
+    "TMDB": { "api_key": "" },
+    "crunchyroll": { "device_id": "", "etp_rt": "" },
+    "tubi": { "email": "", "password": "" },
+    "mediasetinfinity": { "beToken": "" },
+    "discoveryeu": { "st": "" }
+}
+```
+
+| Key | Service | Notes |
+|-----|---------|-------|
+| `TMDB.api_key` | TMDB | Metadata/NFO lookups ([get a key](https://www.themoviedb.org/settings/api)) |
+| `crunchyroll.device_id` / `etp_rt` | Crunchyroll | Auth cookies for member content |
+| `tubi.email` / `password` | TubiTV | Account credentials |
+| `mediasetinfinity.beToken` | MediasetInfinity | Bearer token |
+| `discoveryeu.st` | DiscoveryEU | Session token |
+
+### domains.json
+
+Maps every service to its current URL. The app keeps it fresh automatically, but you can edit it manually when a site moves:
+
+```json
+{
+    "streamingcommunity": { "full_url": "https://streaming-community.coffee" },
+    "limetorrent": {
+        "full_url": "https://limetorrent.net",
+        "mirrors": ["https://limetorrent.net", "https://www.limetorrents.fun"]
+    }
+}
+```
+
+- **`full_url`**: the service's base URL
+- **`mirrors`**: optional list of fallback URLs (used by trackers)
+
+### remote_cdm.json
+
+Configuration for the optional remote CDM used by DRM-protected streams (DASH/ISM). The app ships no keys or devices — you point it at your own CDM service:
+
+```json
+{
+    "config": { "delay_after_request": 5, "create_local_db": false },
+    "external_supa_db": { "url": "https://…supabase.co" },
+    "remote_cdm": {
+        "widevine": { "device_type": "ANDROID", "security_level": 3, "host": "...", "secret": "..." },
+        "playready": { "security_level": 3000, "host": "...", "secret": "..." }
+    }
+}
+```
+
+- **`config.delay_after_request`**: seconds to wait between CDM requests
+- **`config.create_local_db`**: cache keys locally
+- **`external_supa_db.url`**: optional external key cache (a lookup failure is non-fatal)
+- **`remote_cdm.*`**: remote CDM endpoint, secret and device parameters
+
+> The external Supabase URL is only a **key cache**, not a CDM provider. You are
+> responsible for supplying a licensed CDM — see the [Disclaimer](#disclaimer).
 
 ---
 
@@ -329,6 +608,9 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 ```bash
 # Show help and available sites
 python -m StreamingCommunity -h
+
+# Launch the interactive TUI (recommended)
+python -m StreamingCommunity --tui
 
 # Search and download from a specific site
 python -m StreamingCommunity --site streamingcommunity --search "interstellar"
@@ -368,7 +650,13 @@ python -m StreamingCommunity --version
 
 ## Global Search
 
-Search across multiple streaming sites simultaneously:
+Search across multiple streaming sites simultaneously, from either the TUI or the CLI.
+
+### TUI
+
+Type a query in the home search box and press `Enter` (or click **Cerca**). Results stream in live from every site in the selected **sector** (`Tutti`, `Film`, `Music`, `Altro`); select a row to open it — video results go to the detail screen, music results open the music flow pre-seeded with the query.
+
+### CLI
 
 ```bash
 # Global search
@@ -421,7 +709,8 @@ In the interactive site menu, select the **Torrent** entry (shown in magenta). T
         "flaresolverr_url": "",
         "scrape_impersonate": "chrome",
         "scrape_delay_seconds": 2,
-        "scrape_retry_count": 3
+        "scrape_retry_count": 3,
+        "max_duration_diff_sec": 30
     }
 }
 ```
@@ -437,6 +726,7 @@ In the interactive site menu, select the **Torrent** entry (shown in magenta). T
 - **`scrape_impersonate`**: Browser profile impersonated when scraping (default: `"chrome"`)
 - **`scrape_delay_seconds`**: Delay between scraper requests to avoid rate-limiting (default: `2`)
 - **`scrape_retry_count`**: Retry attempts per scraper on failure (default: `3`)
+- **`max_duration_diff_sec`**: Maximum accepted difference between the video and the audio source duration when muxing, in seconds (default: `30`)
 
 > **Requires**: `aria2c` (auto-downloaded by the app) and `ffmpeg` (for audio muxing).
 
@@ -620,6 +910,37 @@ locations, so a Homebrew/macOS-bundle install is found even when it is not on
 If you see *"No media player found"*, install one of the players above or point
 the app at an existing binary via `--player` (CLI) / `STREAMING_PLAYER`
 (environment variable).
+
+---
+
+## Environment Variables
+
+The streaming flags are also exposed as environment variables, which is handy for
+scripts and launchers:
+
+| Variable | Set by | Meaning |
+|----------|--------|---------|
+| `STREAMING_MODE` | `--stream` | `1` when streaming instead of downloading |
+| `STREAMING_PLAYER` | `--player` | Player binary to use (`mpv`, `vlc`, `ffplay`) |
+| `STREAMING_PORT` | `--stream-port` | Local proxy port (`0` = auto) |
+| `SystemDrive` / `ProgramFiles` / `LOCALAPPDATA` | OS | Used on Windows to auto-detect installed players |
+
+> Hook scripts also receive any extra variables defined in their `env` block — see [Hook System](#hook-system).
+
+---
+
+## Logs
+
+The TUI keeps a live log panel in the **Queue** screen. In addition, each download
+writes progress/FFmpeg logs next to the output:
+
+| File | Content |
+|------|---------|
+| `<name>_mux.log` / `_audio_merge.log` / `_sub_merge.log` | FFmpeg mux/merge output |
+| `<name>_download.log` | Downloader (aria2c/segment) output |
+| `<name>_parsing.log` | Manifest (m3u8/DASH) parsing output |
+
+> Temporary files are removed after the download when `DOWNLOAD.cleanup_tmp_folder` is enabled.
 
 ---
 

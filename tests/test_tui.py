@@ -390,7 +390,8 @@ class TestTuiHomeNavigation(unittest.IsolatedAsyncioTestCase):
             prompts = [
                 str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)
             ]
-            self.assertTrue(any("Animeunity (Anime)" in p for p in prompts))
+            # Categories are not shown in the sidebar any more.
+            self.assertIn("Animeunity", prompts)
 
     async def test_home_selects_animeunity_search(self):
         async with OsteApp().run_test(size=(140, 40)) as pilot:
@@ -414,12 +415,14 @@ class TestTuiHomeNavigation(unittest.IsolatedAsyncioTestCase):
             ol = _active(pilot).query_one("#menu-list", OptionList)
             ol.focus()
             await _settle(pilot)
-            # providers + "Attività (Download)" precede "Esci"
-            ol.highlighted = len(registry.all()) + 1
+            # Providers are listed first, then "Esci" as the last entry.
+            last = ol.option_count - 1
+            self.assertEqual(str(ol.get_option_at_index(last).prompt), "Esci")
+            ol.highlighted = last
             await _settle(pilot)
             await pilot.press("enter")
             await _settle(pilot)
-            self.assertIsInstance(_active(pilot), HomeScreen)
+            self.assertFalse(pilot.app.is_running)
 
 
 class TestTuiHomeGlobalSearch(unittest.IsolatedAsyncioTestCase):
@@ -1639,22 +1642,21 @@ class TestTuiActivity(unittest.IsolatedAsyncioTestCase):
         await _settle(pilot)
         return _active(pilot)
 
-    async def test_home_has_activity_entry(self):
+    async def test_home_sidebar_has_no_activity_entry(self):
         async with OsteApp().run_test(size=(140, 40)) as pilot:
             ol = _active(pilot).query_one("#menu-list", OptionList)
             prompts = [
                 str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)
             ]
-            self.assertTrue(any("Attività" in p for p in prompts))
+            self.assertFalse(any("Attività" in p for p in prompts))
+            self.assertEqual(prompts[-1], "Esci")
 
     async def test_home_opens_activity(self):
         async with OsteApp().run_test(size=(140, 40)) as pilot:
-            ol = _active(pilot).query_one("#menu-list", OptionList)
-            ol.focus()
+            # Activity is opened with the `a` keybind, not from the sidebar.
+            _active(pilot).query_one("#menu-list").focus()
             await _settle(pilot)
-            ol.highlighted = len(registry.all())
-            await _settle(pilot)
-            await pilot.press("enter")
+            await pilot.press("a")
             await _settle(pilot)
             self.assertIsInstance(_active(pilot), ActivityScreen)
             await pilot.click("#back-btn")
