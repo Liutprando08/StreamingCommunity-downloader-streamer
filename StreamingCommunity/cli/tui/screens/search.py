@@ -19,7 +19,7 @@ from textual.widgets import (
     Static,
 )
 
-from ..formatting import preview_card
+from ..formatting import media_badge, preview_card
 from ..providers.base import MusicProvider, ServiceProvider, TorrentProvider
 from ..widgets import Header
 from .detail import DetailScreen
@@ -166,7 +166,7 @@ class SearchScreen(Screen):
             is_series = bool(self.provider.is_series(entry))
         except Exception:
             is_series = True
-        icon, kind = ("📺", "Serie") if is_series else ("🎬", "Film")
+        icon, kind = media_badge(self.provider, is_series)
 
         details = (
             (header, getattr(entry, attr, ""))

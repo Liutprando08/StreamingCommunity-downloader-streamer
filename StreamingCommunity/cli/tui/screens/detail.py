@@ -11,7 +11,7 @@ from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Static, Switch
 
-from ..formatting import detail_lines, entry_info, escape_markup
+from ..formatting import detail_lines, entry_info, escape_markup, media_badge
 from ..providers.base import ServiceProvider
 from ..widgets import Header
 from .audio_source import AudioSourceScreen
@@ -93,7 +93,7 @@ class DetailScreen(Screen):
             or getattr(entry, "title", "")
             or "Sconosciuto"
         )
-        icon, kind = ("📺", "Serie") if self.is_series else ("🎬", "Film")
+        icon, kind = media_badge(self.provider, self.is_series)
         provider_name = getattr(self.provider, "name", "")
         language = getattr(entry, "provider_language", "") or ""
 

@@ -2,7 +2,7 @@
 # protocols in ``base``. Providers declare a ``flow`` so the TUI knows which
 # screen sequence to use:
 #
-#   "episode" -> streamingcommunity, animeunity, raiplay, discovery, ... (TV)
+#   "episode" -> streamingcommunity, animeunity, mangaworld, raiplay, ... (TV/manga)
 #   "music"   -> musicmp3, goldenmp3
 #   "atomic"  -> torrent, youtube, mostraguarda, ipersphera
 #
@@ -13,6 +13,7 @@ from __future__ import annotations
 from .animeunity import AnimeunityProvider
 from .base import MusicProvider, ServiceProvider
 from .films import IperspheraProvider, MostraGuardaProvider, YouTubeProvider
+from .manga import MangaWorldProvider
 from .music import Goldenmp3Provider, MonochromeProvider, Musicmp3Provider
 from .streamingcommunity import StreamingCommunityProvider
 from .torrent import TorrentProvider
@@ -62,6 +63,7 @@ class ProviderRegistry:
 registry = ProviderRegistry()
 registry.register(StreamingCommunityProvider())
 registry.register(AnimeunityProvider())
+registry.register(MangaWorldProvider())
 registry.register(TorrentProvider())
 registry.register(Musicmp3Provider())
 registry.register(Goldenmp3Provider())

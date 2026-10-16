@@ -90,6 +90,42 @@ def detail_lines(pairs: Iterable[tuple[Any, Any]]) -> list[str]:
     ]
 
 
+def format_number(value: Any) -> str:
+    """Render an episode/volume identifier without a spurious ``.0``.
+
+    Sources may expose numbers as floats (manga volumes, half chapters, ...),
+    so ``1.0`` becomes ``"1"`` while ``1.5`` stays ``"1.5"``. Falsy values
+    become ``""`` and anything non-numeric is stringified.
+    """
+    if not value:
+        return ""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if number.is_integer():
+        return str(int(number))
+    return str(number)
+
+
+def media_badge(provider: Any, is_series: bool) -> tuple[str, str]:
+    """Return the ``(icon, label)`` badge for an entry.
+
+    Providers may override the generic "Serie"/"Film" badge through the
+    ``series_icon``/``series_label`` (and ``film_*``) attributes so specialised
+    catalogs read correctly, e.g. MangaWorld renders "📚 Manga".
+    """
+    if is_series:
+        return (
+            getattr(provider, "series_icon", "📺"),
+            getattr(provider, "series_label", "Serie"),
+        )
+    return (
+        getattr(provider, "film_icon", "🎬"),
+        getattr(provider, "film_label", "Film"),
+    )
+
+
 def preview_card(
     title: Any,
     badges: str = "",

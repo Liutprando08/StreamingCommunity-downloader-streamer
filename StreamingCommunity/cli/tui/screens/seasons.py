@@ -21,7 +21,7 @@ from textual.widgets import (
 )
 
 from ..flow import SeasonBatch
-from ..formatting import preview_card
+from ..formatting import format_number, preview_card
 from ..providers.base import ServiceProvider
 from ..widgets import Header, SelectableTable
 from .episodes import EpisodesScreen
@@ -116,7 +116,7 @@ class SeasonsScreen(Screen):
         if index is not None and 0 <= index < len(self._seasons):
             season = self._seasons[index]
             details = [
-                ("Numero", str(getattr(season, "number", "") or "")),
+                ("Numero", format_number(getattr(season, "number", ""))),
                 ("Nome", str(getattr(season, "name", "") or "")),
             ]
             extra = getattr(season, "id", "")
@@ -166,7 +166,7 @@ class SeasonsScreen(Screen):
             if self._table is not None:
                 self._table.set_rows(
                     (
-                        str(getattr(season, "number", "") or ""),
+                        format_number(getattr(season, "number", "")),
                         str(getattr(season, "name", "") or ""),
                     )
                     for season in seasons

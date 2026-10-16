@@ -19,13 +19,16 @@ from StreamingCommunity.cli.tui.formatting import (
     detail_lines,
     entry_info,
     escape_markup,
+    format_number,
     format_time,
+    media_badge,
     progress_bar,
     status_badge,
 )
 from StreamingCommunity.cli.tui.parse import parse_ranges
 from StreamingCommunity.cli.tui.providers import registry
 from StreamingCommunity.cli.tui.providers.animeunity import AnimeunityProvider
+from StreamingCommunity.cli.tui.providers.manga import MangaWorldProvider
 from StreamingCommunity.cli.tui.screens.activity import ActivityScreen
 from StreamingCommunity.cli.tui.screens.detail import DetailScreen
 from StreamingCommunity.cli.tui.screens.episodes import EpisodesScreen
@@ -309,7 +312,7 @@ class TestGlobalSearchEngine(unittest.TestCase):
         music = {p.name for p in global_search.providers_for_sector("music")}
         self.assertEqual(music, {"Musicmp3", "Goldenmp3", "Monochrome"})
         other = {p.name for p in global_search.providers_for_sector("other")}
-        self.assertEqual(other, {"YouTube", "MostraGuarda", "Ipersphera"})
+        self.assertEqual(other, {"YouTube", "MostraGuarda", "Ipersphera", "MangaWorld"})
         film = {p.name for p in global_search.providers_for_sector("film")}
         self.assertIn("Streamingcommunity", film)
         self.assertIn("Torrent", film)
@@ -702,6 +705,101 @@ class TestAnimeunityProvider(unittest.TestCase):
         self.assertEqual(self.provider.episodes(scraper, 1)[0].name, "Ep1")
 
 
+class TestMangaWorldProvider(unittest.TestCase):
+    def setUp(self):
+        self.provider = MangaWorldProvider()
+
+    def test_registry_lookup(self):
+        found = registry.get("mangaworld")
+        self.assertIsInstance(found, MangaWorldProvider)
+        self.assertEqual(found.name, "MangaWorld")
+        self.assertEqual(found.category, "Manga")
+
+    def test_implements_service_provider_protocol(self):
+        required = (
+            "search",
+            "is_series",
+            "new_series_scraper",
+            "seasons",
+            "episodes",
+            "download_film",
+            "stream_film",
+            "download_episode",
+            "stream_episode",
+        )
+        for attr in required:
+            self.assertTrue(callable(getattr(self.provider, attr, None)), attr)
+
+    def test_every_entry_is_a_series(self):
+        # Manga always walks the volume/chapter (season/episode) flow.
+        self.assertTrue(self.provider.is_series(FakeEntry("One Piece")))
+        self.assertTrue(self.provider.is_series(FakeEntry("X", type_="manga")))
+
+    def test_seasons_and_episodes_delegate_to_scraper(self):
+        scraper = SimpleNamespace(
+            get_volumes=lambda: [SimpleNamespace(number=1, name="Vol. 1")],
+            get_chapters_in_volume=lambda n: [
+                SimpleNamespace(number=1, name="Capitolo 1")
+            ],
+        )
+        self.assertEqual(self.provider.seasons(scraper)[0].name, "Vol. 1")
+        self.assertEqual(self.provider.episodes(scraper, 1)[0].name, "Capitolo 1")
+
+    def test_episodes_are_sorted_ascending(self):
+        # MangaWorld returns chapters newest-first; the TUI must show 1, 2, 3...
+        scraper = SimpleNamespace(
+            get_chapters_in_volume=lambda n: [
+                SimpleNamespace(number=3.0, name="Capitolo 3"),
+                SimpleNamespace(number=1.0, name="Capitolo 1"),
+                SimpleNamespace(number=2.0, name="Capitolo 2"),
+            ],
+        )
+        numbers = [ep.number for ep in self.provider.episodes(scraper, 1)]
+        self.assertEqual(numbers, [1.0, 2.0, 3.0])
+
+    def test_episodes_without_number_go_last(self):
+        scraper = SimpleNamespace(
+            get_chapters_in_volume=lambda n: [
+                SimpleNamespace(number="extras", name="Extra"),
+                SimpleNamespace(number=2, name="Capitolo 2"),
+                SimpleNamespace(number=1, name="Capitolo 1"),
+            ],
+        )
+        names = [ep.name for ep in self.provider.episodes(scraper, 1)]
+        self.assertEqual(names, ["Capitolo 1", "Capitolo 2", "Extra"])
+
+    def test_new_series_scraper_uses_entry_url_and_name(self):
+        entry = FakeEntry("One Piece", url="https://www.mangaworld.mx/manga/x")
+        scraper = self.provider.new_series_scraper(entry)
+        self.assertEqual(scraper.manga_name, "One Piece")
+        self.assertEqual(scraper.url, entry.url)
+
+    def test_download_episode_routes_manga_and_volume_name(self):
+        volume = SimpleNamespace(number=3, name="Vol. 3")
+        scraper = SimpleNamespace(
+            manga_name="One Piece",
+            seasons_manager=SimpleNamespace(
+                get_season_by_number=lambda n: volume
+            ),
+        )
+        chapter = SimpleNamespace(number=42)
+        with mock.patch.object(
+            MangaWorldProvider, "_downloader"
+        ) as downloader_factory:
+            downloader = mock.MagicMock()
+            downloader_factory.return_value = downloader
+            self.provider.download_episode(chapter, 3, 1, scraper)
+
+        downloader.download_chapter.assert_called_once_with(
+            chapter, "One Piece", "Vol. 3"
+        )
+
+    def test_media_badge_is_manga(self):
+        self.assertEqual(media_badge(self.provider, True), ("📚", "Manga"))
+        self.assertEqual(media_badge(FakeProvider(), True), ("📺", "Serie"))
+        self.assertEqual(media_badge(FakeProvider(), False), ("🎬", "Film"))
+
+
 class TestTuiFilmFlow(unittest.IsolatedAsyncioTestCase):
     def _detail(self, provider, entry):
         return DetailScreen(provider, entry, is_series=provider.is_series(entry))
@@ -936,6 +1034,7 @@ class TestMusicProviders(unittest.TestCase):
             [
                 "Streamingcommunity",
                 "Animeunity",
+                "MangaWorld",
                 "Raiplay",
                 "Mediaset Infinity",
                 "Guardaserie",
@@ -1021,6 +1120,7 @@ class TestProviderRegistry(unittest.TestCase):
                 "Guardaserie",
                 "Home Garden TV",
                 "Ipersphera",
+                "MangaWorld",
                 "Mediaset Infinity",
                 "Monochrome",
                 "MostraGuarda",
@@ -1378,6 +1478,15 @@ class TestFormatting(unittest.TestCase):
     def test_format_time_passthrough(self):
         self.assertEqual(format_time("n/a"), "n/a")
         self.assertEqual(format_time(None), "-")
+
+    def test_format_number_strips_integral_floats(self):
+        self.assertEqual(format_number(1), "1")
+        self.assertEqual(format_number(1.0), "1")
+        self.assertEqual(format_number("2"), "2")
+        self.assertEqual(format_number(1.5), "1.5")
+        self.assertEqual(format_number(0), "")
+        self.assertEqual(format_number(None), "")
+        self.assertEqual(format_number("Volume 3"), "Volume 3")
 
     def test_progress_bar_bounds_and_clamping(self):
         self.assertEqual(progress_bar(0), "░" * 10 + "   0.0%")
