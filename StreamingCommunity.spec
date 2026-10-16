@@ -2,6 +2,8 @@
 
 import os
 
+from PyInstaller.utils.hooks import collect_submodules
+
 pkg = 'StreamingCommunity'
 
 def _find_all_py_modules(package_dir):
@@ -24,7 +26,7 @@ def _find_all_init_packages(package_dir):
             packages.append(rel)
     return packages
 
-def _find_data_files(package_dir, extensions=('.json', '.yaml', '.txt', '.dat')):
+def _find_data_files(package_dir, extensions=('.json', '.yaml', '.txt', '.dat', '.tcss')):
     files = []
     for root, dirs, filenames in os.walk(package_dir):
         dirs[:] = [d for d in dirs if d != '__pycache__']
@@ -41,7 +43,15 @@ data_files = _find_data_files(pkg)
 
 datas = [('Conf', 'Conf')] + data_files
 binaries = []
-hiddenimports = ['curl_cffi', '_cffi_backend'] + all_packages + all_modules
+hiddenimports = (
+    ['curl_cffi', '_cffi_backend']
+    + all_packages
+    + all_modules
+    # Textual lazy-loads its widget modules at runtime (textual/widgets/__init__.py
+    # uses importlib inside __getattr__), so PyInstaller's static analysis misses
+    # them (e.g. "No module named 'textual.widgets._tab'"). Collect them all.
+    + collect_submodules('textual')
+)
 
 
 a = Analysis(
