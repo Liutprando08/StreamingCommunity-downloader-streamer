@@ -24,7 +24,6 @@ from StreamingCommunity.upload import binary_update, git_update
 from StreamingCommunity.upload.version import __title__, __version__
 from StreamingCommunity.utils import config_manager, os_manager, start_message
 from StreamingCommunity.utils.console.shared import console
-from StreamingCommunity.utils.domain_check import check_streamingcommunity_domain
 
 # Internal utilities
 from . import call_global_search
@@ -72,9 +71,6 @@ def initialize():
         git_update()
     except Exception as e:
         console.log(f"[red]Error with loading github: {e!s}")
-
-    # Check if the StreamingCommunity domain changed and update domains.json
-    check_streamingcommunity_domain()
 
 
 def _expand_user_path(path: str) -> str:

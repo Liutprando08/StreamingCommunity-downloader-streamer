@@ -506,7 +506,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 - **`show_message`**: Display debug messages (default: `true`)
 - **`show_device_info`**: Display device information (default: `true`)
 - **`fetch_domain_online`**: Automatically fetch the latest `domains.json` from GitHub on startup (default: `true`)
-- **`check_domain_on_start`**: Verify the StreamingCommunity domain on every launch and update `domains.json` if it changed (default: `true`)
+- **`check_domain_on_start`**: Verify the StreamingCommunity domain before the first search and update `domains.json` if it changed (default: `true`)
 
 ### YouTube Settings
 
@@ -789,7 +789,7 @@ On startup, the app downloads the latest `domains.json` from the project's GitHu
 
 ### StreamingCommunity link check (`check_domain_on_start`)
 
-StreamingCommunity changes its domain very often. When enabled, the app verifies the current domain on every launch by scraping the link tracker page (giardiniblog.it). If the domain changed, `Conf/domains.json` is updated automatically — no restart required.
+StreamingCommunity changes its domain very often. When enabled, the app verifies the current domain before the first StreamingCommunity search by scraping the link tracker page (giardiniblog.it). If the domain changed, `Conf/domains.json` is updated automatically — no restart required.
 
 ```json
 {

@@ -1,4 +1,4 @@
-# 11.08.26 - Auto-detect StreamingCommunity domain changes on startup
+# 11.08.26 - Auto-detect StreamingCommunity domain changes before a search
 
 import logging
 import re
@@ -74,8 +74,9 @@ def check_streamingcommunity_domain() -> bool:
 
     Scrapes the link page (giardiniblog.it) to find the current domain.
     Falls back to redirect detection on the configured domain when the page is
-    unavailable. Runs on every app opening. Returns True when the domain was
-    updated. Never blocks startup: any failure is logged and skipped.
+    unavailable. Runs once, before the first StreamingCommunity search. Returns
+    True when the domain was updated. Never blocks the search: any failure is
+    logged and skipped.
     """
     try:
         enabled = config_manager.config.get_bool(

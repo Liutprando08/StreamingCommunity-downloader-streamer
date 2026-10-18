@@ -18,6 +18,7 @@ from StreamingCommunity.services._base.site_search_manager import (
 # Internal utilities
 from StreamingCommunity.utils import TVShowManager
 from StreamingCommunity.utils.console.shared import console
+from StreamingCommunity.utils.domain_check import check_streamingcommunity_domain
 from StreamingCommunity.utils.http_client import create_client, get_userAgent
 
 # Logic
@@ -31,6 +32,7 @@ IMDB_RE = re.compile(r"tt(\d+)")
 msg = Prompt()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
+_domain_checked = False
 
 
 def _build_entry(item: dict) -> Entries | None:
@@ -174,7 +176,25 @@ def _search_legacy_dle(query: str) -> int:
     return len(entries_manager)
 
 
+def _ensure_domain() -> None:
+    """Refresh the StreamingCommunity domain once, before the first search.
+
+    StreamingCommunity changes domain often; scraping the link tracker before
+    building the search URL keeps requests on the current domain. Runs once per
+    process and never lets a domain-check failure break a search.
+    """
+    global _domain_checked
+    if _domain_checked:
+        return
+    _domain_checked = True
+    try:
+        check_streamingcommunity_domain()
+    except Exception as e:  # a failed check must not block the search
+        console.print(f"[yellow]Domain check skipped: {e}")
+
+
 def title_search(query: str) -> int:
+    _ensure_domain()
     entries_manager.clear()
     table_show_manager.clear()
 
