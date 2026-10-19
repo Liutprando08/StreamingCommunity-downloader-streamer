@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 from textual import on
 from textual.app import ComposeResult
@@ -26,7 +26,14 @@ from textual.widgets.data_table import RowKey
 from StreamingCommunity.source.utils.tracker import download_tracker
 
 from ..formatting import progress_bar, status_badge
-from ..providers.base import ServiceProvider
+from ..providers.base import (
+    AnyProvider,
+    MangaProtocol,
+    MusicProtocol,
+    SeriesFlowProvider,
+    TorrentProtocol,
+    VideoProtocol,
+)
 from ..widgets import Header
 from ..workers import prepare_download_context
 from .log import LogPanel
@@ -50,7 +57,7 @@ class QueueScreen(Screen):
 
     def __init__(
         self,
-        provider: ServiceProvider,
+        provider: AnyProvider,
         items: list[dict[str, Any]],
         title: str = "",
         on_complete: Callable[[], None] | None = None,
@@ -200,19 +207,28 @@ class QueueScreen(Screen):
             pass
 
     def _run_download(self, idx: int, item: dict[str, Any], download_id: str) -> None:
+        # Each queue kind is handled by the provider kinds that implement it:
+        # only music answers track/album, only the season flow answers
+        # episodes, and every kind but music can carry a single film entry.
         kind = item.get("kind")
         if kind == "film":
+            provider = cast(
+                VideoProtocol | TorrentProtocol | MangaProtocol, self.provider
+            )
             # Also the atomic (torrent) entry point: the provider routes to the
             # movie or series folder itself.
-            result = self._result_path(self.provider.download_film(item["entry"]))
+            result = self._result_path(provider.download_film(item["entry"]))
             self._maybe_dub(idx, item, result)
         elif kind == "track":
-            result = self._result_path(self.provider.download_track(item["entry"]))
+            provider = cast(MusicProtocol, self.provider)
+            result = self._result_path(provider.download_track(item["entry"]))
         elif kind == "album":
-            result = self.provider.download_album(item["entry"])
+            provider = cast(MusicProtocol, self.provider)
+            result = provider.download_album(item["entry"])
         else:
+            provider = cast(SeriesFlowProvider, self.provider)
             result = self._result_path(
-                self.provider.download_episode(
+                provider.download_episode(
                     item["obj_episode"],
                     item["season"],
                     item["episode"],
@@ -277,10 +293,13 @@ class QueueScreen(Screen):
             )
 
     def _run_stream(self, item: dict[str, Any]) -> None:
+        # Streaming is only offered by the video catalogs; manga implements the
+        # entry points as "never offered" no-ops.
+        provider = cast(SeriesFlowProvider, self.provider)
         if item.get("kind") == "film":
-            self.provider.stream_film(item["entry"])
+            provider.stream_film(item["entry"])
         else:
-            self.provider.stream_episode(
+            provider.stream_episode(
                 item["obj_episode"],
                 item["season"],
                 item["episode"],

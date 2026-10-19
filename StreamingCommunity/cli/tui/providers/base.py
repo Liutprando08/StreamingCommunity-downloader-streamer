@@ -1,13 +1,20 @@
 # Contracts every service provider must satisfy so the TUI can drive it
-# generically. Providers declare a ``flow`` that tells the TUI which screen
-# sequence to use:
+# generically.
 #
-#   flow = "episode" -> search -> detail -> seasons -> episodes -> queue
-#                      (film/series services)
-#   flow = "music"   -> search -> [albums] -> tracks -> queue
-#                      (music services)
-#   flow = "atomic"  -> search -> detail -> queue
-#                      (torrent: one result is one indivisible download)
+# The provider layer exposes exactly four kinds of providers -- VideoProvider,
+# MusicProvider, TorrentProvider and MangaProvider -- each configured per
+# service. The protocols below describe what a screen may rely on for each
+# kind:
+#
+#   VideoProtocol   flow = "episode" -> search -> detail -> seasons -> episodes -> queue
+#                   flow = "atomic"  -> search -> detail -> queue
+#                   (film/series/single-video services)
+#   MusicProtocol   flow = "music"   -> search -> [albums] -> tracks -> queue
+#                   (music services)
+#   TorrentProtocol flow = "atomic"  -> search -> detail -> queue
+#                   (one result is one indivisible download)
+#   MangaProtocol   flow = "episode" -> search -> detail -> volumes -> chapters -> queue
+#                   (seasons are volumes, episodes are chapters)
 #
 # ``supports_streaming`` and ``supports_seasons`` further narrow what the
 # detail screen may offer.
@@ -35,8 +42,8 @@ def service_search_lock(module_name: str) -> threading.Lock:
         return lock
 
 
-class ServiceProvider(Protocol):
-    """Film/series providers driven through the seasons/episodes flow."""
+class VideoProtocol(Protocol):
+    """Film/series/single-video providers driven through the season flow."""
 
     name: str
     category: str
@@ -77,22 +84,85 @@ class ServiceProvider(Protocol):
         """Stream a movie."""
         ...
 
+    def download_episode(self, *args: Any) -> Any:
+        """Download a single episode (obj_episode, season, episode, scraper).
+
+        Declared as ``*args`` because the detail/queue screens forward whatever
+        the season flow collected, and services without an episode path accept
+        the call and return None.
+        """
+        ...
+
+    def stream_episode(self, *args: Any) -> Any:
+        """Stream a single episode (obj_episode, season, episode, scraper)."""
+        ...
+
+
+class MangaProtocol(Protocol):
+    """
+    Manga providers (mangaworld).
+
+    Same shape as the episode flow, but a "season" is a volume and an
+    "episode" is a chapter that the downloader packages into a ``.cbz``.
+    They never stream, and ``series_icon``/``series_label`` make the cards
+    read "📚 Manga" instead of "📺 Serie".
+    """
+
+    name: str
+    category: str
+    alias: str
+    flow: str
+    supports_streaming: bool
+    supports_seasons: bool
+
+    def search(self, query: str) -> list[Any]:
+        """Search the provider and return the raw Entries list."""
+        ...
+
+    def result_columns(self) -> tuple[tuple[str, str], ...]:
+        """Return (header, entry attribute) pairs for the results table."""
+        ...
+
+    def is_series(self, entry: Any) -> bool:
+        """Return True: a manga is always walked through volumes/chapters."""
+        ...
+
+    def new_series_scraper(self, entry: Any) -> Any:
+        """Build the scraper exposing get_volumes/get_chapters_in_volume."""
+        ...
+
+    def seasons(self, scraper: Any) -> list[Any]:
+        """Return the resolved list of volumes."""
+        ...
+
+    def episodes(self, scraper: Any, season_number: int) -> list[Any]:
+        """Return the chapters of a volume in ascending order."""
+        ...
+
+    def download_film(self, entry: Any) -> Any:
+        """Download the whole collection (atomic fallback path)."""
+        ...
+
+    def stream_film(self, entry: Any) -> Any:
+        """Never offered: manga has no stream path, returns None."""
+        ...
+
     def download_episode(
         self, obj_episode: Any, season: int, episode: int, scraper: Any
     ) -> Any:
-        """Download a single episode."""
+        """Download a single chapter."""
         ...
 
     def stream_episode(
         self, obj_episode: Any, season: int, episode: int, scraper: Any
     ) -> Any:
-        """Stream a single episode."""
+        """Never offered: manga has no stream path, returns None."""
         ...
 
 
-class MusicProvider(Protocol):
+class MusicProtocol(Protocol):
     """
-    Music services (musicmp3, goldenmp3).
+    Music services (musicmp3, goldenmp3, monochrome).
 
     They share the same shape: search by mode (song / album / artist), then
     drill down artist -> album -> tracks before downloading.
@@ -143,7 +213,7 @@ class MusicProvider(Protocol):
         ...
 
 
-class TorrentProvider(Protocol):
+class TorrentProtocol(Protocol):
     """
     Torrent search.
 
@@ -188,3 +258,11 @@ class TorrentProvider(Protocol):
         """Mux an Italian audio source onto ``video_path`` (optional)."""
         ...
 
+
+# What every screen accepts: the union of the four provider kinds. Screens that
+# only care about "some provider" type their constructor with this alias.
+AnyProvider = VideoProtocol | MusicProtocol | TorrentProtocol | MangaProtocol
+
+# The kinds that actually walk the season flow. Torrent is atomic and music
+# drills down into albums, so only video and manga reach those screens.
+SeriesFlowProvider = VideoProtocol | MangaProtocol

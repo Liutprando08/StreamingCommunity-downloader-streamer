@@ -22,7 +22,7 @@ from textual.widgets import (
 
 from ..flow import SeasonBatch
 from ..formatting import format_number, preview_card
-from ..providers.base import ServiceProvider
+from ..providers.base import SeriesFlowProvider
 from ..widgets import Header, SelectableTable
 from .episodes import EpisodesScreen
 
@@ -38,7 +38,7 @@ class SeasonsScreen(Screen):
     COLUMNS = ("Stagione", "Nome")
 
     def __init__(
-        self, provider: ServiceProvider, entry, mode: str = "download", **kwargs
+        self, provider: SeriesFlowProvider, entry, mode: str = "download", **kwargs
     ):
         super().__init__(**kwargs)
         self.provider = provider

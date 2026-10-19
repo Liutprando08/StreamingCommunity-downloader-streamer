@@ -1,55 +1,76 @@
-# Adapters for the music services (musicmp3, goldenmp3).
+# Music providers for the TUI (musicmp3, goldenmp3, monochrome).
 #
-# Both services share the same shape -- search by mode (song / album / artist),
-# then drill down artist -> album -> tracks -- so a single base class drives
-# them and the concrete providers only declare which service module they map to
-# and which modes that module supports.
+# All music services share the same shape -- search by mode (song / album /
+# artist), then drill down artist -> album -> tracks -- so a single
+# ``MusicProvider`` class drives them and each spec only declares which service
+# module it maps to and which modes that module supports.
 
 from __future__ import annotations
 
 import importlib
+from dataclasses import dataclass
 from typing import Any
 
 from .base import service_search_lock
 
+DEFAULT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("Nome", "name"),
+    ("Tipo", "type"),
+    ("Artista", "artist"),
+    ("Album", "album"),
+)
 
-class MusicProviderBase:
+_DEFAULT_MODES: tuple[str, ...] = ("Song", "Album", "Artist")
+
+
+@dataclass(frozen=True)
+class MusicSpec:
+    """Everything that varies between two music services."""
+
+    name: str
+    alias: str
+    module: str
+    search_modes: tuple[str, ...] = _DEFAULT_MODES
+    columns: tuple[tuple[str, str], ...] = DEFAULT_COLUMNS
+
+
+class MusicProvider:
+    """One music service, configured by its :class:`MusicSpec`."""
+
     flow = "music"
     category = "Music"
     supports_streaming = False
     supports_seasons = False
+    # Home tab grouping comes from the category ("Music" -> music tab).
+    sector: str | None = None
 
-    # Set by subclasses: the folder under StreamingCommunity/services/.
-    module_name: str = ""
-    _SEARCH_MODES: tuple[str, ...] = ("Song", "Album", "Artist")
-
-    def __init__(self) -> None:
+    def __init__(self, spec: MusicSpec) -> None:
+        self._spec = spec
         self._service: Any = None
 
+        self.name = spec.name
+        self.alias = spec.alias
+
+    # ── lazy service access ───────────────────────────────────────────────
     def _module(self):
         """Lazy import so TUI startup stays light and CLI stays untouched."""
         if self._service is None:
             self._service = importlib.import_module(
-                f"StreamingCommunity.services.{self.module_name}"
+                f"StreamingCommunity.services.{self._spec.module}"
             )
         return self._service
 
     def _downloader(self):
         return importlib.import_module(
-            f"StreamingCommunity.services.{self.module_name}.downloader"
+            f"StreamingCommunity.services.{self._spec.module}.downloader"
         )
 
-    # ── protocol ─────────────────────────────────────────────────────────
+    # ── protocol ──────────────────────────────────────────────────────────
     def search_modes(self) -> tuple[str, ...]:
-        return self._SEARCH_MODES
+        return self._spec.search_modes
 
     def result_columns(self) -> tuple[tuple[str, str], ...]:
-        return (
-            ("Nome", "name"),
-            ("Tipo", "type"),
-            ("Artista", "artist"),
-            ("Album", "album"),
-        )
+        return self._spec.columns
 
     def search(self, query: str, mode: str) -> list[Any]:
         service = self._module()
@@ -64,7 +85,7 @@ class MusicProviderBase:
         if title_search is None:
             return []
 
-        with service_search_lock(self.module_name):
+        with service_search_lock(self._spec.module):
             title_search(query)
             service.entries_manager.sort_by_fuzzy_score(query)
             return list(service.entries_manager.media_list)
@@ -96,24 +117,27 @@ class MusicProviderBase:
         return self._downloader().download_album(entry, self._module().get_tracks)
 
 
-class Musicmp3Provider(MusicProviderBase):
-    name = "Musicmp3"
-    alias = "musicmp3"
-    module_name = "musicmp3"
-    _SEARCH_MODES = ("Song", "Album", "Artist")
-
-
-class Goldenmp3Provider(MusicProviderBase):
-    name = "Goldenmp3"
-    alias = "goldenmp3"
-    module_name = "goldenmp3"
-    # goldenmp3 only exposes a reliable album search, so Song/Artist are not
-    # offered; this mirrors ``base_music_search(modes=("Album",))``.
-    _SEARCH_MODES = ("Album",)
-
-
-class MonochromeProvider(MusicProviderBase):
-    name = "Monochrome"
-    alias = "monochrome"
-    module_name = "monochrome"
-    _SEARCH_MODES = ("Song", "Album", "Artist")
+# ── the music services ─────────────────────────────────────────────────────
+MUSIC_SPECS: dict[str, MusicSpec] = {
+    spec.alias: spec
+    for spec in (
+        MusicSpec(
+            name="Musicmp3",
+            alias="musicmp3",
+            module="musicmp3",
+        ),
+        MusicSpec(
+            name="Goldenmp3",
+            alias="goldenmp3",
+            module="goldenmp3",
+            # goldenmp3 only exposes a reliable album search, so Song/Artist are
+            # not offered; this mirrors ``base_music_search(modes=("Album",))``.
+            search_modes=("Album",),
+        ),
+        MusicSpec(
+            name="Monochrome",
+            alias="monochrome",
+            module="monochrome",
+        ),
+    )
+}

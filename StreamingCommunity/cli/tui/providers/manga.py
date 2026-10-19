@@ -1,17 +1,27 @@
-# MangaWorld adapter for the TUI. Wraps the existing ``services/mangaworld``
-# search/scraper/downloader instead of re-implementing the MangaWorld plumbing.
+# Manga providers for the TUI (mangaworld).
 #
 # MangaWorld has no streaming path: search hits are manga, each "season" is a
 # volume and each "episode" is a chapter that the downloader packages into a
 # ``.cbz`` archive. ``supports_streaming`` is therefore False and the detail
 # screen hides the streaming button.
+#
+# Only one manga service exists today, but it gets its own provider kind
+# (``MangaProvider``) because its seasons/episodes semantics are genuinely
+# different from the video ones, and new manga services just add a spec row.
 
 from __future__ import annotations
 
 import importlib
+from dataclasses import dataclass
 from typing import Any
 
 from .base import service_search_lock
+
+DEFAULT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("Nome", "name"),
+    ("Tipo", "type"),
+    ("Anno", "year"),
+)
 
 
 def _chapter_sort_key(episode: Any) -> tuple[int, float]:
@@ -22,53 +32,67 @@ def _chapter_sort_key(episode: Any) -> tuple[int, float]:
         return (1, 0.0)
 
 
-class MangaWorldProvider:
-    name = "MangaWorld"
-    category = "Manga"
-    alias = "mangaworld"
+@dataclass(frozen=True)
+class MangaSpec:
+    """Everything that varies between two manga services."""
+
+    name: str
+    alias: str
+    module: str
+    category: str = "Manga"
     # Manga is neither a film nor music, so the home screen groups it under
     # the "Altro" sector.
-    sector = "other"
+    sector: str | None = "other"
+    # Cosmetic overrides so the preview/detail cards say "Manga" (instead of
+    # the default "Serie") for this provider.
+    series_icon: str = "📚"
+    series_label: str = "Manga"
+    columns: tuple[tuple[str, str], ...] = DEFAULT_COLUMNS
+
+
+class MangaProvider:
+    """One manga service, configured by its :class:`MangaSpec`."""
 
     flow = "episode"
     supports_streaming = False
     supports_seasons = True
 
-    # Cosmetic overrides so the preview/detail cards say "Manga" (instead of
-    # the default "Serie") for this provider.
-    series_icon = "📚"
-    series_label = "Manga"
-
-    def __init__(self) -> None:
+    def __init__(self, spec: MangaSpec) -> None:
+        self._spec = spec
         self._service: Any = None
 
+        self.name = spec.name
+        self.alias = spec.alias
+        self.category = spec.category
+        self.sector = spec.sector
+        self.series_icon = spec.series_icon
+        self.series_label = spec.series_label
+
+    # ── lazy service access ───────────────────────────────────────────────
     def _module(self):
         """Lazy import so TUI startup stays light and CLI stays untouched."""
         if self._service is None:
             self._service = importlib.import_module(
-                "StreamingCommunity.services.mangaworld"
+                f"StreamingCommunity.services.{self._spec.module}"
             )
         return self._service
 
     def _downloader(self):
         return importlib.import_module(
-            "StreamingCommunity.services.mangaworld.downloader"
+            f"StreamingCommunity.services.{self._spec.module}.downloader"
         )
 
+    # ── protocol ──────────────────────────────────────────────────────────
     def search(self, query: str) -> list[Any]:
         service = self._module()
-        with service_search_lock(self.alias):
+        with service_search_lock(self._spec.module):
             service.entries_manager.clear()
             service.title_search(query)
             service.entries_manager.sort_by_fuzzy_score(query)
             return list(service.entries_manager.media_list)
 
     def result_columns(self) -> tuple[tuple[str, str], ...]:
-        return (
-            ("Nome", "name"),
-            ("Tipo", "type"),
-            ("Anno", "year"),
-        )
+        return self._spec.columns
 
     def is_series(self, entry: Any) -> bool:
         # A manga is always walked through volumes (seasons) and chapters.
@@ -129,3 +153,16 @@ class MangaWorldProvider:
         self, obj_episode: Any, season: int, episode: int, scraper: Any
     ) -> None:
         return None
+
+
+# ── the manga services ─────────────────────────────────────────────────────
+MANGA_SPECS: dict[str, MangaSpec] = {
+    spec.alias: spec
+    for spec in (
+        MangaSpec(
+            name="MangaWorld",
+            alias="mangaworld",
+            module="mangaworld",
+        ),
+    )
+}

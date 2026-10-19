@@ -40,7 +40,6 @@ RESULT_COLUMNS = ("Titolo", "Tipo", "Anno", "Fonte")
 
 class HomeScreen(Screen):
     BINDINGS = [
-        ("d", "toggle_dark", "Toggle dark mode"),
         ("a", "open_activity", "Attività"),
         ("/", "focus_search", "Cerca"),
     ]

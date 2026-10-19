@@ -1,43 +1,40 @@
-# Provider registry. Each service gets an adapter implementing one of the
-# protocols in ``base``. Providers declare a ``flow`` so the TUI knows which
-# screen sequence to use:
+# Provider registry.
 #
-#   "episode" -> streamingcommunity, animeunity, mangaworld, raiplay, ... (TV/manga)
-#   "music"   -> musicmp3, goldenmp3
+# The TUI has exactly four provider kinds, one per media family:
+#
+#   VideoProvider   film/serie catalogs, the TV cluster and the single-video
+#                   services (flow "episode" or "atomic")
+#   MusicProvider   music services (flow "music")
+#   TorrentProvider torrent search (flow "atomic")
+#   MangaProvider   manga catalogs (flow "episode", volumes/chapters)
+#
+# Every registered provider is one of those classes configured for a single
+# service (youtube, crunchyroll, monochrome, ...), so ``registry.get(alias)``
+# still resolves the handle the sidebar shows. Providers declare a ``flow`` so
+# the TUI knows which screen sequence to use:
+#
+#   "episode" -> streamingcommunity, animeunity, mangaworld, raiplay, ...
+#   "music"   -> musicmp3, goldenmp3, monochrome
 #   "atomic"  -> torrent, youtube, mostraguarda, ipersphera
 #
 # When every service is registered the TUI home screen becomes the main layout.
 
 from __future__ import annotations
 
-from .animeunity import AnimeunityProvider
-from .base import MusicProvider, ServiceProvider
-from .films import IperspheraProvider, MostraGuardaProvider, YouTubeProvider
-from .manga import MangaWorldProvider
-from .music import Goldenmp3Provider, MonochromeProvider, Musicmp3Provider
-from .streamingcommunity import StreamingCommunityProvider
+from .manga import MANGA_SPECS, MangaProvider
+from .music import MUSIC_SPECS, MusicProvider
 from .torrent import TorrentProvider
-from .tv import (
-    CrunchyrollProvider,
-    DiscoveryEuProvider,
-    DiscoveryUsProvider,
-    DmaxProvider,
-    FoodNetworkProvider,
-    GuardaserieProvider,
-    HomeGardenTvProvider,
-    MediasetInfinityProvider,
-    NoveProvider,
-    PlutoTvProvider,
-    RaiplayProvider,
-    RealtimeProvider,
-)
+from .video import VIDEO_SPECS, VideoProvider
+
+# The union of what ``registry`` may hold.
+Provider = VideoProvider | MusicProvider | TorrentProvider | MangaProvider
 
 
 class ProviderRegistry:
     def __init__(self) -> None:
-        self._providers: dict[str, ServiceProvider | MusicProvider | TorrentProvider] = {}
+        self._providers: dict[str, Provider] = {}
 
-    def register(self, provider: ServiceProvider | MusicProvider | TorrentProvider) -> None:
+    def register(self, provider: Provider) -> None:
         # Key by alias so ``registry.get(alias)`` resolves the same handle the
         # sidebar shows. A collision used to silently drop a provider (both
         # music services declared alias="Music"), so fail loudly instead.
@@ -46,52 +43,53 @@ class ProviderRegistry:
             raise ValueError(f"Provider alias already registered: {alias!r}")
         self._providers[alias] = provider
 
-    def all(self) -> list[ServiceProvider | MusicProvider | TorrentProvider]:
+    def all(self) -> list[Provider]:
         return list(self._providers.values())
 
-    def get(
-        self, alias: str
-    ) -> ServiceProvider | None | MusicProvider | TorrentProvider:
+    def get(self, alias: str) -> Provider | None:
         return self._providers.get(alias)
 
-    def by_flow(
-        self, flow: str
-    ) -> list[ServiceProvider | MusicProvider | TorrentProvider]:
+    def by_flow(self, flow: str) -> list[Provider]:
         return [p for p in self._providers.values() if getattr(p, "flow", None) == flow]
 
 
 registry = ProviderRegistry()
-registry.register(StreamingCommunityProvider())
-registry.register(AnimeunityProvider())
-registry.register(MangaWorldProvider())
+
+# The order below is the sidebar order (and what ``by_flow`` returns), so keep
+# it stable: flagship catalogs, manga, torrent, music, then the video services.
+registry.register(VideoProvider(VIDEO_SPECS["streamingcommunity"]))
+registry.register(VideoProvider(VIDEO_SPECS["animeunity"]))
+registry.register(MangaProvider(MANGA_SPECS["mangaworld"]))
 registry.register(TorrentProvider())
-registry.register(Musicmp3Provider())
-registry.register(Goldenmp3Provider())
-registry.register(MonochromeProvider())
+registry.register(MusicProvider(MUSIC_SPECS["musicmp3"]))
+registry.register(MusicProvider(MUSIC_SPECS["goldenmp3"]))
+registry.register(MusicProvider(MUSIC_SPECS["monochrome"]))
 
 # Single-video services (atomic flow).
-registry.register(YouTubeProvider())
-registry.register(MostraGuardaProvider())
-registry.register(IperspheraProvider())
+registry.register(VideoProvider(VIDEO_SPECS["youtube"]))
+registry.register(VideoProvider(VIDEO_SPECS["mostraguarda"]))
+registry.register(VideoProvider(VIDEO_SPECS["ipersphera"]))
 
 # Film/Serie TV services (episode flow).
-registry.register(RaiplayProvider())
-registry.register(MediasetInfinityProvider())
-registry.register(GuardaserieProvider())
-registry.register(DiscoveryEuProvider())
-registry.register(DiscoveryUsProvider())
-registry.register(PlutoTvProvider())
-registry.register(RealtimeProvider())
-registry.register(DmaxProvider())
-registry.register(NoveProvider())
-registry.register(FoodNetworkProvider())
-registry.register(HomeGardenTvProvider())
-registry.register(CrunchyrollProvider())
+registry.register(VideoProvider(VIDEO_SPECS["raiplay"]))
+registry.register(VideoProvider(VIDEO_SPECS["mediasetinfinity"]))
+registry.register(VideoProvider(VIDEO_SPECS["guardaserie"]))
+registry.register(VideoProvider(VIDEO_SPECS["discoveryeu"]))
+registry.register(VideoProvider(VIDEO_SPECS["discoveryus"]))
+registry.register(VideoProvider(VIDEO_SPECS["plutotv"]))
+registry.register(VideoProvider(VIDEO_SPECS["realtime"]))
+registry.register(VideoProvider(VIDEO_SPECS["dmax"]))
+registry.register(VideoProvider(VIDEO_SPECS["nove"]))
+registry.register(VideoProvider(VIDEO_SPECS["foodnetwork"]))
+registry.register(VideoProvider(VIDEO_SPECS["homegardentv"]))
+registry.register(VideoProvider(VIDEO_SPECS["crunchyroll"]))
 
 __all__ = [
+    "MangaProvider",
     "MusicProvider",
+    "Provider",
     "ProviderRegistry",
-    "ServiceProvider",
     "TorrentProvider",
+    "VideoProvider",
     "registry",
 ]

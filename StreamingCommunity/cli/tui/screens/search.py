@@ -20,7 +20,13 @@ from textual.widgets import (
 )
 
 from ..formatting import media_badge, preview_card
-from ..providers.base import MusicProvider, ServiceProvider, TorrentProvider
+from ..providers.base import (
+    AnyProvider,
+    MangaProtocol,
+    MusicProtocol,
+    TorrentProtocol,
+    VideoProtocol,
+)
 from ..widgets import Header
 from .detail import DetailScreen
 from .music import MusicScreen
@@ -34,13 +40,21 @@ INITIAL_PREVIEW = (
 class SearchScreen(Screen):
     BINDINGS = [("escape", "back", "Indietro")]
 
-    def __init__(
-        self, provider: ServiceProvider | MusicProvider | TorrentProvider, **kwargs
-    ):
+    def __init__(self, provider: AnyProvider, **kwargs):
         super().__init__(**kwargs)
         self.provider = provider
         self._entries = []
         self._highlighted: int | None = None
+
+    @property
+    def _catalog(self) -> VideoProtocol | TorrentProtocol | MangaProtocol:
+        """The non-music view of ``provider``.
+
+        Music providers are swapped for a MusicScreen in ``on_mount``, so the
+        results/preview path below only ever sees the kinds that answer a plain
+        ``search(query)``.
+        """
+        return cast(VideoProtocol | TorrentProtocol | MangaProtocol, self.provider)
 
     def compose(self) -> ComposeResult:
         name = self.provider.name
@@ -70,7 +84,7 @@ class SearchScreen(Screen):
         if getattr(self.provider, "flow", "episode") == "music":
             # switch_screen replaces SearchScreen; push+pop would pop the
             # MusicScreen we just pushed.
-            provider = cast(MusicProvider, self.provider)
+            provider = cast(MusicProtocol, self.provider)
             self.app.switch_screen(MusicScreen(provider))
             return
 
@@ -114,7 +128,7 @@ class SearchScreen(Screen):
     def _do_search(self, query: str) -> None:
         results = []
         try:
-            results = self.provider.search(query)
+            results = self._catalog.search(query)
         except Exception as exc:
             self.app.call_from_thread(self._set_status, f"[#f38ba8]Search error: {exc}")
             self.app.call_from_thread(self._show_loader, False)
@@ -163,7 +177,7 @@ class SearchScreen(Screen):
     def _render_preview(self, entry) -> str:
         name = getattr(entry, "name", "") or "?"
         try:
-            is_series = bool(self.provider.is_series(entry))
+            is_series = bool(self._catalog.is_series(entry))
         except Exception:
             is_series = True
         icon, kind = media_badge(self.provider, is_series)
@@ -201,7 +215,7 @@ class SearchScreen(Screen):
             return
         entry = self._entries[index]
         self.app.push_screen(
-            DetailScreen(self.provider, entry, is_series=self.provider.is_series(entry))
+            DetailScreen(self.provider, entry, is_series=self._catalog.is_series(entry))
         )
 
     def action_back(self) -> None:

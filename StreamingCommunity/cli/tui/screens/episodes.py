@@ -21,7 +21,7 @@ from textual.widgets import (
 
 from ..flow import SeasonBatch
 from ..formatting import preview_card
-from ..providers.base import ServiceProvider
+from ..providers.base import SeriesFlowProvider
 from ..widgets import Header, SelectableTable
 from .queue import QueueScreen
 
@@ -38,7 +38,7 @@ class EpisodesScreen(Screen):
 
     def __init__(
         self,
-        provider: ServiceProvider,
+        provider: SeriesFlowProvider,
         entry,
         batch: SeasonBatch,
         season: int,

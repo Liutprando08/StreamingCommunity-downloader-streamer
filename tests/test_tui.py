@@ -26,9 +26,13 @@ from StreamingCommunity.cli.tui.formatting import (
     status_badge,
 )
 from StreamingCommunity.cli.tui.parse import parse_ranges
-from StreamingCommunity.cli.tui.providers import registry
-from StreamingCommunity.cli.tui.providers.animeunity import AnimeunityProvider
-from StreamingCommunity.cli.tui.providers.manga import MangaWorldProvider
+from StreamingCommunity.cli.tui.providers import (
+    MangaProvider,
+    MusicProvider,
+    TorrentProvider,
+    VideoProvider,
+    registry,
+)
 from StreamingCommunity.cli.tui.screens.activity import ActivityScreen
 from StreamingCommunity.cli.tui.screens.detail import DetailScreen
 from StreamingCommunity.cli.tui.screens.episodes import EpisodesScreen
@@ -662,11 +666,12 @@ class TestTuiSettings(unittest.IsolatedAsyncioTestCase):
 
 class TestAnimeunityProvider(unittest.TestCase):
     def setUp(self):
-        self.provider = AnimeunityProvider()
+        # Video services are configured instances of the shared VideoProvider.
+        self.provider = registry.get("animeunity")
 
     def test_registry_lookup(self):
         found = registry.get("animeunity")
-        self.assertIsInstance(found, AnimeunityProvider)
+        self.assertIsInstance(found, VideoProvider)
         self.assertEqual(found.name, "Animeunity")
         self.assertEqual(found.category, "Anime")
         self.assertIsNone(registry.get("does-not-exist"))
@@ -710,11 +715,11 @@ class TestAnimeunityProvider(unittest.TestCase):
 
 class TestMangaWorldProvider(unittest.TestCase):
     def setUp(self):
-        self.provider = MangaWorldProvider()
+        self.provider = registry.get("mangaworld")
 
     def test_registry_lookup(self):
         found = registry.get("mangaworld")
-        self.assertIsInstance(found, MangaWorldProvider)
+        self.assertIsInstance(found, MangaProvider)
         self.assertEqual(found.name, "MangaWorld")
         self.assertEqual(found.category, "Manga")
 
@@ -787,7 +792,7 @@ class TestMangaWorldProvider(unittest.TestCase):
         )
         chapter = SimpleNamespace(number=42)
         with mock.patch.object(
-            MangaWorldProvider, "_downloader"
+            MangaProvider, "_downloader"
         ) as downloader_factory:
             downloader = mock.MagicMock()
             downloader_factory.return_value = downloader
@@ -1145,6 +1150,14 @@ class TestProviderRegistry(unittest.TestCase):
     def test_flows_are_known(self):
         for provider in registry.all():
             self.assertIn(provider.flow, {"episode", "music", "atomic"}, provider.name)
+
+    def test_every_provider_is_one_of_the_four_kinds(self):
+        for provider in registry.all():
+            self.assertIsInstance(
+                provider,
+                (VideoProvider, MusicProvider, TorrentProvider, MangaProvider),
+                provider.name,
+            )
 
     def test_duplicate_alias_rejected(self):
         from StreamingCommunity.cli.tui.providers import ProviderRegistry

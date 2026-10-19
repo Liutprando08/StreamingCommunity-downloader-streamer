@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -12,7 +14,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Static, Switch
 
 from ..formatting import detail_lines, entry_info, escape_markup, media_badge
-from ..providers.base import ServiceProvider
+from ..providers.base import AnyProvider, SeriesFlowProvider
 from ..widgets import Header
 from .audio_source import AudioSourceScreen
 from .queue import QueueScreen
@@ -22,7 +24,7 @@ from .seasons import SeasonsScreen
 class DetailScreen(Screen):
     BINDINGS = [("escape", "back", "Indietro")]
 
-    def __init__(self, provider: ServiceProvider, entry, is_series: bool = True, **kwargs):
+    def __init__(self, provider: AnyProvider, entry, is_series: bool = True, **kwargs):
         super().__init__(**kwargs)
         self.provider = provider
         self.entry = entry
@@ -174,7 +176,11 @@ class DetailScreen(Screen):
         # Providers without season metadata (torrent) treat the picked entry as
         # one indivisible download and skip the seasons/episodes screens.
         if self.is_series and getattr(self.provider, "supports_seasons", True):
-            self.app.push_screen(SeasonsScreen(self.provider, self.entry, mode=mode))
+            # Only the series-capable kinds land here: torrent never passes the
+            # check above (supports_seasons is False) and music opens its own
+            # drill-down screen instead of this one.
+            provider = cast(SeriesFlowProvider, self.provider)
+            self.app.push_screen(SeasonsScreen(provider, self.entry, mode=mode))
             return
 
         # Torrents can borrow the Italian audio from StreamingCommunity: pick

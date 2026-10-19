@@ -24,7 +24,7 @@ from textual.widgets import (
 )
 from textual.widgets.data_table import RowKey
 
-from ..providers.base import MusicProvider
+from ..providers.base import MusicProtocol
 from ..widgets import Header, SelectableTable
 from .queue import QueueScreen
 
@@ -43,7 +43,7 @@ class MusicScreen(Screen):
 
     def __init__(
         self,
-        provider: MusicProvider,
+        provider: MusicProtocol,
         initial_query: str | None = None,
         initial_mode: str | None = None,
         **kwargs,
