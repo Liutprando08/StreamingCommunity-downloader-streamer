@@ -261,7 +261,14 @@ def setup_argument_parser(search_functions):
     )
     parser.add_argument("--site", type=str, help="Site by name or index")
     parser.add_argument(
-        "--tui", action="store_true", help="Start the interactive TUI"
+        "--tui",
+        action="store_true",
+        help="Start the interactive TUI (now the default; kept for compatibility)",
+    )
+    parser.add_argument(
+        "--cli",
+        action="store_true",
+        help="Use the classic command-line interface instead of the TUI",
     )
     parser.add_argument(
         "--global", action="store_true", help="Global search across sites"
@@ -433,6 +440,46 @@ def get_user_site_selection(choice_labels):
     )
 
 
+# Flags that only make sense in the classic CLI: their presence opts out of the
+# TUI default so existing scripts and README examples keep working unchanged.
+_CLI_ONLY_ARGS = (
+    "site",
+    "search",
+    "auto_first",
+    "global",
+    "update",
+    "stream",
+    "player",
+    "stream_port",
+    "extension",
+    "s_video",
+    "s_audio",
+    "s_subtitle",
+    "use_proxy",
+    "not_close",
+)
+
+
+def _should_launch_tui(args) -> bool:
+    """Decide whether to open the TUI instead of the classic CLI.
+
+    The TUI is the default for a bare interactive launch. An explicit ``--cli``,
+    any CLI-only flag, or a non-interactive stdout falls back to the CLI so
+    existing scripts and pipes keep working. ``--tui`` remains an explicit
+    opt-in (and wins over CLI-only flags, matching the previous behaviour).
+    """
+    if getattr(args, "cli", False):
+        return False
+    if getattr(args, "tui", False):
+        return True
+    if any(
+        getattr(args, name, None) not in (None, False, 0, "")
+        for name in _CLI_ONLY_ARGS
+    ):
+        return False
+    return sys.stdout.isatty()
+
+
 def main():
     execute_hooks("pre_run")
     initialize()
@@ -442,15 +489,19 @@ def main():
         parser = setup_argument_parser(search_functions)
         args = parser.parse_args()
 
-        # Launch the interactive TUI when requested
-        if getattr(args, "tui", False):
+        # Launch the interactive TUI by default; fall back to the classic CLI
+        # when ``--cli`` (or any CLI-only flag) is used, or stdout is not a TTY.
+        if _should_launch_tui(args):
             try:
                 from StreamingCommunity.cli.tui import run as run_tui
             except ImportError as e:
-                console.print(f"[red]TUI dependencies are missing: {e}")
+                console.print(
+                    f"[yellow]TUI dependencies are missing ({e}); "
+                    "falling back to the CLI"
+                )
+            else:
+                run_tui()
                 return
-            run_tui()
-            return
 
         # Handle auto-update
         if args.update:
