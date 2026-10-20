@@ -41,6 +41,30 @@ all_modules = _find_all_py_modules(pkg)
 all_packages = _find_all_init_packages(pkg)
 data_files = _find_data_files(pkg)
 
+# Modules never needed at runtime; dropping them shrinks the bundled PYZ.
+#  - setuptools/pkg_resources/_distutils_hack (~1.6 MB): only referenced by
+#    optional import shims (cffi build helpers, click's pkg_resources fallback).
+#  - pydoc + pydoc_data (~0.7 MB): interactive help only.
+#  - unittest/doctest/lib2to3: test tooling, unused at runtime.
+#  - pygments (~4.2 MB): only reached via rich.syntax / rich.traceback /
+#    textual.highlight, which are never imported on this app's startup path
+#    (verified: all 220 package modules import fine without it). Trade-off:
+#    textual's rich crash-screen for an unhandled TUI exception falls back to
+#    a plain traceback.
+# pdb/bdb/cmd/code must NOT be listed: `construct` (used by pywidevine) does a
+# top-level `import pdb`.
+excluded_modules = [
+    'setuptools',
+    'pkg_resources',
+    '_distutils_hack',
+    'pydoc',
+    'pydoc_data',
+    'doctest',
+    'unittest',
+    'lib2to3',
+    'pygments',
+]
+
 datas = [('Conf', 'Conf')] + data_files
 binaries = []
 hiddenimports = (
@@ -63,10 +87,21 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excluded_modules,
     noarchive=False,
-    optimize=0,
+    # 1 = strip assert statements from bundled bytecode. NOTE: 2 (-OO) is NOT
+    # usable here - it also strips __doc__ strings, and pycparser's bundled ply
+    # derives its C grammar from those docstrings, so cffi raises
+    # "YaccError: Unable to build parser" at startup and the app dies.
+    optimize=1,
 )
+
+# Ship only libraries the OS does not provide (libssl, libcrypto, libstdc++,
+# libsqlite3, libncurses, ...). libpython and everything under lib-dynload is
+# always kept. Saves several MB; the target machine must provide the usual
+# system libraries (any desktop distro does).
+a.exclude_system_libraries()
+
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -78,7 +113,7 @@ exe = EXE(
     name='StreamingCommunity',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,

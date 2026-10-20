@@ -4,6 +4,7 @@ import urllib.parse
 
 # External library
 from httpx2 import HTTPError
+from curl_cffi.requests.exceptions import RequestException as CurlRequestException
 from rich.prompt import Prompt
 
 from StreamingCommunity.services._base import Entries, EntriesManager, site_constants
@@ -34,13 +35,19 @@ def get_token(user_agent: str) -> dict:
     """
     Retrieve session cookies from the site.
     """
-    response = create_client_curl(headers={"user-agent": user_agent}).get(
-        site_constants.FULL_URL
-    )
-    response.raise_for_status()
-    all_cookies = {name: value for name, value in response.cookies.items()}
+    try:
+        response = create_client_curl(headers={"user-agent": user_agent}).get(
+            site_constants.FULL_URL
+        )
+        response.raise_for_status()
+        all_cookies = {name: value for name, value in response.cookies.items()}
 
-    return {k: urllib.parse.unquote(v) for k, v in all_cookies.items()}
+        return {k: urllib.parse.unquote(v) for k, v in all_cookies.items()}
+    except (HTTPError, CurlRequestException, OSError, Exception) as e:
+        console.print(
+            f"[red]Site: {site_constants.SITE_NAME}, get_token error: {e}"
+        )
+        raise
 
 
 def get_real_title(record: dict) -> str:
@@ -57,7 +64,7 @@ def get_real_title(record: dict) -> str:
 
 def title_search(query: str) -> int:
     """
-    Perform anime search on animeunity.so.
+    Perform anime search on animeunity.
     """
     entries_manager.clear()
     table_show_manager.clear()
@@ -89,7 +96,7 @@ def title_search(query: str) -> int:
             response1.json().get("records", []), seen_titles, entries_manager
         )
 
-    except HTTPError as e:
+    except (HTTPError, CurlRequestException, OSError, Exception) as e:
         console.print(
             f"[red]Site: {site_constants.SITE_NAME}, request search error: {e}"
         )
@@ -118,8 +125,11 @@ def title_search(query: str) -> int:
             response2.json().get("records", []), seen_titles, entries_manager
         )
 
-    except HTTPError as e:
-        console.print(f"Site: {site_constants.SITE_NAME}, archivio search error: {e}")
+    except (HTTPError, CurlRequestException, OSError, Exception) as e:
+        console.print(
+            f"[red]Site: {site_constants.SITE_NAME}, request search error: {e}"
+        )
+        return 0
 
     result_count = len(entries_manager)
     return result_count

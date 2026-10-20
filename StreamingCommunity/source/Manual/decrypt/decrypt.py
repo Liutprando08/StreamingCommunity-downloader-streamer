@@ -12,14 +12,17 @@ from StreamingCommunity.utils.console.shared import console
 AES = None
 unpad = None
 try:
-    from Cryptodome.Cipher import AES
-    from Cryptodome.Util.Padding import unpad
+    # pycryptodome (namespace `Crypto`) is already a hard dependency of
+    # pywidevine/pyplayready, so it is always available. Prefer it over
+    # pycryptodomex so only one copy of the C extension gets bundled.
+    from Crypto.Cipher import AES
+    from Crypto.Util.Padding import unpad
 except Exception:
     try:
-        from Crypto.Cipher import AES
-        from Crypto.Util.Padding import unpad
+        from Cryptodome.Cipher import AES
+        from Cryptodome.Util.Padding import unpad
     except Exception: 
-        logging.warning("PyCryptodome not found, HLS segment decryption will not work. Install with 'pip install pycryptodomex' for AES-128-CBC support.")
+        logging.warning("PyCryptodome not found, HLS segment decryption will not work. Install with 'pip install pycryptodome' for AES-128-CBC support.")
 
 
 # Internal import

@@ -31,7 +31,7 @@ dependencies = [
   "ua-generator",
   "pywidevine",
   "pyplayready",
-  "pycryptodomex",
+  "pycryptodome",
   "yt-dlp",
   "requests>=2.34.2",
   "textual>=8.2.8",

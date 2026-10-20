@@ -30,12 +30,42 @@ jobs:
         run: uv python install 3.12
 
       # Sincronizza le dipendenze dal file uv.lock, creando il virtualenv
+      # (pyinstaller>=6.21: lo spec usa Analysis.exclude_system_libraries())
       - name: Install dependencies
-        run: uv sync && uv pip install pyinstaller
+        run: uv sync && uv pip install "pyinstaller>=6.21"
+
+      # UPX comprime i binari nel bundle (upx=True nello spec). E' un no-op se
+      # upx non e' sul PATH: senza questo step i release binary escono molto
+      # piu' grandi di quelli buildati localmente.
+      # NOTA: UPX non supporta Mach-O, quindi macOS resta senza compressione.
+      - name: Install UPX (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq upx || sudo apt-get install -y -qq upx-ucl
+          upx --version | head -1
+
+      - name: Install UPX (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ver = '5.2.1'
+          $url = "https://github.com/upx/upx/releases/download/v$ver/upx-$ver-win64.zip"
+          Invoke-WebRequest -Uri $url -OutFile upx.zip
+          Expand-Archive upx.zip -DestinationPath upx -Force
+          Add-Content -Path $env:GITHUB_PATH -Value (Resolve-Path "upx/upx-$ver-win64")
 
       # Esegue pyinstaller isolato nel corretto ambiente virtuale gestito da uv
       - name: Build
         run: uv run pyinstaller StreamingCommunity.spec --clean --noconfirm
+
+      # Verifica che la compressione UPX sia realmente avvenuta: se il binario
+      # e' sospettosamente grande, upx non e' stato trovato.
+      - name: Report binary size
+        shell: bash
+        run: |
+          echo "UPX on PATH: $(command -v upx || echo 'not available')"
+          ls -la dist/StreamingCommunity*
 
       - name: Rename binary (Linux)
         if: runner.os == 'Linux'
