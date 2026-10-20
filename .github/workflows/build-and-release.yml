@@ -38,22 +38,22 @@ jobs:
       # upx non e' sul PATH: senza questo step i release binary escono molto
       # piu' grandi di quelli buildati localmente.
       # NOTA: UPX non supporta Mach-O, quindi macOS resta senza compressione.
-      - name: Install UPX (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq upx || sudo apt-get install -y -qq upx-ucl
-          upx --version | head -1
-
-      - name: Install UPX (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $ver = '5.2.1'
-          $url = "https://github.com/upx/upx/releases/download/v$ver/upx-$ver-win64.zip"
-          Invoke-WebRequest -Uri $url -OutFile upx.zip
-          Expand-Archive upx.zip -DestinationPath upx -Force
-          Add-Content -Path $env:GITHUB_PATH -Value (Resolve-Path "upx/upx-$ver-win64")
+      # UPX completely disabled to avoid DLL corruption on Windows
+      # - name: Install UPX (Linux)
+      #   if: runner.os == 'Linux'
+      #   run: |
+      #     sudo apt-get update -qq
+      #     sudo apt-get install -y -qq upx || sudo apt-get install -y -qq upx-ucl
+      #     upx --version | head -1
+      # - name: Install UPX (Windows)
+      #   if: runner.os == 'Windows'
+      #   shell: pwsh
+      #   run: |
+      #     $ver = '5.2.1'
+      #     $url = "https://github.com/upx/upx/releases/download/v$ver/upx-$ver-win64.zip"
+      #     Invoke-WebRequest -Uri $url -OutFile upx.zip
+      #     Expand-Archive upx.zip -DestinationPath upx -Force
+      #     Add-Content -Path $env:GITHUB_PATH -Value (Resolve-Path "upx/upx-$ver-win64")
 
       # Esegue pyinstaller isolato nel corretto ambiente virtuale gestito da uv
       - name: Build

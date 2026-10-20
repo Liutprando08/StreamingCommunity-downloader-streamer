@@ -107,7 +107,8 @@ pyz = PYZ(a.pure)
 
 # Disable UPX on Windows: it often corrupts python3*.dll and causes
 # "LoadLibrary failed" errors on clean Windows machines.
-upx_enabled = sys.platform != 'win32'
+# Disable UPX completely to avoid any DLL corruption issues on Windows
+upx_enabled = False
 
 exe = EXE(
     pyz,
@@ -118,17 +119,9 @@ exe = EXE(
     name='StreamingCommunity',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True,
+    strip=False,
     upx=upx_enabled,
-    upx_exclude=[
-        'python3*.dll',
-        'python*.dll',
-        'vcruntime*.dll',
-        'ucrtbase.dll',
-        'api-ms-win-*.dll',
-        'msvcp*.dll',
-        'concrt*.dll',
-    ],
+    upx_exclude=[],
     runtime_tmpdir=None,
     console=True,
     disable_windowed_traceback=False,
