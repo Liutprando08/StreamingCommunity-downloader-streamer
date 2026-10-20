@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -104,6 +105,10 @@ a.exclude_system_libraries()
 
 pyz = PYZ(a.pure)
 
+# Disable UPX on Windows: it often corrupts python3*.dll and causes
+# "LoadLibrary failed" errors on clean Windows machines.
+upx_enabled = sys.platform != 'win32'
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -114,8 +119,16 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=True,
-    upx=True,
-    upx_exclude=[],
+    upx=upx_enabled,
+    upx_exclude=[
+        'python3*.dll',
+        'python*.dll',
+        'vcruntime*.dll',
+        'ucrtbase.dll',
+        'api-ms-win-*.dll',
+        'msvcp*.dll',
+        'concrt*.dll',
+    ],
     runtime_tmpdir=None,
     console=True,
     disable_windowed_traceback=False,
