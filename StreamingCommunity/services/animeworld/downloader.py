@@ -173,8 +173,20 @@ def stream_film(select_title: Entries):
     return download_film(select_title)
 
 
-def stream_episode(*args, **kwargs):
-    return None
+def stream_episode(
+    obj_episode: Episode,
+    index_season_selected: int,
+    index_episode_selected: int,
+    scrape_serie: ScrapSerie,
+    video_source=None,
+):
+    return download_episode(
+        obj_episode,
+        index_season_selected,
+        index_episode_selected,
+        scrape_serie,
+        video_source=video_source,
+    )
 
 
 def stream_series(*args, **kwargs):

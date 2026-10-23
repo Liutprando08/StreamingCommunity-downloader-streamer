@@ -5,12 +5,23 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "StreamingCommunity-download-stream"
 dynamic = ["version"]
-description = "Download content from streaming platforms"
+description = "Actively maintained downloader/streamer for publicly accessible streaming and torrent sources."
 readme = "README.md"
-license = "GPL-3.0-only"
+license = "GPL-3.0-or-later"
 requires-python = ">=3.10"
 authors = [{ name = "Liutprando08" }]
+maintainers = [{ name = "Liutprando08" }]
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: OS Independent",
+]
+dependencies = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: End Users/Desktop",
   "Programming Language :: Python :: 3",
@@ -39,6 +50,9 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/Liutprando08/StreamingCommunity-downloader-streamer"
+Repository = "https://github.com/Liutprando08/StreamingCommunity-downloader-streamer"
+Issues = "https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/issues"
+Changelog = "https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/blob/master/CHANGELOG.md"
 "Bug Reports" = "https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/issues"
 Source = "https://github.com/Liutprando08/StreamingCommunity-downloader-streamer"
 
