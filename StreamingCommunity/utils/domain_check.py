@@ -17,10 +17,15 @@ SITE_NAME = "streamingcommunity"
 SCRAPER_URL = "https://www.giardiniblog.it/streamingcommunity-nuovo-link/"
 ANIMEWORLD_SITE_NAME = "animeworld"
 ANIMEWORLD_SCRAPER_URL = "https://www.giardiniblog.it/animeworld-nuovo/"
+ANIMEUNITY_SITE_NAME = "animeunity"
+ANIMEUNITY_SCRAPER_URL = "https://natchecker.com/it/blog/animeunity"
 DEFAULT_TIMEOUT = 10.0
 URL_PATTERN = re.compile(r"https?://streaming-community\.[a-z0-9.-]+/?")
 ANIMEWORLD_URL_PATTERN = re.compile(
     r"https?://(?:www\.)?animeworld\.[a-z0-9.-]+/?"
+)
+ANIMEUNITY_URL_PATTERN = re.compile(
+    r"https?://(?:www\.)?animeunity\.[a-z0-9.-]+/?"
 )
 logger = logging.getLogger(__name__)
 
@@ -161,4 +166,15 @@ def check_animeworld_domain() -> bool:
     """
     return _check_domain(
         ANIMEWORLD_SITE_NAME, ANIMEWORLD_SCRAPER_URL, ANIMEWORLD_URL_PATTERN
+    )
+
+
+def check_animeunity_domain() -> bool:
+    """Check the current AnimeUnity domain and update domains.json if it changed.
+
+    Uses natchecker.com as source, with redirect detection as a fallback.
+    Called once before the first AnimeUnity search.
+    """
+    return _check_domain(
+        ANIMEUNITY_SITE_NAME, ANIMEUNITY_SCRAPER_URL, ANIMEUNITY_URL_PATTERN
     )

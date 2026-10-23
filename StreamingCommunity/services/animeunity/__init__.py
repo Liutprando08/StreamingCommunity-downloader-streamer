@@ -16,6 +16,7 @@ from StreamingCommunity.utils import TVShowManager
 from StreamingCommunity.utils.console.shared import console
 
 # Internal utilities
+from StreamingCommunity.utils.domain_check import check_animeunity_domain
 from StreamingCommunity.utils.http_client import create_client_curl, get_userAgent
 
 # Logic
@@ -25,10 +26,21 @@ from .downloader import download_film, download_series
 indice = 1
 _useFor = "Anime"
 
-
 msg = Prompt()
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
+_domain_checked = False
+
+
+def _ensure_domain() -> None:
+    global _domain_checked
+    if _domain_checked:
+        return
+    _domain_checked = True
+    try:
+        check_animeunity_domain()
+    except Exception as exc:
+        console.print(f"[yellow]Domain check skipped: {exc}")
 
 
 def get_token(user_agent: str) -> dict:
@@ -66,6 +78,7 @@ def title_search(query: str) -> int:
     """
     Perform anime search on animeunity.
     """
+    _ensure_domain()
     entries_manager.clear()
     table_show_manager.clear()
     seen_titles = set()

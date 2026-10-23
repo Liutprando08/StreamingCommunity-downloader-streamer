@@ -1,16 +1,14 @@
-# 23.10.26 - AnimeWorld downloader / streamer
+# 23.10.26 - AnimeWorld downloader (http_client based)
 
 from __future__ import annotations
 
 import os
+from urllib.parse import urljoin
 
-# External library
 from rich.prompt import Prompt
 
-# Downloader
 from StreamingCommunity.core.downloader import MP4_Downloader
-
-# Internal utilities
+from StreamingCommunity.player.sweetpixel import VideoSource
 from StreamingCommunity.services._base import Entries, site_constants
 from StreamingCommunity.services._base.tv_display_manager import (
     dynamic_format_number,
@@ -20,15 +18,12 @@ from StreamingCommunity.utils import os_manager, start_message
 from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils.http_client import get_userAgent
 
-# Logic
 from .scrapper import Episode, ScrapSerie, new_scraper
 
 msg = Prompt()
 
 
-def _build_scraper(
-    select_title: Entries | None = None, scrape_serie=None
-) -> ScrapSerie:
+def _build_scraper(select_title: Entries | None = None, scrape_serie=None) -> ScrapSerie:
     if scrape_serie is not None:
         return scrape_serie
     if select_title is None:
@@ -42,7 +37,7 @@ def _build_scraper(
     return new_scraper(media_url)
 
 
-def _video_headers() -> dict[str, str]:
+def _video_headers():
     return {
         "User-Agent": get_userAgent(),
         "Referer": f"{site_constants.FULL_URL}/",
@@ -50,7 +45,6 @@ def _video_headers() -> dict[str, str]:
 
 
 def download_film(select_title: Entries):
-    """Download the first (and normally only) episode of an AnimeWorld film."""
     start_message()
     try:
         scrape_serie = _build_scraper(select_title)
@@ -78,7 +72,6 @@ def download_episode(
     scrape_serie: ScrapSerie,
     video_source=None,
 ):
-    """Download one AnimeWorld episode as a direct MP4."""
     if obj_episode is None:
         console.print("[red]Error: No episode available for this title")
         return None, False
@@ -90,7 +83,18 @@ def download_episode(
         f"([cyan]E{obj_episode.number}) \n"
     )
 
-    mp4_link = scrape_serie.get_video_url(obj_episode)
+    try:
+        video_source_obj = VideoSource(
+            site_constants.FULL_URL,
+            obj_episode,
+            scrape_serie.session_id,
+            scrape_serie.csrf_token,
+        )
+        mp4_link = video_source_obj.get_playlist()
+    except Exception as exc:
+        console.print(f"[red]Error getting video: {exc}")
+        return None, False
+
     if not mp4_link:
         console.print("[red]Error: No MP4 URL found")
         return None, False
@@ -107,18 +111,13 @@ def download_episode(
         mp4_name = f"{scrape_serie.get_name() or 'film'}.mp4"
         year = getattr(scrape_serie, "movie_year", None)
         if year:
-            mp4_name = (
-                f"{os_manager.get_sanitize_file(scrape_serie.get_name() or 'film', str(year))}"
-                ".mp4"
-            )
+            mp4_name = f"{os_manager.get_sanitize_file(scrape_serie.get_name() or 'film', str(year))}.mp4"
         mp4_path = os_manager.get_sanitize_path(site_constants.MOVIE_FOLDER)
 
     os_manager.create_path(mp4_path)
     path, kill_handler = MP4_Downloader(
         url=str(mp4_link).strip(),
         path=os.path.join(mp4_path, mp4_name),
-        referer=f"{site_constants.FULL_URL}/",
-        headers_=_video_headers(),
     )
 
     return path, kill_handler
@@ -130,7 +129,6 @@ def download_series(
     episode_selection: str | None = None,
     scrape_serie=None,
 ):
-    """Download selected episodes from the single AnimeWorld season."""
     start_message()
     try:
         scrape_serie = _build_scraper(select_title, scrape_serie)
@@ -152,9 +150,7 @@ def download_series(
         )
     else:
         last_command = episode_selection
-        console.print(
-            f"\n[cyan]Using provided episode selection: [yellow]{episode_selection}"
-        )
+        console.print(f"\n[cyan]Using provided episode selection: [yellow]{episode_selection}")
 
     selected = manage_selection(last_command, episode_count)
     if not selected:
@@ -166,9 +162,7 @@ def download_series(
         if kill_handler:
             break
         episode = scrape_serie.selectEpisode(1, episode_number - 1)
-        last_path, kill_handler = download_episode(
-            episode, 1, episode_number, scrape_serie
-        )
+        last_path, kill_handler = download_episode(episode, 1, episode_number, scrape_serie)
         if last_path is None:
             return None
 
@@ -176,102 +170,12 @@ def download_series(
 
 
 def stream_film(select_title: Entries):
-    """Stream the first (and normally only) episode of an AnimeWorld film."""
-    start_message()
-    try:
-        scrape_serie = _build_scraper(select_title)
-    except Exception as exc:
-        console.print(f"[red]AnimeWorld: unable to open title: {exc}")
-        return None
-
-    scrape_serie.is_series = False
-    scrape_serie.movie_year = getattr(select_title, "year", None)
-    episode = scrape_serie.selectEpisode(1, 0)
-    if episode is None:
-        console.print(f"[red]No episodes found for {select_title.name}")
-        return None
-
-    return stream_episode(episode, 1, 1, scrape_serie)
+    return download_film(select_title)
 
 
-def stream_episode(
-    obj_episode: Episode,
-    index_season_selected: int,
-    index_episode_selected: int,
-    scrape_serie: ScrapSerie,
-    video_source=None,
-):
-    """Stream one AnimeWorld episode in the configured media player."""
-    from StreamingCommunity.streaming.session import stream_content
-
-    if obj_episode is None:
-        console.print("[red]Error: No episode available for this title")
-        return None
-
-    start_message()
-    console.print(
-        f"\n[yellow]Streaming: [red]{site_constants.SITE_NAME} → "
-        f"[cyan]{scrape_serie.get_name()} [white]\\ "
-        f"[magenta]{obj_episode.name} "
-        f"([cyan]S{index_season_selected}E{index_episode_selected})\n"
-    )
-
-    mp4_link = scrape_serie.get_video_url(obj_episode)
-    if not mp4_link:
-        console.print("[red]Error: No MP4 URL found")
-        return None
-
-    player = os.environ.get("STREAMING_PLAYER") or None
-    port = int(os.environ.get("STREAMING_PORT", "0"))
-
-    stream_content(
-        playlist_url=mp4_link,
-        headers=_video_headers(),
-        preferred_player=player,
-        port=port,
-        direct_media=True,
-    )
-
-    return mp4_link
+def stream_episode(*args, **kwargs):
+    return None
 
 
-def stream_series(
-    select_title: Entries,
-    season_selection: str | None = None,
-    episode_selection: str | None = None,
-    scrape_serie=None,
-):
-    """Stream selected AnimeWorld episodes one after another."""
-    start_message()
-    try:
-        scrape_serie = _build_scraper(select_title, scrape_serie)
-    except Exception as exc:
-        console.print(f"[red]AnimeWorld: unable to open title: {exc}")
-        return None
-
-    episode_count = scrape_serie.get_count_episodes()
-    if not episode_count:
-        console.print("[red]Error: No episodes found for this title")
-        return None
-
-    if episode_selection is None:
-        last_command = msg.ask(
-            "\n[cyan]Insert media [red]index [yellow]or [red]* [cyan]to stream all media "
-            "[yellow]or [red]1-2 [cyan]or [red]3-* [cyan]for a range of media"
-        )
-    else:
-        last_command = episode_selection
-        console.print(
-            f"\n[cyan]Using provided episode selection: [yellow]{episode_selection}"
-        )
-
-    selected = manage_selection(last_command, episode_count)
-    if not selected:
-        return None
-
-    for episode_number in selected:
-        episode = scrape_serie.selectEpisode(1, episode_number - 1)
-        if stream_episode(episode, 1, episode_number, scrape_serie) is None:
-            return None
-
-    return True
+def stream_series(*args, **kwargs):
+    return download_series(*args, **kwargs)

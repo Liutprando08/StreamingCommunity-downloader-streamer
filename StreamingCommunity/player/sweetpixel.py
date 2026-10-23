@@ -1,50 +1,52 @@
-# 23.10.26 - AnimeWorld video source
+# 20.09.23
 
-from __future__ import annotations
-
+import json
 import logging
+from urllib.parse import urljoin
 
-from StreamingCommunity.services.animeworld.client import AnimeWorldClient
+from bs4 import BeautifulSoup
 
-logger = logging.getLogger(__name__)
+# Internal utilities
+from StreamingCommunity.utils.http_client import create_client, get_headers
 
 
 class VideoSource:
-    """Resolve an AnimeWorld episode to its direct MP4 URL.
-
-    Kept as a small compatibility wrapper for callers that used the old
-    ``player.sweetpixel.VideoSource`` API.  New code normally lets
-    ``ScrapSerie.get_video_url`` reuse the scraper's authenticated client.
-    """
-
-    def __init__(
-        self,
-        site_url: str,
-        episode_data=None,
-        session_id: str | None = None,
-        csrf_token: str | None = None,
-    ):
-        self.site_url = str(site_url).rstrip("/")
-        self.episode_data = episode_data
+    def __init__(self, site_url, episode, session_id, csrf_token):
+        self.site_url = site_url
+        self.episode = episode
         self.session_id = session_id
         self.csrf_token = csrf_token
-        self.client = AnimeWorldClient(self.site_url)
+        self.headers = get_headers()
 
-    def get_playlist(self, token: str | None = None) -> str | None:
-        token = token or getattr(self.episode_data, "token", None)
-        if token is None and self.episode_data is not None:
-            token = getattr(self.episode_data, "id", None)
-        if not token:
-            logger.warning("No AnimeWorld episode token supplied")
-            return None
-
+    def get_playlist(self):
         try:
-            info = self.client.episode_info(str(token))
-            url = info.get("grabber") or info.get("download")
-            return str(url).strip() if url else None
-        except Exception as exc:
-            logger.warning("AnimeWorld video source failed for %s: %s", token, exc)
-            return None
-
-    def close(self) -> None:
-        self.client.close()
+            url_info = f"{self.site_url}/api/episode/info?id={self.episode.id}&alt=0"
+            client = create_client(
+                cookies={"sessionId": self.session_id},
+                headers={**self.headers, "csrf-token": self.csrf_token, "X-Requested-With": "XMLHttpRequest", "Referer": f"{self.site_url}/"},
+                timeout=20,
+            )
+            try:
+                response = client.get(url_info)
+                response.raise_for_status()
+                data = response.json()
+                if isinstance(data, dict):
+                    if data.get("grabber"):
+                        return data["grabber"]
+                    if data.get("download"):
+                        return data["download"]
+                    if data.get("target"):
+                        target = urljoin(self.site_url + "/", data["target"])
+                        resp = client.get(target)
+                        soup = BeautifulSoup(resp.text, "html.parser")
+                        source = soup.find("source")
+                        if source and source.get("src"):
+                            return urljoin(self.site_url + "/", source.get("src"))
+                        video = soup.find("video")
+                        if video and video.get("src"):
+                            return urljoin(self.site_url + "/", video.get("src"))
+            finally:
+                client.close()
+        except Exception as e:
+            logging.error(f"Error getting playlist: {e}")
+        return None
