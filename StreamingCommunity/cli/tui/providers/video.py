@@ -91,6 +91,21 @@ def _scraper_animeunity(entry: Any) -> Any:
     return new_scraper(media_id, series_name)
 
 
+def _scraper_animeworld(entry: Any) -> Any:
+    from StreamingCommunity.services.animeworld.scrapper import new_scraper
+
+    # ``slug`` is the relative /play/... path, so a domain update between the
+    # search and the detail screen still resolves against the current domain.
+    media_url = getattr(entry, "slug", None) or getattr(entry, "url", None)
+    return new_scraper(media_url)
+
+
+def _description_animeworld(entry: Any) -> str | None:
+    import StreamingCommunity.services.animeworld as service
+
+    return service.get_full_description(entry)
+
+
 def _scraper_raiplay(entry: Any) -> Any:
     from StreamingCommunity.services.raiplay.scrapper import GetSerieInfo
 
@@ -260,8 +275,8 @@ class VideoProvider:
         return self._downloader().download_film(entry)
 
     def stream_film(self, entry: Any) -> Any:
-        # Only the streaming-capable catalogs (streamingcommunity, animeunity)
-        # have a stream path; the rest never offer the button.
+        # Only the streaming-capable catalogs (streamingcommunity, animeunity,
+        # animeworld) have a stream path; the rest never offer the button.
         if not self._spec.supports_streaming:
             return None
         return self._downloader().stream_film(entry)
@@ -315,6 +330,22 @@ _VIDEO_SPECS: tuple[VideoSpec, ...] = (
         ),
         series_test=_type_not_in(_FILM_TYPES),
         new_scraper=_scraper_animeunity,
+    ),
+    VideoSpec(
+        name="AnimeWorld",
+        alias="animeworld",
+        module="animeworld",
+        category="Anime",
+        supports_streaming=True,
+        downloads_films=True,
+        columns=(
+            ("Nome", "name"),
+            ("Tipo", "type"),
+            ("Lingua", "provider_language"),
+        ),
+        series_test=_type_not_in(_FILM_TYPES),
+        new_scraper=_scraper_animeworld,
+        description=_description_animeworld,
     ),
     # ── single-video services (atomic flow) ────────────────────────────────
     VideoSpec(

@@ -206,7 +206,7 @@ name (`--site animeunity`) or index (`--site 1`).
 | 3 | MediasetInfinity | Film / Serie | ✅ |
 | 4 | Guardaserie | Serie | ✅ |
 | 5 | RaiPlay | Film / Serie | ✅ |
-| 6 | AnimeWorld | Anime | — |
+| 6 | AnimeWorld | Anime | ✅ |
 | 7 | Crunchyroll | Anime | ✅ |
 | 8 | Realtime | Serie | ✅ |
 | 9 | Dmax | Serie | ✅ |
@@ -506,7 +506,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 - **`show_message`**: Display debug messages (default: `true`)
 - **`show_device_info`**: Display device information (default: `true`)
 - **`fetch_domain_online`**: Automatically fetch the latest `domains.json` from GitHub on startup (default: `true`)
-- **`check_domain_on_start`**: Verify the StreamingCommunity domain before the first search and update `domains.json` if it changed (default: `true`)
+- **`check_domain_on_start`**: Verify the StreamingCommunity and AnimeWorld domains before their first search and update `domains.json` if they changed (default: `true`)
 
 ### YouTube Settings
 
@@ -787,9 +787,9 @@ On startup, the app downloads the latest `domains.json` from the project's GitHu
 }
 ```
 
-### StreamingCommunity link check (`check_domain_on_start`)
+### StreamingCommunity / AnimeWorld link check (`check_domain_on_start`)
 
-StreamingCommunity changes its domain very often. When enabled, the app verifies the current domain before the first StreamingCommunity search by scraping the link tracker page (giardiniblog.it). If the domain changed, `Conf/domains.json` is updated automatically — no restart required.
+StreamingCommunity and AnimeWorld change their domains very often. When enabled, the app verifies the current domain before the first search of each service by scraping the corresponding link tracker page on giardiniblog.it. If the domain changed, `Conf/domains.json` is updated automatically — no restart required.
 
 ```json
 {

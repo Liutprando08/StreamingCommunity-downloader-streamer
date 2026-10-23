@@ -3,10 +3,22 @@ from __future__ import annotations
 import logging
 import signal
 import threading
+from urllib.parse import urlparse
 
 from StreamingCommunity.utils.console.shared import console
 
 logger = logging.getLogger(__name__)
+
+DIRECT_MEDIA_SUFFIXES = (".mp4", ".m4v", ".webm", ".mkv")
+
+
+def is_direct_media_url(url: str) -> bool:
+    """True for a plain media file, which must not be parsed as HLS."""
+    try:
+        path = urlparse(str(url)).path.lower()
+    except (TypeError, ValueError):
+        return False
+    return path.endswith(DIRECT_MEDIA_SUFFIXES)
 
 
 class StreamSession:
@@ -17,11 +29,13 @@ class StreamSession:
         output_dir: str | None = None,
         port: int = 0,
         preferred_player: str | None = None,
+        direct_media: bool = False,
     ):
         self.playlist_url = playlist_url
         self.headers = headers or {}
         self.output_dir = output_dir
         self.preferred_player = preferred_player
+        self.direct_media = bool(direct_media or is_direct_media_url(playlist_url))
 
         self.proxy_port = port
         self.cache = None
@@ -40,8 +54,9 @@ class StreamSession:
         from urllib.parse import quote
 
         encoded_url = quote(self.playlist_url, safe=":/")
+        route = "media" if self.direct_media else "playlist"
         proxy_playlist_url = (
-            f"http://127.0.0.1:{self.proxy_port}/playlist/{encoded_url}"
+            f"http://127.0.0.1:{self.proxy_port}/{route}/{encoded_url}"
         )
         from .player import PlayerLauncher
 
@@ -102,6 +117,7 @@ def stream_content(
     output_dir: str | None = None,
     port: int = 0,
     preferred_player: str | None = None,
+    direct_media: bool = False,
 ):
     session = StreamSession(
         playlist_url=playlist_url,
@@ -109,6 +125,7 @@ def stream_content(
         output_dir=output_dir,
         port=port,
         preferred_player=preferred_player,
+        direct_media=direct_media,
     )
 
     if not session.start():

@@ -206,6 +206,13 @@ class EpisodesScreen(Screen):
                     for i, ep in enumerate(episodes)
                 )
             self._show_loader(False)
+            if not episodes:
+                self._set_status(
+                    "[#f9e2af]Nessun episodio disponibile per questo titolo "
+                    "(potrebbe non essere ancora uscito)."
+                )
+                self._set_preview(INITIAL_PREVIEW)
+                return
             self._highlighted = 0
             if self._table is not None and self._table.count:
                 self._table.move_cursor(row=0)

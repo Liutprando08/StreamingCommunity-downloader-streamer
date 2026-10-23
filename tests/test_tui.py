@@ -713,6 +713,47 @@ class TestAnimeunityProvider(unittest.TestCase):
         self.assertEqual(self.provider.episodes(scraper, 1)[0].name, "Ep1")
 
 
+class TestAnimeWorldProvider(unittest.TestCase):
+    def setUp(self):
+        self.provider = registry.get("animeworld")
+
+    def test_registry_lookup(self):
+        found = registry.get("animeworld")
+        self.assertIsInstance(found, VideoProvider)
+        self.assertEqual(found.name, "AnimeWorld")
+        self.assertEqual(found.category, "Anime")
+        self.assertTrue(found.supports_streaming)
+        self.assertTrue(found.supports_seasons)
+
+    def test_columns_expose_language(self):
+        values = dict(self.provider.result_columns())
+        self.assertIn("Lingua", values)
+        self.assertEqual(values["Lingua"], "provider_language")
+        self.assertIn("name", values.values())
+        self.assertIn("type", values.values())
+
+    def test_film_types_are_not_series(self):
+        for media_type in ("film", "movie", "Movie", "FILM"):
+            entry = FakeEntry("X", type_=media_type)
+            self.assertFalse(self.provider.is_series(entry), media_type)
+
+    def test_anime_and_special_types_are_series(self):
+        for media_type in ("tv", "ONA", "ova", "anime", "", None):
+            entry = FakeEntry("X", type_=media_type)
+            self.assertTrue(self.provider.is_series(entry), media_type)
+
+    def test_seasons_and_episodes_delegate_to_scraper(self):
+        scraper = SimpleNamespace(
+            seasons_manager=SimpleNamespace(
+                seasons=[SimpleNamespace(number=1, name="S1")]
+            ),
+            getNumberSeason=lambda: 1,
+            getEpisodeSeasons=lambda s: [SimpleNamespace(number=1, name="Ep1")],
+        )
+        self.assertEqual(self.provider.seasons(scraper)[0].number, 1)
+        self.assertEqual(self.provider.episodes(scraper, 1)[0].name, "Ep1")
+
+
 class TestMangaWorldProvider(unittest.TestCase):
     def setUp(self):
         self.provider = registry.get("mangaworld")
@@ -1042,6 +1083,7 @@ class TestMusicProviders(unittest.TestCase):
             [
                 "Streamingcommunity",
                 "Animeunity",
+                "AnimeWorld",
                 "MangaWorld",
                 "Raiplay",
                 "Mediaset Infinity",
@@ -1118,6 +1160,7 @@ class TestProviderRegistry(unittest.TestCase):
         self.assertEqual(
             sorted(p.name for p in registry.all()),
             [
+                "AnimeWorld",
                 "Animeunity",
                 "Crunchyroll",
                 "Discovery EU",

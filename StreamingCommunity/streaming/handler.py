@@ -22,11 +22,24 @@ class StreamingHandler(BaseHTTPRequestHandler):
                 self._handle_segment(path)
             elif path.startswith("/key/"):
                 self._handle_key(path)
+            elif path.startswith("/media/"):
+                self._handle_media(path)
             else:
                 self.send_error(404, "Not found")
         except Exception as e:
             logger.error(f"Handler error: {e}")
             self.send_error(502, f"Proxy error: {e}")
+
+    def do_HEAD(self):
+        """Players often probe a direct media URL with HEAD before GET."""
+        if self.path.startswith("/media/"):
+            try:
+                self._handle_media(self.path, head=True)
+            except Exception as e:
+                logger.error(f"Handler HEAD error: {e}")
+                self.send_error(502, f"Proxy error: {e}")
+        else:
+            self.send_error(405, "Method not allowed")
 
     def _handle_playlist(self, path: str):
         origin_url = unquote(path[len("/playlist/") :])
@@ -94,6 +107,59 @@ class StreamingHandler(BaseHTTPRequestHandler):
         data = response.content
         self.session.cache.put(origin_url, data)
         self._send_bytes(data, content_type="application/octet-stream")
+
+    def _handle_media(self, path: str, head: bool = False):
+        """Proxy a direct media file and forward HTTP Range requests.
+
+        Unlike HLS segments this is not cached: a player may issue many range
+        requests for the same file, and seeking must always reach upstream.
+        """
+        origin_url = unquote(path[len("/media/") :])
+
+        from StreamingCommunity.utils.http_client import create_client
+
+        upstream_headers = {
+            "Accept-Encoding": "identity",
+        }
+        range_header = self.headers.get("Range")
+        if range_header:
+            upstream_headers["Range"] = range_header
+
+        with create_client(headers=self.session.headers, timeout=60) as client:
+            with client.stream(
+                "GET", origin_url, headers=upstream_headers
+            ) as response:
+                if response.status_code >= 400:
+                    self.send_error(
+                        response.status_code, "Upstream media request failed"
+                    )
+                    return
+
+                self.send_response(response.status_code)
+                for name in (
+                    "Content-Type",
+                    "Content-Length",
+                    "Content-Range",
+                    "Accept-Ranges",
+                    "Last-Modified",
+                    "ETag",
+                ):
+                    value = response.headers.get(name)
+                    if value:
+                        self.send_header(name, value)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+
+                if head:
+                    return
+
+                try:
+                    for chunk in response.iter_bytes():
+                        if chunk:
+                            self.wfile.write(chunk)
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    logger.debug("Media client disconnected from proxy")
 
     def _send_bytes(self, data: bytes, content_type: str = "application/octet-stream"):
         self.send_response(200)

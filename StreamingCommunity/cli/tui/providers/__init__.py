@@ -59,6 +59,7 @@ registry = ProviderRegistry()
 # it stable: flagship catalogs, manga, torrent, music, then the video services.
 registry.register(VideoProvider(VIDEO_SPECS["streamingcommunity"]))
 registry.register(VideoProvider(VIDEO_SPECS["animeunity"]))
+registry.register(VideoProvider(VIDEO_SPECS["animeworld"]))
 registry.register(MangaProvider(MANGA_SPECS["mangaworld"]))
 registry.register(TorrentProvider())
 registry.register(MusicProvider(MUSIC_SPECS["musicmp3"]))
