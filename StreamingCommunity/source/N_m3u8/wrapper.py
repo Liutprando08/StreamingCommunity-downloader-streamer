@@ -160,6 +160,9 @@ class MediaDownloader:
         ) = None, None, None, None, None
         self.status = None
         self.manifest_type = "Unknown"
+        self.parse_exit_code = None
+        self.parse_error = None
+        self.exit_code = None
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir_type = (
             "Movie"
@@ -266,8 +269,20 @@ class MediaDownloader:
 
     def parser_stream(self) -> List[StreamInfo]:
         """Analyze playlist and display table of available streams"""
+        self.parse_error = None
+        self.parse_exit_code = None
         analysis_path = self.output_dir / "analysis_temp"
         analysis_path.mkdir(exist_ok=True)
+        # Drop metadata from a previous (possibly failed) analysis so a failed
+        # re-parse cannot be mistaken for a successful one.
+        for stale in (
+            analysis_path / "temp_analysis" / "meta.json",
+            analysis_path / "temp_analysis" / "meta_selected.json",
+        ):
+            try:
+                stale.unlink()
+            except FileNotFoundError:
+                pass
         if self.download_id:
             download_tracker.update_status(self.download_id, "Parsing...")
 
@@ -321,10 +336,10 @@ class MediaDownloader:
         )
 
         # Save parsing log
+        log_parser = LogParser()
         log_path = self.output_dir / f"{self.filename}_parsing.log"
         with open(log_path, "w", encoding="utf-8", errors="replace") as log_file:
             log_file.write(f"Command: {' '.join(cmd)}\n{'=' * 80}\n\n")
-            log_parser = LogParser()
             for line in proc.stdout:
                 if line := line.rstrip():
                     log_parser.parse_line(line)
@@ -332,6 +347,7 @@ class MediaDownloader:
                     log_file.flush()
             proc.wait()
 
+        self.parse_exit_code = proc.returncode
         analysis_dir = analysis_path / "temp_analysis"
         self.meta_json_path = analysis_dir / "meta.json"
         self.meta_selected_path = analysis_dir / "meta_selected.json"
@@ -402,7 +418,25 @@ class MediaDownloader:
             )
             return self.streams
 
+        if proc.returncode not in (0, None):
+            self.parse_error = self._format_failure(proc.returncode, log_parser.errors)
+            console.print(f"[red]{self.parse_error}")
+
         return []
+
+    @staticmethod
+    def _format_failure(returncode, errors, max_lines: int = 3) -> str:
+        """Build a readable failure message from the downloader's error lines."""
+        tail = [str(e).strip() for e in errors[-max_lines:] if str(e).strip()]
+        detail = " | ".join(tail) if tail else "no error output"
+        return f"N_m3u8DL-RE exited with code {returncode}: {detail}"
+
+    @staticmethod
+    def _looks_like_expired_token(errors) -> bool:
+        """Heuristics for a signed-URL/token rejection (worth refreshing the URL)."""
+        joined = " ".join(str(e) for e in errors[-20:]).lower()
+        markers = ("403", "forbidden", "unauthorized", "401", "expired", "token")
+        return any(marker in joined for marker in markers)
 
     def get_metadata(self) -> tuple:
         """Get paths to metadata files"""
@@ -639,11 +673,14 @@ class MediaDownloader:
         if self.download_id and download_tracker.is_stopped(self.download_id):
             return {"error": "cancelled"}
 
+        self.exit_code = proc.returncode
+
         # Check for key retrieval errors (Succedde spesso quando parsa m3u8 che hanno bisogna di licenza, ma non ho ancora trovato un caso per implementare license per quel cazzo di m3u8 quindi amen va su failed).
         if any("Failed to get KEY" in error for error in log_parser.errors):
             self.status = {
                 "error": "key_error",
                 "message": "Failed to retrieve decryption key",
+                "exit_code": proc.returncode,
             }
             if self.download_id:
                 download_tracker.complete_download(
@@ -653,7 +690,26 @@ class MediaDownloader:
                 )
             return self.status
 
+        # A non-zero exit code means the downloader aborted. Do not pretend the
+        # partial files on disk are a successful download.
+        if proc.returncode not in (0, None):
+            self.status = {
+                "error": "download_failed",
+                "exit_code": proc.returncode,
+                "message": self._format_failure(proc.returncode, log_parser.errors),
+                "token_expired": self._looks_like_expired_token(log_parser.errors),
+                "errors": [str(e) for e in log_parser.errors[-5:]],
+            }
+            if self.download_id:
+                download_tracker.complete_download(
+                    self.download_id,
+                    success=False,
+                    error="Download failed",
+                )
+            return self.status
+
         self.status = self._get_download_status(subtitle_sizes, external_subs)
+        self.status["exit_code"] = proc.returncode
 
         if self.key:
             # IL 99% delle volte n3u8dl riesce a fare tutto ma in quel 1% sti cazzi meglio fare double check anche se si perde tempo.

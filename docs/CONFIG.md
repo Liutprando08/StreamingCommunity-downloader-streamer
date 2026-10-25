@@ -34,10 +34,15 @@ All configuration lives in `Conf/`. See `Conf/README.md` for a quick overview. Y
     "select_video": "best",
     "select_audio": "lang='ita|Ita|it':for=best",
     "select_subtitle": "lang='ita|eng|Ita|Eng|it|en':for=all",
-    "cleanup_tmp_folder": true
+    "cleanup_tmp_folder": true,
+    "hls_refresh_retry": 3,
+    "mp4_resume": true
   }
 }
 ```
+
+- `hls_refresh_retry`: how many times a failed HLS download is restarted with a freshly signed playlist URL (useful when the token expires mid-download).
+- `mp4_resume`: resume interrupted MP4 downloads with HTTP Range requests instead of restarting from zero. A `.temp` file is kept on failure and reused on the next attempt.
 
 ### PROCESS
 ```json

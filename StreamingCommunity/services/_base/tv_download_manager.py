@@ -110,7 +110,12 @@ def process_episode_download(index_season_selected: int, scrape_serie: Any, down
     
     if download_all:
         for i_episode in range(1, episodes_count + 1):
-            path, stopped = download_video_callback(episodes[i_episode-1], index_season_selected, i_episode)
+            try:
+                path, stopped = download_video_callback(episodes[i_episode-1], index_season_selected, i_episode)
+            except Exception as exc:
+                # One broken episode must not abort the whole batch.
+                console.print(f"[red]Episode {i_episode} failed: {exc}")
+                continue
             
             if stopped:
                 break
@@ -173,7 +178,12 @@ def process_episode_download(index_season_selected: int, scrape_serie: Any, down
 
         # Download selected episodes if not stopped
         for i_episode in list_episode_select:
-            path, stopped = download_video_callback(episodes[i_episode-1], index_season_selected, i_episode)
+            try:
+                path, stopped = download_video_callback(episodes[i_episode-1], index_season_selected, i_episode)
+            except Exception as exc:
+                # One broken episode must not abort the whole batch.
+                console.print(f"[red]Episode {i_episode} failed: {exc}")
+                continue
             
             if stopped:
                 break

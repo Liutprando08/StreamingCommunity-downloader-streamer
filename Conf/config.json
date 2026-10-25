@@ -27,7 +27,9 @@
         "select_video": "best",
         "select_audio": "lang='ita|Ita|it':for=best",
         "select_subtitle": "lang='ita|eng|Ita|Eng|it|en':for=all",
-        "cleanup_tmp_folder": true
+        "cleanup_tmp_folder": true,
+        "hls_refresh_retry": 3,
+        "mp4_resume": true
     },
     "PROCESS": {
         "generate_nfo": false,

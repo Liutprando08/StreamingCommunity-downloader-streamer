@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import signal
 import threading
 import time
@@ -36,6 +37,8 @@ CREATE_NFO_FILES = config_manager.config.get_bool(
     "PROCESS", "generate_nfo", default=False
 )
 SKIP_DOWNLOAD = config_manager.config.get_bool("DOWNLOAD", "skip_download")
+MAX_RETRIES = config_manager.config.get_int("REQUESTS", "max_retry", default=3)
+MP4_RESUME = config_manager.config.get_bool("DOWNLOAD", "mp4_resume", default=True)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +74,62 @@ def signal_handler(signum, frame, interrupt_handler, original_handler):
         signal.signal(signum, original_handler)
 
 
+def _report_progress(bar_mgr, downloaded, total, start_time, speed_samples):
+    """Push the current transfer stats to the progress bar."""
+    elapsed = time.time() - start_time
+    now = time.time()
+
+    # Windowed speed calculation (3s sliding window)
+    speed_samples.append((now, downloaded))
+    while speed_samples and now - speed_samples[0][0] > 3.0:
+        speed_samples.popleft()
+
+    if len(speed_samples) >= 2:
+        bytes_delta = downloaded - speed_samples[0][1]
+        time_delta = now - speed_samples[0][0]
+        speed = bytes_delta / time_delta if time_delta > 0 else 0
+    else:
+        speed = downloaded / elapsed if elapsed > 0 else 0
+
+    speed_str = (
+        internet_manager.format_transfer_speed(speed) if elapsed > 0 else "-- B/s"
+    )
+
+    if total:
+        remaining_bytes = max(total - downloaded, 0)
+        eta_seconds = remaining_bytes / speed if (elapsed > 0 and speed > 0) else 0
+        eta_str = internet_manager.format_time(eta_seconds)
+    else:
+        eta_str = "--"
+
+    # Format downloaded size
+    downloaded_value, downloaded_unit = internet_manager.format_file_size(
+        downloaded
+    ).split(" ")
+
+    percent = (downloaded / total * 100) if total else 0
+    total_size_str = f"{(total / 1024 / 1024):.2f}MB" if total else "Unknown"
+
+    bar_mgr.handle_progress_line(
+        {
+            "task_key": "video",
+            "label": "MP4",
+            "pct": percent,
+            "speed": speed_str,
+            "size": f"{downloaded_value} {downloaded_unit}/{total_size_str if total else '??'}",
+            "duration": eta_str,
+        }
+    )
+
+
+def _parse_total_from_content_range(value: str | None) -> int | None:
+    """Extract the full resource size from a ``Content-Range: bytes a-b/total`` header."""
+    if not value:
+        return None
+    match = re.search(r"/(\d+)\s*$", value)
+    return int(match.group(1)) if match else None
+
+
 def MP4_Downloader(
     url: str,
     path: str,
@@ -84,6 +143,7 @@ def MP4_Downloader(
     Downloads an MP4 video with enhanced interrupt handling.
     - Single Ctrl+C: Completes download gracefully
     - Triple Ctrl+C: Saves partial download and exits
+    - Transient failures are retried and resumed with HTTP Range requests
     """
     url = str(url).strip()
     path = os_manager.get_sanitize_path(path)
@@ -152,6 +212,24 @@ def MP4_Downloader(
     # Ensure the output directory exists
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
+    total = None
+    downloaded = 0
+    etag = None
+    last_modified = None
+    incomplete_error = False
+    cancelled = False
+
+    # Resume a previous partial download when possible.
+    if MP4_RESUME and os.path.exists(temp_path):
+        downloaded = os.path.getsize(temp_path)
+        if downloaded:
+            console.print(
+                f"[yellow]Resuming download from {internet_manager.format_file_size(downloaded)}"
+            )
+
+    start_time = time.time()
+    speed_samples = deque([(start_time, downloaded)])
+
     with create_client() as client:
         try:
             head = client.head(url, headers=headers)
@@ -186,133 +264,161 @@ def MP4_Downloader(
                 console.print(f"[red]Fallback GET failed: {e}")
                 return None, False
 
-        # Open the streaming response using the effective headers
-        with client.stream("GET", url, headers=headers) as response:
-            response.raise_for_status()
+        # Unified progress bar manager (Rich in CLI, null-context in GUI)
+        with DownloadBarManager(download_id) as bar_mgr:
+            bar_mgr.add_prebuilt_tasks([("video", "MP4")])
 
-            # Respect content-length when provided; otherwise treat as unknown (streaming/chunked)
-            content_length = response.headers.get("content-length")
-            try:
-                total = int(content_length) if content_length is not None else None
-            except (ValueError, TypeError):
-                total = None
+            attempt = 0
+            while True:
+                attempt += 1
+                request_headers = dict(headers)
+                if downloaded > 0:
+                    request_headers["Range"] = f"bytes={downloaded}-"
+                    validator = etag or last_modified
+                    if validator:
+                        request_headers["If-Range"] = validator
 
-            if total is None:
-                console.print(
-                    "[yellow]No Content-Length received; streaming until peer closes connection."
-                )
+                attempt_error = None
+                try:
+                    with client.stream("GET", url, headers=request_headers) as response:
+                        if response.status_code == 416:
+                            # Requested range is already complete.
+                            break
 
-            start_time = time.time()
-            downloaded = 0
-            incomplete_error = False
-            speed_samples = deque()
+                        response.raise_for_status()
 
-            # Unified progress bar manager (Rich in CLI, null-context in GUI)
-            with DownloadBarManager(download_id) as bar_mgr:
-                bar_mgr.add_prebuilt_tasks([("video", "MP4")])
-
-                with open(temp_path, "wb") as file:
-                    try:
-                        for chunk in response.iter_bytes(chunk_size=65536):
-                            if interrupt_handler.force_quit or (
-                                download_id and download_tracker.is_stopped(download_id)
-                            ):
+                        if response.status_code == 206:
+                            total = _parse_total_from_content_range(
+                                response.headers.get("content-range")
+                            ) or total
+                            mode = "ab" if downloaded > 0 else "wb"
+                        else:
+                            if downloaded > 0:
                                 console.print(
-                                    "\n[red]Force quitting... Saving partial download."
+                                    "[yellow]Server ignored the resume request; restarting from scratch."
                                 )
-                                if download_id and download_tracker.is_stopped(
-                                    download_id
-                                ):
-                                    incomplete_error = "cancelled"
-                                break
-
-                            if chunk:
-                                size = file.write(chunk)
-                                downloaded += size
-
-                                # Calculate stats
-                                elapsed = time.time() - start_time
-
-                                # Windowed speed calculation (3s sliding window)
-                                now = time.time()
-                                speed_samples.append((now, downloaded))
-                                while speed_samples and now - speed_samples[0][0] > 3.0:
-                                    speed_samples.popleft()
-                                if len(speed_samples) >= 2:
-                                    bytes_delta = downloaded - speed_samples[0][1]
-                                    time_delta = now - speed_samples[0][0]
-                                    speed = (
-                                        bytes_delta / time_delta if time_delta > 0 else 0
-                                    )
-                                else:
-                                    speed = downloaded / elapsed if elapsed > 0 else 0
-                                speed_str = (
-                                    internet_manager.format_transfer_speed(speed)
-                                    if elapsed > 0
-                                    else "-- B/s"
+                                downloaded = 0
+                            content_length = response.headers.get("content-length")
+                            try:
+                                total = (
+                                    int(content_length)
+                                    if content_length is not None
+                                    else total
                                 )
+                            except (TypeError, ValueError):
+                                total = None
+                            mode = "wb"
 
-                                if total:
-                                    remaining_bytes = max(total - downloaded, 0)
-                                    eta_seconds = (
-                                        remaining_bytes / speed
-                                        if (elapsed > 0 and speed > 0)
-                                        else 0
-                                    )
-                                    eta_str = internet_manager.format_time(eta_seconds)
-                                else:
-                                    eta_str = "--"
-
-                                # Format downloaded size
-                                downloaded_value, downloaded_unit = (
-                                    internet_manager.format_file_size(downloaded).split(
-                                        " "
-                                    )
-                                )
-
-                                percent = (downloaded / total * 100) if total else 0
-                                total_size_str = (
-                                    f"{(total / 1024 / 1024):.2f}MB"
-                                    if total
-                                    else "Unknown"
-                                )
-
-                                bar_mgr.handle_progress_line(
-                                    {
-                                        "task_key": "video",
-                                        "label": "MP4",
-                                        "pct": percent,
-                                        "speed": speed_str,
-                                        "size": f"{downloaded_value} {downloaded_unit}/{total_size_str if total else '??'}",
-                                        "duration": eta_str,
-                                    }
-                                )
-
-                    except KeyboardInterrupt:
-                        if not interrupt_handler.force_quit:
-                            interrupt_handler.kill_download = True
-
-                    except (httpx2.HTTPError, OSError) as e:
-                        incomplete_error = True
-                        interrupt_handler.kill_download = True
-                        console.print(
-                            f"\n[red]Download error: {e}. Saving partial download."
+                        etag = etag or response.headers.get("etag")
+                        last_modified = last_modified or response.headers.get(
+                            "last-modified"
                         )
 
-                    finally:
-                        try:
-                            file.flush()
-                            os.fsync(file.fileno())
-                        except OSError as e:
-                            logger.error(f"error:{e}")
+                        if total is None:
+                            console.print(
+                                "[yellow]No Content-Length received; streaming until peer closes connection."
+                            )
+
+                        with open(temp_path, mode) as file:
+                            try:
+                                for chunk in response.iter_bytes(chunk_size=65536):
+                                    if interrupt_handler.force_quit or (
+                                        download_id
+                                        and download_tracker.is_stopped(download_id)
+                                    ):
+                                        console.print(
+                                            "\n[red]Force quitting... Saving partial download."
+                                        )
+                                        if download_id and download_tracker.is_stopped(
+                                            download_id
+                                        ):
+                                            cancelled = True
+                                        break
+
+                                    if chunk:
+                                        downloaded += file.write(chunk)
+                                        _report_progress(
+                                            bar_mgr,
+                                            downloaded,
+                                            total,
+                                            start_time,
+                                            speed_samples,
+                                        )
+
+                            except KeyboardInterrupt:
+                                if not interrupt_handler.force_quit:
+                                    interrupt_handler.kill_download = True
+
+                            except (httpx2.HTTPError, OSError) as e:
+                                incomplete_error = True
+                                attempt_error = e
+                                console.print(
+                                    f"\n[red]Download error: {e}. Saving progress."
+                                )
+
+                            finally:
+                                try:
+                                    file.flush()
+                                    os.fsync(file.fileno())
+                                except OSError as e:
+                                    logger.error(f"error:{e}")
+
+                except (httpx2.HTTPError, OSError) as e:
+                    incomplete_error = True
+                    attempt_error = e
+                    console.print(f"\n[red]Download error: {e}")
+
+                if cancelled or interrupt_handler.force_quit:
+                    break
+
+                # Complete when the announced size has been received.
+                if total is not None and downloaded >= total:
+                    incomplete_error = False
+                    break
+
+                # Without a length, a clean end-of-stream is all we can verify.
+                if total is None and attempt_error is None:
+                    break
+
+                if attempt >= MAX_RETRIES:
+                    break
+
+                delay = min(2 ** (attempt - 1), 10)
+                console.print(
+                    f"[yellow]Retrying download in {delay}s "
+                    f"(attempt {attempt}/{MAX_RETRIES})..."
+                )
+                time.sleep(delay)
 
     if os.path.exists(temp_path):
-        if incomplete_error == "cancelled":
+        if cancelled or (download_id and download_tracker.is_stopped(download_id)):
             if download_id:
                 download_tracker.complete_download(
                     download_id, success=False, error="cancelled"
                 )
             return None, True
+
+        # Never present a truncated file as a successful download.
+        if total is not None and downloaded < total:
+            console.print(
+                f"[red]Download incomplete: {downloaded}/{total} bytes. "
+                f"Partial file kept at {temp_path}"
+            )
+            if download_id:
+                download_tracker.complete_download(
+                    download_id, success=False, error="Incomplete download"
+                )
+            return None, False
+
+        if total is None and incomplete_error:
+            console.print(
+                "[red]Download failed before the stream ended; partial file kept."
+            )
+            if download_id:
+                download_tracker.complete_download(
+                    download_id, success=False, error="Download failed"
+                )
+            return None, False
 
         last_exc = None
         for attempt in range(10):

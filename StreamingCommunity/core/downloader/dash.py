@@ -288,6 +288,12 @@ class DASH_Downloader:
         
         console.print("[dim]Parsing MPD ...")
         self.media_downloader.parser_stream()
+
+        if getattr(self.media_downloader, "parse_error", None):
+            logging.error("Unable to parse the playlist: %s", self.media_downloader.parse_error)
+            if self.download_id:
+                download_tracker.complete_download(self.download_id, success=False, error="Playlist parsing failed")
+            return None, False
         
         # Get metadata
         self.meta_json, self.meta_selected, _, self.raw_mpd, _ = self.media_downloader.get_metadata()
@@ -300,7 +306,7 @@ class DASH_Downloader:
             logging.error("Failed to fetch DRM info")
             if self.download_id:
                 download_tracker.complete_download(self.download_id, success=False, error="DRM parsing failed")
-            return None, True
+            return None, False
         
         # Fetch decryption keys if DRM protected
         if self.drm_info and self.drm_info['available_drm_types']:
@@ -308,7 +314,7 @@ class DASH_Downloader:
                 logging.error(f"Failed to fetch decryption keys: {self.error}")
                 if self.download_id:
                     download_tracker.complete_download(self.download_id, success=False, error=self.error)
-                return None, True
+                return None, False
             
         if SKIP_DOWNLOAD:
             console.print("[yellow]Skipping download as per configuration.")
@@ -328,12 +334,21 @@ class DASH_Downloader:
                 download_tracker.complete_download(self.download_id, success=False, error="cancelled")
             return None, True
 
+        # A real failure (non-zero downloader exit) must not look like a user
+        # cancellation, otherwise the whole batch is aborted.
+        if status.get('error'):
+            reason = status.get('message') or status.get('error')
+            logging.error("Download failed: %s", reason)
+            if self.download_id:
+                download_tracker.complete_download(self.download_id, success=False, error=reason)
+            return None, False
+
         # Check if any media was downloaded
         if self._no_media_downloaded(status):
             logging.error("No media downloaded")
             if self.download_id:
                 download_tracker.complete_download(self.download_id, success=False, error="No media downloaded")
-            return None, True
+            return None, False
         
         # Merge files
         if self.download_id:
@@ -348,7 +363,7 @@ class DASH_Downloader:
             logging.error("Merge operation failed")
             if self.download_id:
                 download_tracker.complete_download(self.download_id, success=False, error="Merge failed")
-            return None, True
+            return None, False
         
         # Move to final location if needed
         if final_file and os.path.exists(final_file):

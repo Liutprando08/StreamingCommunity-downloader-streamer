@@ -145,7 +145,10 @@ def download_film(select_title: Entries) -> tuple[str | None, Any] | None:
         console.print("[red]No IMDB ID available for this title")
         return None
 
-    master_playlist = _get_playlist_url(imdb_id, False)
+    def resolve_playlist() -> str | None:
+        return _get_playlist_url(imdb_id, False)
+
+    master_playlist = resolve_playlist()
     if master_playlist is None:
         console.print("[red]Error: No master playlist found")
         return None
@@ -159,6 +162,7 @@ def download_film(select_title: Entries) -> tuple[str | None, Any] | None:
         m3u8_url=master_playlist,
         output_path=os.path.join(mp4_path, mp4_name),
         headers=_get_vidxgo_headers(),
+        playlist_resolver=resolve_playlist,
     ).start()
 
 
@@ -170,9 +174,12 @@ def download_episode(
         f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{scrape_serie.series_name} [white]\\ [magenta]{obj_episode.name} ([cyan]S{index_season_selected}E{index_episode_selected}) \n"
     )
 
-    master_playlist = _get_playlist_url(
-        scrape_serie.imdb_id, True, index_season_selected, index_episode_selected
-    )
+    def resolve_playlist() -> str | None:
+        return _get_playlist_url(
+            scrape_serie.imdb_id, True, index_season_selected, index_episode_selected
+        )
+
+    master_playlist = resolve_playlist()
     if master_playlist is None:
         console.print("[red]Error: No master playlist found")
         return None, False
@@ -188,6 +195,7 @@ def download_episode(
         m3u8_url=master_playlist,
         output_path=os.path.join(mp4_path, mp4_name),
         headers=_get_vidxgo_headers(),
+        playlist_resolver=resolve_playlist,
     ).start()
 
 

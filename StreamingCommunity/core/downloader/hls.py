@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 import time
-from typing import Any
+from typing import Any, Callable
 
 # External libraries
 from StreamingCommunity.core.processors import join_audios, join_subtitles, join_video
@@ -36,6 +36,11 @@ MERGE_SUBTITLES = config_manager.config.get_bool(
     "PROCESS", "merge_subtitle", default=True
 )
 MERGE_AUDIO = config_manager.config.get_bool("PROCESS", "merge_audio", default=True)
+# How many times a failed download may be restarted with a freshly minted
+# playlist URL (signed URLs from several sites expire mid-download).
+REFRESH_RETRIES = config_manager.config.get_int(
+    "DOWNLOAD", "hls_refresh_retry", default=3
+)
 logger = logging.getLogger(__name__)
 
 
@@ -46,6 +51,7 @@ class HLS_Downloader:
         output_path: str | None = None,
         headers: dict[str, str] | None = None,
         audio_only: bool = False,
+        playlist_resolver: Callable[[], str | None] | None = None,
     ):
         """
         Args:
@@ -53,8 +59,11 @@ class HLS_Downloader:
             output_path: Full path including filename and extension (e.g., /path/to/video.mp4)
             headers: Custom headers for requests
             audio_only: If True, download only the audio track (no video)
+            playlist_resolver: Optional callable returning a freshly signed playlist
+                URL. Used to restart a download whose token expired mid-way.
         """
         self.m3u8_url = str(m3u8_url).strip()
+        self.playlist_resolver = playlist_resolver
         self.custom_headers = headers
         if self.custom_headers is None:
             self.custom_headers = get_headers()
@@ -104,7 +113,34 @@ class HLS_Downloader:
             audio_only=self.audio_only,
         )
         console.print("[dim]Parsing HLS ...")
-        self.media_downloader.parser_stream()
+        parse_attempts = 0
+        while True:
+            self.media_downloader.parser_stream()
+            if not getattr(self.media_downloader, "parse_error", None):
+                break
+
+            parse_attempts += 1
+            reason = self.media_downloader.parse_error
+            if (
+                self.playlist_resolver is not None
+                and parse_attempts <= REFRESH_RETRIES
+            ):
+                console.print(
+                    f"[yellow]Unable to parse the playlist ({reason}). Refreshing the URL "
+                    f"and retrying ({parse_attempts}/{REFRESH_RETRIES})..."
+                )
+                fresh_url = self._resolve_fresh_playlist()
+                if fresh_url:
+                    self.m3u8_url = fresh_url
+                    self.media_downloader.url = fresh_url
+                    continue
+
+            console.print(f"[red]Unable to parse the playlist: {reason}")
+            if self.download_id:
+                download_tracker.complete_download(
+                    self.download_id, success=False, error="Playlist parsing failed"
+                )
+            return None, False
 
         # Create output directory
         os_manager.create_path(self.output_dir)
@@ -124,24 +160,58 @@ class HLS_Downloader:
             download_tracker.update_status(self.download_id, "downloading")
 
         console.print("[dim]Starting download ...")
-        status = self.media_downloader.start_download()
 
-        # Check for cancellation
-        if status.get("error") == "cancelled":
+        # Downloads can abort mid-way when the signed playlist URL expires.
+        # Restart with a freshly minted URL instead of failing the whole batch.
+        attempts = 0
+        while True:
+            attempts += 1
+            status = self.media_downloader.start_download()
+            error = status.get("error")
+
+            if error == "cancelled":
+                if self.download_id:
+                    download_tracker.complete_download(
+                        self.download_id, success=False, error="cancelled"
+                    )
+                return None, True
+
+            if not error:
+                break
+
+            reason = status.get("message") or error
+            if (
+                error == "download_failed"
+                and self.playlist_resolver is not None
+                and attempts <= REFRESH_RETRIES
+            ):
+                console.print(
+                    f"[yellow]Download failed ({reason}). Refreshing the playlist URL "
+                    f"and retrying ({attempts}/{REFRESH_RETRIES})..."
+                )
+                fresh_url = self._resolve_fresh_playlist()
+                if fresh_url:
+                    self.m3u8_url = fresh_url
+                    self.media_downloader.url = fresh_url
+                    continue
+
+            logger.error("Download failed: %s", reason)
+            console.print(f"[red]Download failed: {reason}")
             if self.download_id:
                 download_tracker.complete_download(
-                    self.download_id, success=False, error="cancelled"
+                    self.download_id, success=False, error=reason
                 )
-            return None, True
+            return None, False
 
         # Check if any media was downloaded
         if self._no_media_downloaded(status):
             logger.error("No media downloaded")
+            console.print("[red]No media was downloaded")
             if self.download_id:
                 download_tracker.complete_download(
                     self.download_id, success=False, error="No media downloaded"
                 )
-            return None, True
+            return None, False
 
         # Merge files using FFmpeg
         if self.download_id:
@@ -160,7 +230,7 @@ class HLS_Downloader:
                 download_tracker.complete_download(
                     self.download_id, success=False, error="Merge failed"
                 )
-            return None, True
+            return None, False
 
         # Move to final location if needed
         if os.path.abspath(final_file) != os.path.abspath(self.output_path):
@@ -205,6 +275,19 @@ class HLS_Downloader:
         if CLEANUP_TMP:
             shutil.rmtree(self.output_dir, ignore_errors=True)
         return self.output_path, False
+
+    def _resolve_fresh_playlist(self) -> str | None:
+        """Ask the site for a new signed playlist URL after a failure."""
+        if self.playlist_resolver is None:
+            return None
+        try:
+            fresh = self.playlist_resolver()
+        except Exception as exc:  # a refresh failure falls back to the error path
+            logger.error("Playlist refresh failed: %s", exc)
+            return None
+        if not fresh:
+            return None
+        return str(fresh).strip()
 
     def _no_media_downloaded(self, status):
         """Check if no media was downloaded."""
