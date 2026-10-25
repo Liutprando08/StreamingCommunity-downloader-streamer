@@ -41,6 +41,12 @@ MERGE_AUDIO = config_manager.config.get_bool("PROCESS", "merge_audio", default=T
 REFRESH_RETRIES = config_manager.config.get_int(
     "DOWNLOAD", "hls_refresh_retry", default=3
 )
+# Resume a stalled/expired HLS download from the last completed segment
+# instead of starting over (single unencrypted TS streams only).
+HLS_RESUME = config_manager.config.get_bool("DOWNLOAD", "hls_resume", default=True)
+MAX_CONSECUTIVE_STALLS = max(
+    1, config_manager.config.get_int("DOWNLOAD", "hls_max_stalls", default=3)
+)
 logger = logging.getLogger(__name__)
 
 
@@ -162,10 +168,108 @@ class HLS_Downloader:
         console.print("[dim]Starting download ...")
 
         # Downloads can abort mid-way when the signed playlist URL expires.
-        # Restart with a freshly minted URL instead of failing the whole batch.
+        # N_m3u8DL-RE does not resume by itself, so:
+        #  * a watchdog aborts the frozen process;
+        #  * for a single unencrypted TS stream only the remaining segments are
+        #    downloaded (--custom-range) and concatenated with the prefix.
         attempts = 0
+        consecutive_empty = 0
+        status = None
+
+        # A previous run may have been cancelled or the app closed. Reuse its
+        # contiguous prefix instead of making N_m3u8DL-RE download it again.
+        resume_state = None
+        if HLS_RESUME:
+            plan = self.media_downloader.get_resume_plan()
+            if plan:
+                console.print(
+                    f"[yellow]Resuming after "
+                    f"{plan['offset']}/{plan['total']} segments..."
+                )
+                resume_state = {**plan, "parts": []}
+
         while True:
             attempts += 1
+
+            if resume_state is not None:
+                if resume_state["offset"] >= resume_state["total"]:
+                    status = self.media_downloader.build_resumed_status(
+                        resume_state["prefix_dir"],
+                        resume_state["parts"],
+                        resume_state["ext"],
+                        resume_state["total"],
+                    )
+                    break
+                resume_dir = os.path.join(
+                    self.output_dir, f"_resume_{attempts:03d}"
+                )
+                result = self.media_downloader.start_download(
+                    resume_from=(
+                        resume_state["first_index"] + resume_state["offset"]
+                    ),
+                    resume_tmp=resume_dir,
+                )
+
+                if result.get("error") == "cancelled":
+                    if self.download_id:
+                        download_tracker.complete_download(
+                            self.download_id, success=False, error="cancelled"
+                        )
+                    return None, True
+
+                count = int(result.get("resume_count") or 0)
+                if count > 0:
+                    resume_state["parts"].append(
+                        {
+                            "dir": result.get("resume_dir") or resume_dir,
+                            "count": count,
+                        }
+                    )
+                    resume_state["offset"] += count
+                    consecutive_empty = 0
+                    console.print(
+                        "[dim]Resume progress: "
+                        f"{resume_state['offset']}/{resume_state['total']} segments"
+                    )
+                else:
+                    consecutive_empty += 1
+
+                if resume_state["offset"] >= resume_state["total"]:
+                    status = self.media_downloader.build_resumed_status(
+                        resume_state["prefix_dir"],
+                        resume_state["parts"],
+                        resume_state["ext"],
+                        resume_state["total"],
+                    )
+                    break
+
+                if consecutive_empty >= MAX_CONSECUTIVE_STALLS:
+                    reason = (
+                        result.get("message") or "no new segments were downloaded"
+                    )
+                    logger.error("Resume failed: %s", reason)
+                    console.print(f"[red]Download failed: {reason}")
+                    if self.download_id:
+                        download_tracker.complete_download(
+                            self.download_id, success=False, error=reason
+                        )
+                    return None, False
+
+                fresh_url = self._resolve_fresh_playlist()
+                if not fresh_url:
+                    reason = "unable to refresh the playlist URL"
+                    logger.error("Resume failed: %s", reason)
+                    console.print(f"[red]Download failed: {reason}")
+                    if self.download_id:
+                        download_tracker.complete_download(
+                            self.download_id, success=False, error=reason
+                        )
+                    return None, False
+
+                self.m3u8_url = fresh_url
+                self.media_downloader.url = fresh_url
+                continue
+
             status = self.media_downloader.start_download()
             error = status.get("error")
 
@@ -185,6 +289,11 @@ class HLS_Downloader:
                 and self.playlist_resolver is not None
                 and attempts <= REFRESH_RETRIES
             ):
+                plan = (
+                    self.media_downloader.get_resume_plan()
+                    if HLS_RESUME
+                    else None
+                )
                 console.print(
                     f"[yellow]Download failed ({reason}). Refreshing the playlist URL "
                     f"and retrying ({attempts}/{REFRESH_RETRIES})..."
@@ -193,8 +302,34 @@ class HLS_Downloader:
                 if fresh_url:
                     self.m3u8_url = fresh_url
                     self.media_downloader.url = fresh_url
+
+                    if plan:
+                        if plan["offset"] >= plan["total"]:
+                            status = self.media_downloader.build_resumed_status(
+                                plan["prefix_dir"],
+                                [],
+                                plan["ext"],
+                                plan["total"],
+                            )
+                            break
+                        console.print(
+                            f"[yellow]Resuming after "
+                            f"{plan['offset']}/{plan['total']} segments..."
+                        )
+                        resume_state = {**plan, "parts": []}
+                        consecutive_empty = 0
                     continue
 
+            logger.error("Download failed: %s", reason)
+            console.print(f"[red]Download failed: {reason}")
+            if self.download_id:
+                download_tracker.complete_download(
+                    self.download_id, success=False, error=reason
+                )
+            return None, False
+
+        if status.get("error"):
+            reason = status.get("message") or status["error"]
             logger.error("Download failed: %s", reason)
             console.print(f"[red]Download failed: {reason}")
             if self.download_id:

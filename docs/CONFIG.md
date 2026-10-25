@@ -36,12 +36,20 @@ All configuration lives in `Conf/`. See `Conf/README.md` for a quick overview. Y
     "select_subtitle": "lang='ita|eng|Ita|Eng|it|en':for=all",
     "cleanup_tmp_folder": true,
     "hls_refresh_retry": 3,
+    "hls_resume": true,
+    "hls_stall_timeout": 60,
+    "hls_auth_error_limit": 3,
+    "hls_max_stalls": 3,
     "mp4_resume": true
   }
 }
 ```
 
 - `hls_refresh_retry`: how many times a failed HLS download is restarted with a freshly signed playlist URL (useful when the token expires mid-download).
+- `hls_resume`: resume a stalled/expired HLS download from the last completed segment instead of starting over. Also reuses an existing contiguous prefix when a new run starts (for example after the app was closed). Applies to single, unencrypted TS streams; other streams fall back to a fresh restart. Default: `true`.
+- `hls_stall_timeout`: seconds without progress before the HLS downloader considers the download frozen, terminates N_m3u8DL-RE and refreshes the URL. Increase it on very slow connections where a single segment can take longer than a minute. If the signed playlist URL exposes an `e=` expiry timestamp, the downloader resumes shortly after that timestamp instead of waiting for this timeout. Default: `60`.
+- `hls_auth_error_limit`: number of `401`/`403`/`Forbidden` messages that abort the current attempt immediately instead of waiting for the stall timeout. Default: `3`.
+- `hls_max_stalls`: consecutive resume attempts that download no new segments before the download is reported as failed. Default: `3`.
 - `mp4_resume`: resume interrupted MP4 downloads with HTTP Range requests instead of restarting from zero. A `.temp` file is kept on failure and reused on the next attempt.
 
 ### PROCESS

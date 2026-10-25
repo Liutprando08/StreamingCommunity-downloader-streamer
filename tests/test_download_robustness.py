@@ -8,9 +8,11 @@ Covers the "downloads stop after a few minutes" fixes:
 """
 
 import io
+import json
 import os
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
@@ -172,9 +174,12 @@ class _FakeMediaDownloader:
     def parser_stream(self):
         return []
 
-    def start_download(self):
+    def start_download(self, resume_from=None, resume_tmp=None):
         self.calls += 1
         return self.statuses.pop(0)
+
+    def get_resume_plan(self):
+        return None
 
 
 _SUCCESS_STATUS = {
@@ -290,6 +295,458 @@ class TestHLSRetry(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
 
+class _StallingProc:
+    """Process stand-in that stays alive until the watchdog kills it."""
+
+    def __init__(self):
+        self.stdout = None
+        self.returncode = None
+        self.terminated = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        self.terminated = True
+        self.returncode = -15
+
+    def wait(self, timeout=None):
+        if self.returncode is None:
+            self.returncode = -15
+        return self.returncode
+
+    def kill(self):
+        self.terminated = True
+        self.returncode = -9
+
+
+class TestHLSResumePlan(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.output_dir = os.path.join(self._tmp.name, "episode_hls_temp")
+        os.makedirs(os.path.join(self.output_dir, "analysis_temp", "temp_analysis"))
+        self.downloader = MediaDownloader(
+            "https://cdn.example/master.m3u8", self.output_dir, "episode"
+        )
+        self.downloader.meta_selected_path = os.path.join(
+            self.output_dir, "analysis_temp", "temp_analysis", "meta_selected.json"
+        )
+
+    @staticmethod
+    def _stream(total=5, encrypted=False):
+        segments = [
+            {
+                "Index": index + 1,
+                "EncryptInfo": {"Method": "AES-128" if encrypted else "NONE"},
+            }
+            for index in range(total)
+        ]
+        return {
+            "Resolution": "1920x1080",
+            "Extension": "ts",
+            "Codecs": "avc1.4d4028,mp4a.40.2",
+            "Bandwidth": 3085448,
+            "Playlist": {"MediaParts": [{"MediaSegments": segments}]},
+        }
+
+    def _write_meta(self, streams):
+        with open(self.downloader.meta_selected_path, "w", encoding="utf-8") as handle:
+            json.dump(streams, handle)
+
+    def _write_segments(self, dir_name, indexes):
+        directory = os.path.join(self.output_dir, dir_name)
+        os.makedirs(directory, exist_ok=True)
+        for index in indexes:
+            with open(
+                os.path.join(directory, f"{index:04d}.ts"), "wb"
+            ) as handle:
+                handle.write(b"x")
+        return directory
+
+    def test_plan_resumes_from_contiguous_prefix(self):
+        self._write_meta([self._stream(total=5)])
+        self._write_segments(
+            "0__avc1.4d4028,mp4a.40.2_3085448_", [1, 2, 3, 5]
+        )
+
+        plan = self.downloader.get_resume_plan()
+
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan["offset"], 3)
+        self.assertEqual(plan["total"], 5)
+        self.assertEqual(plan["ext"], "ts")
+
+    def test_plan_is_disabled_for_encrypted_segments(self):
+        self._write_meta([self._stream(total=3, encrypted=True)])
+        self._write_segments(
+            "0__avc1.4d4028,mp4a.40.2_3085448_", [1, 2, 3]
+        )
+
+        self.assertIsNone(self.downloader.get_resume_plan())
+
+    def test_plan_is_disabled_for_multiple_streams(self):
+        self._write_meta([self._stream(total=3), self._stream(total=3)])
+        self._write_segments(
+            "0__avc1.4d4028,mp4a.40.2_3085448_", [1, 2, 3]
+        )
+
+        self.assertIsNone(self.downloader.get_resume_plan())
+
+    def test_plan_is_disabled_without_segment_index(self):
+        stream = self._stream(total=3)
+        del stream["Playlist"]["MediaParts"][0]["MediaSegments"][1]["Index"]
+        self._write_meta([stream])
+
+        self.assertIsNone(self.downloader.get_resume_plan())
+
+    def test_build_resumed_status_concatenates_in_order(self):
+        prefix = self._write_segments("prefix", [1, 2])
+        part = self._write_segments("part", [0, 1, 2])
+        with open(os.path.join(prefix, "0001.ts"), "wb") as handle:
+            handle.write(b"a")
+        with open(os.path.join(prefix, "0002.ts"), "wb") as handle:
+            handle.write(b"b")
+        with open(os.path.join(part, "0000.ts"), "wb") as handle:
+            handle.write(b"c")
+        with open(os.path.join(part, "0001.ts"), "wb") as handle:
+            handle.write(b"d")
+        with open(os.path.join(part, "0002.ts"), "wb") as handle:
+            handle.write(b"e")
+
+        status = self.downloader.build_resumed_status(
+            prefix, [{"dir": part, "count": 2}], "ts"
+        )
+
+        with open(status["video"]["path"], "rb") as handle:
+            self.assertEqual(handle.read(), b"abcd")
+
+        status = self.downloader.build_resumed_status(
+            prefix, [{"dir": part, "count": 2}], "ts", total=3
+        )
+        joined_path = status["video"]["path"]
+        with open(joined_path, "rb") as handle:
+            self.assertEqual(handle.read(), b"abc")
+
+        status = self.downloader.build_resumed_status(
+            prefix, [{"dir": part, "count": 2}], "ts", total=10
+        )
+        self.assertEqual(status["error"], "download_failed")
+        self.assertIsNone(status["video"])
+        self.assertFalse(os.path.exists(joined_path))
+
+
+class TestDownloadWatchdog(unittest.TestCase):
+    def _run_download(
+        self, fake_reader, cfg_int, url="https://cdn.example/master.m3u8"
+    ):
+        with tempfile.TemporaryDirectory() as tmp:
+            downloader = MediaDownloader(url, tmp, "episode")
+            proc = _StallingProc()
+
+            with mock.patch.object(
+                wrapper_module.subprocess, "Popen", return_value=proc
+            ), mock.patch.object(
+                wrapper_module, "get_n_m3u8dl_re_path", return_value="N_m3u8DL-RE"
+            ), mock.patch.object(
+                wrapper_module, "get_ffmpeg_path", return_value="ffmpeg"
+            ), mock.patch.object(
+                MediaDownloader, "determine_decryption_tool", return_value="shaka"
+            ), mock.patch.object(
+                MediaDownloader,
+                "_download_external_subtitles",
+                new=mock.AsyncMock(return_value=[]),
+            ), mock.patch.object(
+                wrapper_module, "DownloadBarManager", _FakeBarManager
+            ), mock.patch.object(
+                wrapper_module, "_read_download_output", fake_reader
+            ), mock.patch.object(
+                wrapper_module, "_cfg_int", side_effect=cfg_int
+            ):
+                status = downloader.start_download()
+
+            return status, proc
+
+    def test_stalled_download_is_terminated(self):
+        def fake_reader(stream):
+            yield (
+                "Vid 1920x1080 | 1/10 10.00% 1.00MB/10.00MB 0.00Bps",
+                "progress",
+            )
+            time.sleep(2)
+
+        def cfg_int(section, key, default=0):
+            if key == "hls_stall_timeout":
+                return 1
+            if key == "hls_auth_error_limit":
+                return 1000
+            return default
+
+        status, proc = self._run_download(fake_reader, cfg_int)
+
+        self.assertEqual(status.get("error"), "download_failed")
+        self.assertTrue(status.get("stalled"))
+        self.assertFalse(status.get("token_expired"))
+        self.assertTrue(proc.terminated)
+
+    def test_signed_url_expiry_aborts_before_stall_timeout(self):
+        expired_ms = int((time.time() - 1) * 1000)
+        url = f"https://cdn.example/master.m3u8?e={expired_ms}&t=1"
+
+        def fake_reader(stream):
+            yield (
+                "Vid 1920x1080 | 1/10 10.00% 1.00MB/10.00MB 0.00Bps",
+                "progress",
+            )
+            time.sleep(2)
+
+        def cfg_int(section, key, default=0):
+            if key == "hls_stall_timeout":
+                return 60
+            if key == "hls_auth_error_limit":
+                return 1000
+            return default
+
+        started = time.monotonic()
+        with mock.patch.object(wrapper_module, "_URL_EXPIRY_GRACE", 1.0):
+            status, proc = self._run_download(fake_reader, cfg_int, url=url)
+        elapsed = time.monotonic() - started
+
+        self.assertEqual(status.get("error"), "download_failed")
+        self.assertTrue(status.get("token_expired"))
+        self.assertFalse(status.get("stalled"))
+        self.assertTrue(proc.terminated)
+        self.assertLess(elapsed, 5)
+
+    def test_segment_number_403_is_not_an_auth_error(self):
+        def fake_reader(stream):
+            yield (
+                "Vid 1920x1080 | 403/1804 22.34% 1.00MB/10.00MB 0.00Bps",
+                "progress",
+            )
+            time.sleep(2)
+
+        def cfg_int(section, key, default=0):
+            if key == "hls_stall_timeout":
+                return 1
+            if key == "hls_auth_error_limit":
+                return 1
+            return default
+
+        status, proc = self._run_download(fake_reader, cfg_int)
+
+        self.assertEqual(status.get("error"), "download_failed")
+        self.assertTrue(status.get("stalled"))
+        self.assertFalse(status.get("token_expired"))
+        self.assertTrue(proc.terminated)
+
+    def test_repeated_auth_errors_abort_immediately(self):
+        def fake_reader(stream):
+            for _ in range(3):
+                yield (
+                    "WARN : Response status code does not indicate success: "
+                    "403 (Forbidden)",
+                    "log",
+                )
+            time.sleep(2)
+
+        def cfg_int(section, key, default=0):
+            if key == "hls_auth_error_limit":
+                return 3
+            if key == "hls_stall_timeout":
+                return 60
+            return default
+
+        status, proc = self._run_download(fake_reader, cfg_int)
+
+        self.assertEqual(status.get("error"), "download_failed")
+        self.assertTrue(status.get("token_expired"))
+        self.assertFalse(status.get("stalled"))
+        self.assertTrue(proc.terminated)
+
+
+class TestHLSResumeFlow(unittest.TestCase):
+    def test_stalled_download_resumes_instead_of_restarting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = os.path.join(tmp, "episode.mkv")
+            resolver_calls = []
+
+            class _ResumableFake(_FakeMediaDownloader):
+                def start_download(self, resume_from=None, resume_tmp=None):
+                    self.resume_args = (resume_from, resume_tmp)
+                    return super().start_download(resume_from, resume_tmp)
+
+                def get_resume_plan(self):
+                    self.plan_calls = getattr(self, "plan_calls", 0) + 1
+                    if self.plan_calls == 1:
+                        return None
+                    return {
+                        "prefix_dir": os.path.join(tmp, "temp", "prefix"),
+                        "first_index": 1,
+                        "offset": 2,
+                        "total": 4,
+                        "ext": "ts",
+                    }
+
+                def build_resumed_status(self, prefix_dir, parts, ext, total=None):
+                    self.built = (prefix_dir, parts, ext, total)
+                    return dict(_SUCCESS_STATUS)
+
+            fake = _ResumableFake(
+                [
+                    {
+                        "error": "download_failed",
+                        "message": "Download stalled",
+                        "stalled": True,
+                    },
+                    {"error": None, "resume_count": 2, "resume_dir": "part"},
+                ]
+            )
+            downloader = HLS_Downloader(
+                "https://cdn.example/old.m3u8", output, playlist_resolver=lambda: (
+                    resolver_calls.append(True) or "https://cdn.example/fresh.m3u8"
+                )
+            )
+            # _merge_files is mocked, so make the success path's output exist.
+            open(output, "wb").close()
+
+            with mock.patch.object(hls_module, "MediaDownloader", return_value=fake), \
+                    mock.patch.object(hls_module, "MediaPlayers"), \
+                    mock.patch.object(hls_module.os_manager, "create_path"), \
+                    mock.patch.object(hls_module, "CREATE_NFO_FILES", False), \
+                    mock.patch.object(hls_module, "KODI_NFO_FILES", False), \
+                    mock.patch.object(hls_module, "CLEANUP_TMP", False), \
+                    mock.patch.object(hls_module, "REFRESH_RETRIES", 3), \
+                    mock.patch.object(hls_module, "HLS_RESUME", True), \
+                    mock.patch.object(
+                        HLS_Downloader,
+                        "_merge_files",
+                        return_value=downloader.output_path,
+                    ), \
+                    mock.patch.object(HLS_Downloader, "_print_summary"):
+                path, stopped = downloader.start()
+
+            self.assertEqual(path, output)
+            self.assertFalse(stopped)
+            self.assertEqual(fake.calls, 2)
+            self.assertEqual(len(resolver_calls), 1)
+            self.assertEqual(fake.resume_args[0], 3)
+            self.assertEqual(fake.built[1][0]["count"], 2)
+
+    def test_existing_prefix_resumes_on_startup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = os.path.join(tmp, "episode.mkv")
+            resolver_calls = []
+
+            class _StartupResumableFake(_FakeMediaDownloader):
+                def start_download(self, resume_from=None, resume_tmp=None):
+                    self.resume_args = (resume_from, resume_tmp)
+                    return super().start_download(resume_from, resume_tmp)
+
+                def get_resume_plan(self):
+                    return {
+                        "prefix_dir": os.path.join(tmp, "temp", "prefix"),
+                        "first_index": 1,
+                        "offset": 2,
+                        "total": 4,
+                        "ext": "ts",
+                    }
+
+                def build_resumed_status(self, prefix_dir, parts, ext, total=None):
+                    self.built = (prefix_dir, parts, ext, total)
+                    return dict(_SUCCESS_STATUS)
+
+            fake = _StartupResumableFake(
+                [
+                    {"error": None, "resume_count": 2, "resume_dir": "part"},
+                ]
+            )
+            downloader = HLS_Downloader(
+                "https://cdn.example/old.m3u8",
+                output,
+                playlist_resolver=lambda: (
+                    resolver_calls.append(True) or "https://cdn.example/fresh.m3u8"
+                ),
+            )
+            open(output, "wb").close()
+
+            with mock.patch.object(hls_module, "MediaDownloader", return_value=fake), \
+                    mock.patch.object(hls_module, "MediaPlayers"), \
+                    mock.patch.object(hls_module.os_manager, "create_path"), \
+                    mock.patch.object(hls_module, "CREATE_NFO_FILES", False), \
+                    mock.patch.object(hls_module, "KODI_NFO_FILES", False), \
+                    mock.patch.object(hls_module, "CLEANUP_TMP", False), \
+                    mock.patch.object(hls_module, "HLS_RESUME", True), \
+                    mock.patch.object(
+                        HLS_Downloader,
+                        "_merge_files",
+                        return_value=downloader.output_path,
+                    ), \
+                    mock.patch.object(HLS_Downloader, "_print_summary"):
+                path, stopped = downloader.start()
+
+            self.assertEqual(path, output)
+            self.assertFalse(stopped)
+            # No full run and no URL refresh: the existing prefix is used.
+            self.assertEqual(fake.calls, 1)
+            self.assertEqual(len(resolver_calls), 0)
+            self.assertEqual(fake.resume_args[0], 3)
+            self.assertEqual(fake.built[1][0]["count"], 2)
+
+    def test_complete_prefix_is_merged_without_downloading(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = os.path.join(tmp, "episode.mkv")
+
+            class _CompleteFake(_FakeMediaDownloader):
+                def start_download(self, resume_from=None, resume_tmp=None):
+                    raise AssertionError("complete prefix must not download")
+
+                def get_resume_plan(self):
+                    return {
+                        "prefix_dir": os.path.join(tmp, "temp", "prefix"),
+                        "first_index": 1,
+                        "offset": 4,
+                        "total": 4,
+                        "ext": "ts",
+                    }
+
+                def build_resumed_status(self, prefix_dir, parts, ext, total=None):
+                    self.built = (prefix_dir, parts, ext, total)
+                    return dict(_SUCCESS_STATUS)
+
+            fake = _CompleteFake([])
+            downloader = HLS_Downloader(
+                "https://cdn.example/old.m3u8", output
+            )
+            open(output, "wb").close()
+
+            with mock.patch.object(hls_module, "MediaDownloader", return_value=fake), \
+                    mock.patch.object(hls_module, "MediaPlayers"), \
+                    mock.patch.object(hls_module.os_manager, "create_path"), \
+                    mock.patch.object(hls_module, "CREATE_NFO_FILES", False), \
+                    mock.patch.object(hls_module, "KODI_NFO_FILES", False), \
+                    mock.patch.object(hls_module, "CLEANUP_TMP", False), \
+                    mock.patch.object(hls_module, "HLS_RESUME", True), \
+                    mock.patch.object(
+                        HLS_Downloader,
+                        "_merge_files",
+                        return_value=downloader.output_path,
+                    ), \
+                    mock.patch.object(HLS_Downloader, "_print_summary"):
+                path, stopped = downloader.start()
+
+            self.assertEqual(path, output)
+            self.assertFalse(stopped)
+            self.assertEqual(fake.calls, 0)
+            self.assertEqual(fake.built[1], [])
+
+
 class _FakeProc:
     def __init__(self, stdout, returncode):
         self.stdout = stdout
@@ -323,6 +780,7 @@ class TestM3U8ExitCode(unittest.TestCase):
             downloader = MediaDownloader(
                 "https://cdn.example/master.m3u8", tmp, "episode"
             )
+            downloader.download_id = "test-nonzero-exit"
             stdout = io.StringIO(
                 "INFO : start downloading\nERROR : HTTP 403 Forbidden\n"
             )
@@ -345,13 +803,18 @@ class TestM3U8ExitCode(unittest.TestCase):
                         "_download_external_subtitles",
                         new=mock.AsyncMock(return_value={}),
                     ), \
-                    mock.patch.object(wrapper_module, "DownloadBarManager", _FakeBarManager):
+                    mock.patch.object(wrapper_module, "DownloadBarManager", _FakeBarManager), \
+                    mock.patch.object(
+                        wrapper_module.download_tracker, "complete_download"
+                    ) as complete_mock:
                 status = downloader.start_download()
 
             self.assertEqual(status.get("error"), "download_failed")
             self.assertEqual(status.get("exit_code"), 1)
             self.assertTrue(status.get("token_expired"))
             self.assertEqual(downloader.exit_code, 1)
+            # The retry/resume layer decides when a download is finally failed.
+            complete_mock.assert_not_called()
 
 
 class TestBatchLoopRobustness(unittest.TestCase):

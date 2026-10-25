@@ -29,6 +29,10 @@
         "select_subtitle": "lang='ita|eng|Ita|Eng|it|en':for=all",
         "cleanup_tmp_folder": true,
         "hls_refresh_retry": 3,
+        "hls_resume": true,
+        "hls_stall_timeout": 60,
+        "hls_auth_error_limit": 3,
+        "hls_max_stalls": 3,
         "mp4_resume": true
     },
     "PROCESS": {

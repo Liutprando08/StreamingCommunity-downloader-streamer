@@ -1,12 +1,17 @@
 ﻿# 04.01.25
 
 from logging import raiseExceptions
+import json
+import queue
 import re
 import asyncio
 import platform
 import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+from urllib.parse import parse_qs, urlparse
 
 
 # External
@@ -76,6 +81,13 @@ def _cfg_dict(section, key, default=None):
 
 
 _PROGRESS_PREFIX_RE = re.compile(r"(Vid|Aud|Sub)\s")
+_AUTH_ERROR_RE = re.compile(r"\b(?:401|403)\b|forbidden|unauthorized", re.IGNORECASE)
+_SEGMENT_FILE_EXTS = {".ts", ".m4s", ".mp4", ".aac", ".m4a"}
+_QUEUE_END = object()
+_QUEUE_EMPTY = object()
+# Give in-flight segments a few seconds after the signed URL expiry before
+# aborting and asking the site for a fresh playlist URL.
+_URL_EXPIRY_GRACE = 10.0
 
 
 def _read_download_output(stream):
@@ -524,8 +536,29 @@ class MediaDownloader:
                         )
         return downloaded
 
-    def start_download(self) -> Dict[str, Any]:
-        """Start the download process"""
+    def start_download(
+        self,
+        resume_from: Optional[int] = None,
+        resume_tmp: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Start the download process.
+
+        When ``resume_from`` is set, only the remaining segments are fetched
+        (``--custom-range``) and kept on disk (``--skip-merge``) so the caller
+        can concatenate them with the already-downloaded prefix.
+        """
+        is_resume = resume_from is not None
+        # A short, fixed save name keeps resume paths below Windows limits; the
+        # caller already gives every resume attempt its own directory.
+        save_name = "resume" if is_resume else self.filename
+        if is_resume:
+            save_dir = Path(resume_tmp or self.output_dir)
+            tmp_dir = save_dir
+            save_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            save_dir = self.output_dir
+            tmp_dir = self.output_dir
+
         filters = getattr(self, "custom_filters", None)
 
         # Determine filters
@@ -553,11 +586,11 @@ class MediaDownloader:
         cmd = [
             get_n_m3u8dl_re_path(),
             "--save-name",
-            TorrentResult.safe_arg(self.filename),
+            TorrentResult.safe_arg(save_name),
             "--save-dir",
-            str(self.output_dir),
+            str(save_dir),
             "--tmp-dir",
-            str(self.output_dir),
+            str(tmp_dir),
             "--ffmpeg-binary-path",
             get_ffmpeg_path(),
             "--decryption-binary-path",
@@ -567,13 +600,30 @@ class MediaDownloader:
             "false",
             "--binary-merge",
             "--del-after-done",
+            "false" if is_resume else "true",
             "--auto-subtitle-fix",
             "false",
             "--check-segments-count",
-            "true" if _cfg_bool("DOWNLOAD", "check_segments_count") else "false",
+            (
+                "false"
+                if is_resume
+                else "true"
+                if _cfg_bool("DOWNLOAD", "check_segments_count")
+                else "false"
+            ),
             "--mp4-real-time-decryption",
             "true" if _cfg_bool("DOWNLOAD", "real_time_decryption") else "false",
         ]
+
+        if is_resume:
+            # Keep the segments: the caller merges them with the prefix.
+            cmd.extend(
+                [
+                    "--custom-range",
+                    f"{int(resume_from)}-",
+                    "--skip-merge",
+                ]
+            )
 
         if self.audio_only:
             # Drop all video streams — download audio only
@@ -618,19 +668,28 @@ class MediaDownloader:
 
         cmd.append(TorrentResult.safe_arg(self.url))
 
-        # Download external subtitles
-        loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(loop)
-            external_subs = loop.run_until_complete(self._download_external_subtitles())
-        finally:
-            loop.close()
+        # External subtitles only need to be fetched once, not on every resume.
+        external_subs = []
+        if not is_resume:
+            loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(loop)
+                external_subs = loop.run_until_complete(
+                    self._download_external_subtitles()
+                )
+            finally:
+                loop.close()
 
         log_parser = LogParser(show_warnings=False)
         log_path = self.output_dir / f"{self.filename}_download.log"
         subtitle_sizes = {}
 
-        with open(log_path, "w", encoding="utf-8", errors="replace") as log_file:
+        with open(
+            log_path,
+            "a" if is_resume else "w",
+            encoding="utf-8",
+            errors="replace",
+        ) as log_file:
             log_file.write(f"Command: {' '.join(cmd)}\n{'=' * 80}\n\n")
 
             # Unified progress bar manager (Rich in CLI, null-context in GUI)
@@ -651,29 +710,64 @@ class MediaDownloader:
                     download_tracker.register_process(self.download_id, proc)
 
                 with proc:
-                    for line, is_log in _read_download_output(proc.stdout):
-                        if self.download_id and download_tracker.is_stopped(
-                            self.download_id
-                        ):
-                            proc.terminate()
-                            break
+                    stop_reason, auth_errors = self._monitor_download(
+                        proc, log_file, log_parser, bar_mgr, subtitle_sizes
+                    )
 
-                        if is_log or any(
-                            k in line for k in ("INFO :", "WARN :", "ERROR :")
-                        ):
-                            log_file.write(line + "\n")
-                            log_parser.parse_line(line)
-
-                        self._parse_progress_line(line, bar_mgr, subtitle_sizes)
-
-                    # Ensure all tasks are complete
-                    bar_mgr.finish_all_tasks()
-
-        # Check if we were cancelled
-        if self.download_id and download_tracker.is_stopped(self.download_id):
-            return {"error": "cancelled"}
+                # Ensure all tasks are complete
+                bar_mgr.finish_all_tasks()
 
         self.exit_code = proc.returncode
+
+        if is_resume:
+            resume_dir = self._find_segment_dir(tmp_dir)
+            resume_files = (
+                self._contiguous_files(resume_dir) if resume_dir else []
+            )
+            # The first segment of the requested range must be present;
+            # otherwise advancing would silently skip a segment.
+            if resume_files and int(resume_files[0].stem) == int(resume_from):
+                resume_count = len(resume_files)
+            else:
+                resume_count = 0
+            base = {
+                "resume_dir": str(resume_dir) if resume_dir else None,
+                "resume_count": resume_count,
+                "exit_code": proc.returncode,
+            }
+            if stop_reason == "cancelled" or (
+                self.download_id and download_tracker.is_stopped(self.download_id)
+            ):
+                return {"error": "cancelled", **base}
+            if stop_reason in ("stalled", "auth"):
+                return {
+                    "error": "download_failed",
+                    "stalled": stop_reason == "stalled",
+                    "token_expired": stop_reason == "auth" or auth_errors > 0,
+                    "message": (
+                        "Download stalled"
+                        if stop_reason == "stalled"
+                        else "Playlist/segment token rejected"
+                    ),
+                    **base,
+                }
+            if proc.returncode not in (0, None):
+                return {
+                    "error": "download_failed",
+                    "token_expired": auth_errors > 0,
+                    "message": self._format_failure(
+                        proc.returncode, log_parser.errors
+                    ),
+                    "errors": [str(e) for e in log_parser.errors[-5:]],
+                    **base,
+                }
+            return {"error": None, **base}
+
+        # Check if we were cancelled
+        if stop_reason == "cancelled" or (
+            self.download_id and download_tracker.is_stopped(self.download_id)
+        ):
+            return {"error": "cancelled"}
 
         # Check for key retrieval errors (Succedde spesso quando parsa m3u8 che hanno bisogna di licenza, ma non ho ancora trovato un caso per implementare license per quel cazzo di m3u8 quindi amen va su failed).
         if any("Failed to get KEY" in error for error in log_parser.errors):
@@ -682,12 +776,25 @@ class MediaDownloader:
                 "message": "Failed to retrieve decryption key",
                 "exit_code": proc.returncode,
             }
-            if self.download_id:
-                download_tracker.complete_download(
-                    self.download_id,
-                    success=False,
-                    error="Failed to get decryption key",
-                )
+            return self.status
+
+        # The watchdog aborts a frozen process. A frozen N_m3u8DL-RE never
+        # exits on its own (it retries rejected signed URLs forever), so this
+        # is the only way the HLS layer can refresh the URL and resume.
+        if stop_reason in ("stalled", "auth"):
+            self.status = {
+                "error": "download_failed",
+                "exit_code": proc.returncode,
+                "message": (
+                    "Download stalled: no progress for "
+                    f"{_cfg_int('DOWNLOAD', 'hls_stall_timeout', default=60)}s"
+                    if stop_reason == "stalled"
+                    else "Download aborted: playlist/segment token rejected"
+                ),
+                "stalled": stop_reason == "stalled",
+                "token_expired": stop_reason == "auth" or auth_errors > 0,
+                "errors": [str(e) for e in log_parser.errors[-5:]],
+            }
             return self.status
 
         # A non-zero exit code means the downloader aborted. Do not pretend the
@@ -700,12 +807,9 @@ class MediaDownloader:
                 "token_expired": self._looks_like_expired_token(log_parser.errors),
                 "errors": [str(e) for e in log_parser.errors[-5:]],
             }
-            if self.download_id:
-                download_tracker.complete_download(
-                    self.download_id,
-                    success=False,
-                    error="Download failed",
-                )
+            # Final tracking is the caller's responsibility: the HLS layer may
+            # refresh the URL and resume, so marking a failed history entry
+            # here would prevent the eventual success from being recorded.
             return self.status
 
         self.status = self._get_download_status(subtitle_sizes, external_subs)
@@ -717,6 +821,480 @@ class MediaDownloader:
             print("")
 
         return self.status
+
+    # ------------------------------------------------------------------
+    # Download watchdog
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _url_expiry(url: Optional[str]) -> Optional[float]:
+        """Return the signed URL expiry (epoch seconds) from its ``e`` param.
+
+        StreamingCommunity's CDN signs playlists with ``e=<epoch_ms>``. The
+        watchdog uses it to refresh/resume shortly after expiry instead of
+        waiting for the full stall timeout. Unknown/invalid values are ignored.
+        """
+        if not url:
+            return None
+        try:
+            query = parse_qs(urlparse(str(url)).query)
+        except Exception:
+            return None
+        raw = (query.get("e") or [None])[0]
+        if not raw or not str(raw).isdigit():
+            return None
+        value = int(raw)
+        # Accept both epoch seconds and milliseconds.
+        if value > 10_000_000_000:
+            value = value / 1000.0
+        now = time.time()
+        if value < now - 3600 or value > now + 7 * 86400:
+            return None
+        return float(value)
+
+    @staticmethod
+    def _is_auth_error(line: str) -> bool:
+        """True when N_m3u8DL-RE reports a rejected signed URL (401/403)."""
+        return bool(_AUTH_ERROR_RE.search(line or ""))
+
+    @staticmethod
+    def _progress_signature(line: str):
+        """Return a comparable snapshot of a progress line.
+
+        N_m3u8DL-RE keeps printing the same progress line while it retries a
+        dead URL. Comparing the values lets the watchdog tell real progress
+        from a frozen download.
+        """
+        if not line.startswith(("Vid", "Aud", "Sub")):
+            return None
+        segment = SEGMENT_RE.search(line)
+        size = SIZE_RE.search(line)
+        percent = PERCENT_RE.search(line)
+        if not (segment or size or percent):
+            return None
+        return (
+            segment.group(0) if segment else None,
+            size.group(0) if size else None,
+            percent.group(1) if percent else None,
+        )
+
+    @staticmethod
+    def _terminate_process(proc, force: bool = False) -> None:
+        """Terminate a stuck downloader, escalating to kill if needed.
+
+        ``force`` is used for watchdog aborts: a hard kill prevents
+        N_m3u8DL-RE from cleaning up the already-downloaded segments, which
+        are needed to resume.
+        """
+        try:
+            if proc.poll() is not None:
+                return
+        except Exception:
+            pass
+        if force:
+            try:
+                proc.kill()
+                proc.wait(timeout=5)
+                return
+            except Exception:
+                pass
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=5)
+            return
+        except Exception:
+            pass
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            pass
+
+    def _monitor_download(
+        self, proc, log_file, log_parser, bar_mgr, subtitle_sizes
+    ) -> tuple[Optional[str], int]:
+        """Read the process output while watching for stalls and auth errors.
+
+        Returns ``(stop_reason, auth_error_count)``. ``stop_reason`` is one of
+        ``None`` (process ended on its own), ``"cancelled"``, ``"stalled"`` or
+        ``"auth"``.
+        """
+        output_queue: "queue.Queue" = queue.Queue()
+
+        def _reader():
+            try:
+                for item in _read_download_output(proc.stdout):
+                    output_queue.put(item)
+            except Exception:
+                pass
+            finally:
+                output_queue.put(_QUEUE_END)
+
+        reader = threading.Thread(target=_reader, daemon=True)
+        reader.start()
+
+        stall_timeout = max(
+            1, _cfg_int("DOWNLOAD", "hls_stall_timeout", default=60)
+        )
+        auth_error_limit = max(
+            1, _cfg_int("DOWNLOAD", "hls_auth_error_limit", default=3)
+        )
+        last_change = time.monotonic()
+        last_signature = None
+        auth_errors = 0
+        download_complete = False
+        stop_reason: Optional[str] = None
+        merge_timeout = max(stall_timeout, 15 * 60)
+
+        expiry = self._url_expiry(getattr(self, "url", None))
+        expiry_deadline = (
+            time.monotonic() + max(0.0, expiry - time.time()) + _URL_EXPIRY_GRACE
+            if expiry is not None
+            else None
+        )
+
+        while True:
+            if self.download_id and download_tracker.is_stopped(self.download_id):
+                stop_reason = "cancelled"
+                break
+
+            try:
+                item = output_queue.get(timeout=0.5)
+            except queue.Empty:
+                item = _QUEUE_EMPTY
+
+            if item is _QUEUE_END:
+                break
+
+            if item is not _QUEUE_EMPTY:
+                line, is_log = item
+
+                is_log_line = is_log == "log" or any(
+                    key in line for key in ("INFO :", "WARN :", "ERROR :")
+                )
+                if is_log_line:
+                    log_file.write(line + "\n")
+                    log_file.flush()
+                    log_parser.parse_line(line)
+                    # Progress lines can contain a segment index such as
+                    # ``403/1804``; only real log lines may indicate auth
+                    # failures.
+                    if self._is_auth_error(line):
+                        auth_errors += 1
+
+                if any(
+                    marker in line.lower()
+                    for marker in ("binary merging", "start merging", "merging...")
+                ):
+                    download_complete = True
+                    last_change = time.monotonic()
+
+                signature = self._progress_signature(line)
+                if signature is not None and signature != last_signature:
+                    last_signature = signature
+                    last_change = time.monotonic()
+                    segments = signature[0]
+                    if segments and "/" in segments:
+                        try:
+                            current, total = (
+                                int(value) for value in segments.split("/", 1)
+                            )
+                            if total > 0 and current >= total:
+                                download_complete = True
+                                last_change = time.monotonic()
+                        except (TypeError, ValueError):
+                            pass
+
+                self._parse_progress_line(line, bar_mgr, subtitle_sizes)
+
+            if auth_errors >= auth_error_limit:
+                stop_reason = "auth"
+                break
+            if (
+                expiry_deadline is not None
+                and not download_complete
+                and time.monotonic() >= expiry_deadline
+            ):
+                # The signed URL is dead; do not wait for the longer stall
+                # timeout. The HLS layer will refresh it and resume.
+                stop_reason = "auth"
+                break
+            effective_timeout = merge_timeout if download_complete else stall_timeout
+            if time.monotonic() - last_change > effective_timeout:
+                stop_reason = "stalled"
+                break
+
+        if stop_reason is not None:
+            self._terminate_process(
+                proc, force=stop_reason in ("stalled", "auth")
+            )
+
+        reader.join(timeout=2)
+        return stop_reason, auth_errors
+
+    # ------------------------------------------------------------------
+    # Segment-level resume
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _segment_files(directory: Path) -> List[Path]:
+        """Numeric segment files in *directory*, ignoring partial ``.tmp``."""
+        try:
+            if not directory or not Path(directory).is_dir():
+                return []
+        except OSError:
+            return []
+
+        found = []
+        for path in Path(directory).iterdir():
+            try:
+                if not path.is_file():
+                    continue
+            except OSError:
+                continue
+            if path.name.endswith(".tmp"):
+                continue
+            if path.suffix.lower() not in _SEGMENT_FILE_EXTS:
+                continue
+            if not path.stem.isdigit():
+                continue
+            found.append((int(path.stem), path))
+        found.sort(key=lambda item: item[0])
+        return [path for _, path in found]
+
+    @classmethod
+    def _contiguous_files(cls, directory: Path) -> List[Path]:
+        """Numeric segment files from the start of *directory*, until a gap."""
+        files = cls._segment_files(directory)
+        if not files:
+            return []
+        result = [files[0]]
+        for path in files[1:]:
+            if int(path.stem) == int(result[-1].stem) + 1:
+                result.append(path)
+            else:
+                break
+        return result
+
+    @classmethod
+    def _find_segment_dir(cls, root) -> Optional[Path]:
+        """Find the stream directory N_m3u8DL-RE wrote segments into."""
+        if not root:
+            return None
+        root_path = Path(root)
+        if not root_path.is_dir():
+            return None
+
+        candidates = []
+        try:
+            for path in root_path.rglob("*"):
+                if path.is_dir() and cls._segment_files(path):
+                    candidates.append(path)
+        except OSError:
+            pass
+        if not candidates:
+            return None
+
+        # Prefer the first selected video stream, otherwise the newest dir.
+        for candidate in candidates:
+            if candidate.name.startswith("0__"):
+                return candidate
+        return max(candidates, key=lambda p: p.stat().st_mtime)
+
+    def _load_selected_meta(self) -> Optional[list]:
+        if not self.meta_selected_path:
+            return None
+        try:
+            with open(
+                self.meta_selected_path, encoding="utf-8-sig", errors="replace"
+            ) as handle:
+                data = json.load(handle)
+        except Exception:
+            return None
+        return data if isinstance(data, list) else None
+
+    def get_resume_plan(self) -> Optional[Dict[str, Any]]:
+        """Describe how to resume a failed single-stream, clear TS download.
+
+        Only the safe case is resumed: one selected video stream, unencrypted
+        TS segments. Anything else falls back to a normal restart.
+        """
+        if self.audio_only or self.key:
+            return None
+
+        data = self._load_selected_meta()
+        if not data or len(data) != 1:
+            return None
+
+        stream = data[0]
+        if not stream.get("Resolution"):
+            return None
+        if str(stream.get("Extension") or "").lower() != "ts":
+            return None
+
+        codecs = str(stream.get("Codecs") or "")
+        try:
+            bandwidth = int(stream.get("Bandwidth") or 0)
+        except (TypeError, ValueError):
+            return None
+
+        total_segments = 0
+        first_index = None
+        segment_indexes = []
+        parts = (stream.get("Playlist") or {}).get("MediaParts") or []
+        if len(parts) != 1:
+            return None
+        for part in parts:
+            for segment in part.get("MediaSegments") or []:
+                index = segment.get("Index")
+                if not isinstance(index, int):
+                    return None
+                if first_index is None:
+                    first_index = index
+                segment_indexes.append(index)
+                total_segments += 1
+                encrypt = segment.get("EncryptInfo") or {}
+                method = str(encrypt.get("Method") or "NONE").upper()
+                if segment.get("IsEncrypted") or method not in ("", "NONE"):
+                    return None
+        if total_segments <= 0 or first_index is None:
+            return None
+        if segment_indexes != list(
+            range(first_index, first_index + total_segments)
+        ):
+            return None
+
+        prefix_dir = self.output_dir / self.filename / f"0__{codecs}_{bandwidth}_"
+        if not prefix_dir.is_dir():
+            # Fallback for slightly different sanitisation of the dir name.
+            matches = []
+            for root in (self.output_dir / self.filename, self.output_dir):
+                if not root.is_dir():
+                    continue
+                try:
+                    matches = [
+                        path
+                        for path in root.iterdir()
+                        if path.is_dir()
+                        and path.name.startswith("0__")
+                        and codecs in path.name
+                    ]
+                except OSError:
+                    matches = []
+                if matches:
+                    break
+            if not matches:
+                try:
+                    matches = [
+                        path
+                        for path in self.output_dir.rglob(
+                            f"0__{codecs}_{bandwidth}_"
+                        )
+                        if path.is_dir()
+                    ]
+                except OSError:
+                    matches = []
+            if len(matches) != 1:
+                return None
+            prefix_dir = matches[0]
+
+        files = self._contiguous_files(prefix_dir)
+        if not files:
+            return None
+
+        # N_m3u8DL-RE names segment files after their playlist index. If the
+        # first one is missing we cannot safely know how much was downloaded.
+        if int(files[0].stem) != first_index:
+            return None
+
+        return {
+            "prefix_dir": str(prefix_dir),
+            "first_index": first_index,
+            "offset": len(files),
+            "total": total_segments,
+            "ext": "ts",
+        }
+
+    @staticmethod
+    def _append_file(target, source: Path) -> None:
+        with open(source, "rb") as src:
+            while True:
+                chunk = src.read(1024 * 1024)
+                if not chunk:
+                    break
+                target.write(chunk)
+
+    def build_resumed_status(
+        self,
+        prefix_dir: Optional[str],
+        parts: List[Dict[str, Any]],
+        extension: str = "ts",
+        total: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Concatenate the prefix and resumed segments into one TS file."""
+        joined = self.output_dir / f"{self.filename}_joined.{extension}"
+        written = 0
+
+        def _can_write() -> bool:
+            return total is None or written < total
+
+        with open(joined, "wb") as target:
+            if prefix_dir:
+                for path in self._contiguous_files(Path(prefix_dir)):
+                    if not _can_write():
+                        break
+                    self._append_file(target, path)
+                    written += 1
+
+            for part in parts:
+                if not _can_write():
+                    break
+                part_dir = part.get("dir")
+                if not part_dir:
+                    continue
+                try:
+                    count = int(part.get("count") or 0)
+                except (TypeError, ValueError):
+                    count = 0
+                if total is not None:
+                    count = min(count, total - written)
+                for path in self._contiguous_files(Path(part_dir))[:count]:
+                    self._append_file(target, path)
+                    written += 1
+
+        if written == 0 or (total is not None and written < total):
+            try:
+                joined.unlink()
+            except OSError:
+                pass
+            message = (
+                "No downloaded segments to merge"
+                if written == 0
+                else f"Incomplete resume: {written}/{total} segments"
+            )
+            status = {
+                "error": "download_failed",
+                "message": message,
+                "video": None,
+                "audios": [],
+                "subtitles": [],
+                "external_subtitles": [],
+            }
+            self.status = status
+            return status
+
+        status = {
+            "video": {"path": str(joined), "size": joined.stat().st_size},
+            "audios": [],
+            "subtitles": [],
+            "external_subtitles": [],
+        }
+        self.status = status
+        return status
 
     def _manual_decrypt_check(self, status: Dict[str, Any]):
         """Check and manually decrypt files if they are still encrypted after download"""
