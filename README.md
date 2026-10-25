@@ -39,7 +39,7 @@ Classic numbered menu. Great for scripts/pipes/non-interactive use.
 
 ---
 
-## Features (Reality)
+## Features
 - **Multi-site support** — see [docs/SITES.md](docs/SITES.md)
 - **TUI + CLI** — flexible workflows
 - **HLS/DASH/MP4/ISM/MEGA** — multiple downloaders
