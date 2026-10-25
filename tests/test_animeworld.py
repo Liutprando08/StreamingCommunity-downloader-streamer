@@ -2,11 +2,11 @@ import os
 import unittest
 from types import SimpleNamespace
 from unittest import mock
-from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
 import StreamingCommunity.services.animeworld as animeworld_service
+from StreamingCommunity.player.sweetpixel import VideoSource
 from StreamingCommunity.services.animeworld import _build_entry, _status_type
 from StreamingCommunity.services.animeworld.scrapper import ScrapSerie
 
@@ -36,30 +36,30 @@ PAGE = """
 """
 
 
-class FakeAnimeWorldClient:
-    info = {
-        "tok1": {"grabber": "https://cdn.example/tok1.mp4"},
-        "tok2": {"target": "/api/episode/serverPlayerAnimeWorld?id=tok2"},
-    }
-    source_page = "<video><source src='https://cdn.example/fallback.mp4'></video>"
+class _FakeResponse:
+    def __init__(self, content=b"", text=None, json_data=None):
+        self.content = content
+        self.text = text if text is not None else content.decode("utf-8", errors="replace")
+        self._json = json_data
 
-    def __init__(self, site_url):
-        self.site_url = site_url
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._json
+
+
+class _FakeScraperClient:
+    """Minimal http client used by ScrapSerie to load the anime page."""
+
+    def __init__(self, page):
+        self.page = page
         self.closed = False
+        self.requests = []
 
-    def get_page(self, url):
-        return SimpleNamespace(text=PAGE)
-
-    def absolute_url(self, value):
-        if str(value).startswith(("http://", "https://")):
-            return str(value)
-        return urljoin(f"{self.site_url}/", str(value).lstrip("/"))
-
-    def episode_info(self, token):
-        return dict(self.info.get(str(token), {}))
-
-    def player_page(self, target):
-        return SimpleNamespace(text=self.source_page)
+    def get(self, url, **kwargs):
+        self.requests.append(url)
+        return _FakeResponse(content=self.page.encode("utf-8"))
 
     def close(self):
         self.closed = True
@@ -67,12 +67,21 @@ class FakeAnimeWorldClient:
 
 class TestAnimeWorldScraper(unittest.TestCase):
     def setUp(self):
-        patcher = mock.patch(
-            "StreamingCommunity.services.animeworld.scrapper.AnimeWorldClient",
-            FakeAnimeWorldClient,
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        self.client = _FakeScraperClient(PAGE)
+        patchers = [
+            mock.patch(
+                "StreamingCommunity.services.animeworld.scrapper.get_session_and_csrf",
+                return_value=("session-id", "csrf-token"),
+            ),
+            mock.patch(
+                "StreamingCommunity.services.animeworld.scrapper.create_client",
+                return_value=self.client,
+            ),
+        ]
+        for patcher in patchers:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
         self.scraper = ScrapSerie("/play/test.abc", site_url="https://aw.test")
 
     def test_parses_and_sorts_episodes(self):
@@ -93,22 +102,6 @@ class TestAnimeWorldScraper(unittest.TestCase):
         self.assertEqual(self.scraper.selectEpisode(1, 0).number, "1")
         self.assertEqual(self.scraper.selectEpisode(1, 1).number, "2")
         self.assertIsNone(self.scraper.selectEpisode(1, 99))
-
-    def test_resolves_grabber_url(self):
-        episode = self.scraper.selectEpisode(1, 0)
-        self.assertEqual(
-            self.scraper.get_video_url(episode), "https://cdn.example/tok1.mp4"
-        )
-
-    def test_resolves_target_fallback_source(self):
-        episode = self.scraper.selectEpisode(1, 1)
-        self.assertEqual(
-            self.scraper.get_video_url(episode),
-            "https://cdn.example/fallback.mp4",
-        )
-
-    def test_returns_none_without_episode(self):
-        self.assertIsNone(self.scraper.get_video_url(None))
 
     def test_series_name_and_description(self):
         self.assertIn("Test", self.scraper.get_name())
@@ -134,8 +127,62 @@ class TestAnimeWorldScraper(unittest.TestCase):
         self.assertEqual(episodes[0].name, "Episodio 9")
 
 
-if __name__ == "__main__":
-    unittest.main()
+class _FakeVideoApiClient:
+    """Fake client for the episode-info endpoint and the player page."""
+
+    def __init__(self, info, source_page):
+        self.info = info
+        self.source_page = source_page
+        self.closed = False
+
+    def get(self, url, **kwargs):
+        if "/api/episode/info" in url:
+            return _FakeResponse(json_data=self.info)
+        return _FakeResponse(content=self.source_page.encode("utf-8"))
+
+    def close(self):
+        self.closed = True
+
+
+class TestAnimeWorldVideoSource(unittest.TestCase):
+    """The mp4 URL resolution now lives in player.sweetpixel.VideoSource."""
+
+    source_page = "<video><source src='https://cdn.example/fallback.mp4'></video>"
+
+    def _resolve(self, info):
+        client = _FakeVideoApiClient(info, self.source_page)
+        with mock.patch(
+            "StreamingCommunity.player.sweetpixel.create_client", return_value=client
+        ), mock.patch(
+            "StreamingCommunity.player.sweetpixel.get_headers", return_value={}
+        ):
+            return VideoSource(
+                "https://aw.test",
+                SimpleNamespace(id="tok1"),
+                "session-id",
+                "csrf-token",
+            ).get_playlist()
+
+    def test_prefers_grabber_url(self):
+        self.assertEqual(
+            self._resolve({"grabber": "https://cdn.example/tok1.mp4"}),
+            "https://cdn.example/tok1.mp4",
+        )
+
+    def test_uses_download_url_fallback(self):
+        self.assertEqual(
+            self._resolve({"download": "https://cdn.example/download.mp4"}),
+            "https://cdn.example/download.mp4",
+        )
+
+    def test_resolves_target_page_source(self):
+        self.assertEqual(
+            self._resolve({"target": "/api/episode/serverPlayerAnimeWorld?id=tok2"}),
+            "https://cdn.example/fallback.mp4",
+        )
+
+    def test_returns_none_when_no_source_found(self):
+        self.assertIsNone(self._resolve({}))
 
 
 class TestAnimeWorldSearchMapping(unittest.TestCase):
@@ -203,3 +250,7 @@ class TestAnimeWorldCliRouting(unittest.TestCase):
         kwargs = base.call_args.kwargs
         self.assertIs(kwargs["download_film_func"], animeworld_service.download_film)
         self.assertIs(kwargs["download_series_func"], animeworld_service.download_series)
+
+
+if __name__ == "__main__":
+    unittest.main()
