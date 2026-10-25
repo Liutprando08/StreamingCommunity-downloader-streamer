@@ -1,69 +1,69 @@
 {
-  "streamingcommunity": {
-    "full_url": "https://streaming-community.farm"
-  },
-  "animeunity": {
-    "full_url": "https://www.animeunity.co"
-  },
-  "animeworld": {
-    "full_url": "https://www.animeworld.ac"
-  },
-  "guardaserie": {
-    "full_url": "https://guardaserie.meme"
-  },
-  "crunchyroll": {
-    "full_url": "https://www.crunchyroll.com"
-  },
-  "mostraguarda": {
-    "full_url": "https://mostraguarda.stream"
-  },
-  "torrent": {
-    "full_url": ""
-  },
-  "limetorrent": {
-    "full_url": "https://limetorrent.net",
-    "mirrors": [
-      "https://limetorrent.net",
-      "https://www.limetorrents.fun",
-      "https://limetorrents.asia",
-      "https://limetorrents.zone"
-    ]
-  },
-  "torrentgalaxy": {
-    "full_url": "https://torrentgalaxy.info",
-    "mirrors": [
-      "https://torrentgalaxy.info",
-      "https://torrentgalaxy-official.is",
-      "https://tgx.rs",
-      "https://torrentgalaxy.mx",
-      "https://torrentgalaxy.hair"
-    ]
-  },
-  "eztv": {
-    "full_url": "https://eztvx.to/api"
-  },
-  "nyaa": {
-    "full_url": "https://nyaa.si"
-  },
-  "foodnetwork": {
-    "full_url": "https://www.foodnetwork.it"
-  },
-  "plutotv": {
-    "full_url": "https://pluto.tv"
-  },
-  "youtube": {
-    "full_url": "https://www.youtube.com"
-  },
-  "musicmp3": {
-    "full_url": "https://musicmp3.ru"
-  },
-  "goldenmp3": {
-    "full_url": "https://www.goldenmp3.ru"
-  },
-  "monochrome": {
-    "full_url": "https://monochrome.st"
-  },
-  "mangaworld": {
-    "full_url": "https://www.mangaworld.mx"
-  }
+    "streamingcommunity": {
+        "full_url": "https://streaming-community.mba"
+    },
+    "animeunity": {
+        "full_url": "https://www.animeunity.co"
+    },
+    "animeworld": {
+        "full_url": "https://www.animeworld.ac"
+    },
+    "guardaserie": {
+        "full_url": "https://guardaserie.meme"
+    },
+    "crunchyroll": {
+        "full_url": "https://www.crunchyroll.com"
+    },
+    "mostraguarda": {
+        "full_url": "https://mostraguarda.stream"
+    },
+    "torrent": {
+        "full_url": ""
+    },
+    "limetorrent": {
+        "full_url": "https://limetorrent.net",
+        "mirrors": [
+            "https://limetorrent.net",
+            "https://www.limetorrents.fun",
+            "https://limetorrents.asia",
+            "https://limetorrents.zone"
+        ]
+    },
+    "torrentgalaxy": {
+        "full_url": "https://torrentgalaxy.info",
+        "mirrors": [
+            "https://torrentgalaxy.info",
+            "https://torrentgalaxy-official.is",
+            "https://tgx.rs",
+            "https://torrentgalaxy.mx",
+            "https://torrentgalaxy.hair"
+        ]
+    },
+    "eztv": {
+        "full_url": "https://eztvx.to/api"
+    },
+    "nyaa": {
+        "full_url": "https://nyaa.si"
+    },
+    "foodnetwork": {
+        "full_url": "https://www.foodnetwork.it"
+    },
+    "plutotv": {
+        "full_url": "https://pluto.tv"
+    },
+    "youtube": {
+        "full_url": "https://www.youtube.com"
+    },
+    "musicmp3": {
+        "full_url": "https://musicmp3.ru"
+    },
+    "goldenmp3": {
+        "full_url": "https://www.goldenmp3.ru"
+    },
+    "monochrome": {
+        "full_url": "https://monochrome.st"
+    },
+    "mangaworld": {
+        "full_url": "https://www.mangaworld.mx"
+    }
 }
