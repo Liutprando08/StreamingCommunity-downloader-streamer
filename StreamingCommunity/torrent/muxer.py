@@ -13,13 +13,18 @@ from curl_cffi.requests.exceptions import HTTPError
 from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.utils import config_manager
 from StreamingCommunity.core.processors.capture import capture_ffmpeg_real_time
-from StreamingCommunity.core.processors.helper.ex_timing import probe_stream_start, probe_stream_duration, compute_itsoffset
+from StreamingCommunity.core.processors.helper.ex_timing import probe_stream_duration
 
 # Variable
 log = logging.getLogger(__name__)
-SYNC_TOLERANCE_MS = config_manager.config.get_int("PROCESS", "sync_tolerance_ms", default=45)
-SYNC_ITSOFFSET_THRESHOLD_MS = config_manager.config.get_int("PROCESS", "sync_itsoffset_threshold_ms", default=10)
+DURATION_WARN_SEC = 1.0
 MAX_DURATION_DIFF_SEC = config_manager.config.get_float("TORRENT", "max_duration_diff_sec", default=30.0)
+
+
+def _temp_output_path(out_path: str) -> str:
+    """Sibling path with the same extension so ffmpeg picks the right muxer."""
+    base, ext = os.path.splitext(out_path)
+    return f"{base}.part{ext}" if ext else f"{out_path}.part"
 
 
 class TorrentMuxer:
@@ -123,16 +128,12 @@ class TorrentMuxer:
         # Detect how many audio streams the torrent file has
         original_audio_count = len(self.detect_streams(video_path).get("audio", []))
 
-        # ---- Allineamento temporale video/audio ----
-        video_start = probe_stream_start(video_path, "v")
-        audio_start = probe_stream_start(audio_source_path, "a")
-
         # Confronto durate: avviso se divergono, abort se la divergenza e' grave
         video_dur = probe_stream_duration(video_path, "v")
         audio_dur = probe_stream_duration(audio_source_path, "a")
         if video_dur and audio_dur:
             dur_diff = abs(video_dur - audio_dur)
-            if dur_diff > SYNC_TOLERANCE_MS / 1000.0:
+            if dur_diff > DURATION_WARN_SEC:
                 console.print(f"[yellow]WARN Duration mismatch: video {video_dur:.2f}s vs audio {audio_dur:.2f}s (diff {dur_diff:.2f}s)")
             if dur_diff > MAX_DURATION_DIFF_SEC:
                 console.print(f"[red]Aborting mux: duration difference {dur_diff:.2f}s exceeds "
@@ -143,11 +144,9 @@ class TorrentMuxer:
 
         ffmpeg_cmd.extend(["-i", video_path])
 
-        # Allinea l'audio streaming alla timeline del video torrent (-itsoffset)
-        offset = compute_itsoffset(video_start, audio_start, tolerance_ms=SYNC_ITSOFFSET_THRESHOLD_MS)
-        if offset is not None:
-            console.print(f"[yellow]Audio start offset {offset:+.3f}s -> applying -itsoffset")
-            ffmpeg_cmd.extend(["-itsoffset", f"{offset}"])
+        # No -itsoffset here: ffmpeg already places both inputs on the output
+        # timeline. The container start offset is an HLS artifact, not a real
+        # audio delay, so shifting the audio again desynchronizes it.
         ffmpeg_cmd.extend(["-i", audio_source_path])
 
         ffmpeg_cmd.extend(["-map", "0:v"])
@@ -171,20 +170,32 @@ class TorrentMuxer:
         # Evita timestamp negativi in output
         ffmpeg_cmd.extend(["-avoid_negative_ts", "make_zero"])
 
-        ffmpeg_cmd.extend([output_path, "-y"])
+        # Write to a temp file so a failed/killed ffmpeg cannot leave a partial
+        # mux at output_path that callers treat as a successful result.
+        tmp_out = _temp_output_path(output_path)
+        ffmpeg_cmd.extend([tmp_out, "-y"])
 
         console.print(
             f"[yellow]FFMPEG [cyan]Muxing torrent video + original audio ({original_audio_count} tracks) + Italian audio..."
         )
         print()
 
-        capture_ffmpeg_real_time(ffmpeg_cmd, "[yellow]FFMPEG [cyan]Muxing torrent video + Italian audio")
+        _result_json, returncode = capture_ffmpeg_real_time(
+            ffmpeg_cmd, "[yellow]FFMPEG [cyan]Muxing torrent video + Italian audio"
+        )
         print()
 
-        if os.path.isfile(output_path):
-            size_mb = os.path.getsize(output_path) / (1024 * 1024)
-            console.print(f"[green]Mux complete: {output_path} ({size_mb:.1f} MB)")
-            return output_path
+        if returncode != 0 or not os.path.isfile(tmp_out):
+            console.print(
+                f"[red]Mux failed (ffmpeg exit code {returncode}); partial output removed"
+            )
+            try:
+                os.remove(tmp_out)
+            except OSError:
+                pass
+            return None
 
-        console.print("[red]Mux failed — output file not created")
-        return None
+        os.replace(tmp_out, output_path)
+        size_mb = os.path.getsize(output_path) / (1024 * 1024)
+        console.print(f"[green]Mux complete: {output_path} ({size_mb:.1f} MB)")
+        return output_path

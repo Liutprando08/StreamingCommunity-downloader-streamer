@@ -536,6 +536,25 @@ class MediaDownloader:
                         )
         return downloaded
 
+    def _cleanup_stale_intermediates(self) -> None:
+        """Remove leftover mux/conversion files from a previous failed run."""
+        if not self.output_dir.is_dir():
+            return
+        for path in self.output_dir.iterdir():
+            if not path.is_file():
+                continue
+            name = path.name.lower()
+            stem = path.stem.lower()
+            if (
+                ".temp." in name
+                or ".part." in name
+                or stem.endswith(("_joined", "_with_audio", "_final"))
+            ):
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+
     def start_download(
         self,
         resume_from: Optional[int] = None,
@@ -548,6 +567,8 @@ class MediaDownloader:
         can concatenate them with the already-downloaded prefix.
         """
         is_resume = resume_from is not None
+        if not is_resume:
+            self._cleanup_stale_intermediates()
         # A short, fixed save name keeps resume paths below Windows limits; the
         # caller already gives every resume attempt its own directory.
         save_name = "resume" if is_resume else self.filename
@@ -1552,6 +1573,18 @@ class MediaDownloader:
             if not f.is_file():
                 continue
 
+            # Ignore muxing intermediates left by an interrupted/failed run.
+            # They share the media extensions above and used to be classified
+            # as audio, which produced duplicate or unmappable tracks.
+            name_lower = f.name.lower()
+            stem_lower = f.stem.lower()
+            if (
+                ".temp." in name_lower
+                or ".part." in name_lower
+                or stem_lower.endswith(("_joined", "_with_audio", "_final"))
+            ):
+                continue
+
             # Audio
             if any(f.name.lower().endswith(e) for e in exts["audio"]):
                 if status["video"] and f.name == Path(status["video"]["path"]).name:
@@ -1561,9 +1594,14 @@ class MediaDownloader:
                     f.stem[len(self.filename) :].lstrip(".")
                     if f.stem.lower().startswith(self.filename.lower())
                     else f.stem
-                )
+                ) or "und"
                 status["audios"].append(
-                    {"path": str(f), "name": name, "size": f.stat().st_size}
+                    {
+                        "path": str(f),
+                        "name": name,
+                        "language": name,
+                        "size": f.stat().st_size,
+                    }
                 )
 
             # Subtitle
@@ -1598,6 +1636,7 @@ class MediaDownloader:
                     )
                     seen_langs[lang] = seen_langs.get(lang, 0) + 1
                 else:
+                    lang = ext_lang
                     final_name = ext_lang
 
                 status["subtitles"].append(
@@ -1605,6 +1644,7 @@ class MediaDownloader:
                         "path": str(f),
                         "language": final_name,
                         "name": final_name,
+                        "lang": lang,
                         "size": f_size,
                     }
                 )

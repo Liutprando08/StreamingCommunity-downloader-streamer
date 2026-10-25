@@ -205,8 +205,8 @@ def mux_italian_audio(
     Mux ``audio_path`` onto ``torrent_video_path`` as an Italian track.
 
     Produces ``<base>_ita.<ext>`` next to the torrent video, removes the
-    temporary audio and (only on success) the original torrent video.
-    Returns the dubbed path or None.
+    temporary audio and (only after validating the output with ffprobe) the
+    original torrent video. Returns the dubbed path or None.
     """
     if not torrent_video_path or not os.path.isfile(torrent_video_path):
         return None
@@ -221,6 +221,25 @@ def mux_italian_audio(
     muxer = TorrentMuxer()
     result = muxer.mux_video_audio(torrent_video_path, audio_path, dubbed_path)
 
+    # Validate the mux before touching the only copy of the original. A
+    # killed ffmpeg used to leave a partial file behind, and this function
+    # then deleted the good torrent video.
+    valid = False
+    if result and os.path.isfile(result):
+        try:
+            streams = muxer.detect_streams(result)
+            valid = bool(streams.get("video")) and bool(streams.get("audio"))
+        except Exception as e:
+            log.warning("Could not validate dubbed output %s: %s", result, e)
+
+    if result and not valid:
+        console.print(f"[red]Dubbed output failed validation: {result}")
+        try:
+            os.remove(result)
+        except OSError:
+            pass
+        result = None
+
     # Always drop the temporary streaming download.
     try:
         os.remove(audio_path)
@@ -230,8 +249,8 @@ def mux_italian_audio(
     except Exception as e:
         log.debug("Cleanup failed: %s", e)
 
-    # Only remove the original once the dubbed file actually exists.
-    if result and os.path.isfile(result):
+    # Only remove the original once the dubbed file has been validated.
+    if valid and result and os.path.isfile(result):
         try:
             os.remove(torrent_video_path)
         except Exception as e:

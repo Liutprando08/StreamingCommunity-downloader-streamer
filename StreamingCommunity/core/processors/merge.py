@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import subprocess
 
@@ -17,7 +16,7 @@ from .capture import capture_ffmpeg_real_time
 from .conversion.ttml_to_srt import convert_ttml_to_srt
 from .helper.ex_audio import check_duration_v_a, has_audio, check_sync_offset
 from .helper.ex_sub import fix_subtitle_extension
-from .helper.ex_timing import probe_stream_start, compute_itsoffset
+from .helper.ex_timing import probe_stream_start
 
 # Logic class
 from .helper.ex_video import convert_ts_to_mp4, detect_ts_timestamp_issues
@@ -35,9 +34,10 @@ SUBTITLE_DISPOSITION_LANGUAGE = config_manager.config.get_list(
 AUDIO_ORDER = config_manager.config.get_list("PROCESS", "audio_order")
 SUBTITLE_ORDER = config_manager.config.get_list("PROCESS", "subtitle_order")
 SYNC_TOLERANCE_MS = config_manager.config.get_int("PROCESS", "sync_tolerance_ms", default=45)
-SYNC_ITSOFFSET_THRESHOLD_MS = config_manager.config.get_int("PROCESS", "sync_itsoffset_threshold_ms", default=10)
-
-logger = logging.getLogger(__name__)
+# Container start times naturally differ by a few frames between separate HLS
+# renditions. Only warn when the difference is large enough to be a real A/V
+# problem; the streams themselves must not be shifted (see join_audios).
+SYNC_WARN_TOLERANCE_MS = max(SYNC_TOLERANCE_MS, 500)
 
 
 def add_encoding_params(ffmpeg_cmd: list[str | None]):
@@ -52,6 +52,31 @@ def add_encoding_params(ffmpeg_cmd: list[str | None]):
     else:
         ffmpeg_cmd.extend(PARAM_VIDEO)
         ffmpeg_cmd.extend(PARAM_AUDIO)
+
+
+def _temp_output_path(out_path: str) -> str:
+    """Sibling path with the same extension so ffmpeg picks the right muxer."""
+    base, ext = os.path.splitext(out_path)
+    return f"{base}.part{ext}" if ext else f"{out_path}.part"
+
+
+def _remove_quietly(path: str | None) -> None:
+    if not path:
+        return
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def _subtitle_language_code(value: str) -> str:
+    """Turn a track label such as ``forced-ita`` into an ISO-ish language code."""
+    code = (value or "und").lower().strip().split(" - ", 1)[0].strip()
+    if code.startswith("forced-"):
+        code = code[len("forced-") :]
+    if code.endswith("-forced"):
+        code = code[: -len("-forced")]
+    return code or "und"
 
 
 def detect_gpu_device_type() -> str:
@@ -141,22 +166,30 @@ def join_video(video_path: str, out_path: str, log_path: str | None = None):
     # Insert input video path
     if not os.path.isfile(video_path):
         console.print(f"[red]Input video file not found: {video_path}")
-        return out_path, {}
+        return None, {}
     ffmpeg_cmd.extend(["-i", video_path])
 
     # Add encoding parameters (prima dell'output)
     add_encoding_params(ffmpeg_cmd)
 
-    # Output file and overwrite
-    ffmpeg_cmd.extend([out_path, "-y"])
+    # Write to a sibling temporary file: a killed/failed ffmpeg must never leave
+    # a partial file at out_path that callers mistake for a successful mux.
+    tmp_out = _temp_output_path(out_path)
+    ffmpeg_cmd.extend([tmp_out, "-y"])
 
     # Run join
-    result_json = capture_ffmpeg_real_time(
+    result_json, returncode = capture_ffmpeg_real_time(
         ffmpeg_cmd, "[yellow]FFMPEG [cyan]Join video", log_path
     )
     print()
 
-    return out_path, result_json
+    if returncode != 0 or not os.path.isfile(tmp_out):
+        console.print(f"[red]FFmpeg join video failed (exit code {returncode})")
+        _remove_quietly(tmp_out)
+        return None, result_json or {}
+
+    os.replace(tmp_out, out_path)
+    return out_path, result_json or {}
 
 
 def join_audios(
@@ -169,8 +202,9 @@ def join_audios(
     """
     Joins audio tracks with a video file using FFmpeg.
 
-    Ogni traccia audio viene allineata alla timeline del video tramite
-    -itsoffset (nessuna ricodifica) se l'offset di partenza supera la soglia.
+    FFmpeg already normalizes each input's start time when muxing into the
+    output container. Adding an explicit -itsoffset on top of that shifts the
+    audio twice, so audio tracks are left on their original timestamps here.
 
     Parameters:
         - video_path (str): The path to the video file.
@@ -190,7 +224,7 @@ def join_audios(
 
         audio_tracks = sorted(audio_tracks, key=get_order_index)
 
-    use_shortest = False
+    audio_shorter = False
 
     # Check and convert audio tracks if TS with issues
     temp_audio_paths = []
@@ -199,7 +233,7 @@ def join_audios(
         if audio_path is None:
             break
         if audio_path.lower().endswith(".ts") and detect_ts_timestamp_issues(
-            audio_path
+            audio_path, "a:0"
         ):
             temp_audio_path = audio_path + ".temp.m4a"
             if convert_ts_to_mp4(audio_path, temp_audio_path):
@@ -214,7 +248,9 @@ def join_audios(
         _, diff, video_duration, audio_duration = check_duration_v_a(
             video_path, audio_path
         )
-        offset_ms, within_tolerance = check_sync_offset(video_path, audio_path, tolerance_ms=SYNC_TOLERANCE_MS)
+        offset_ms, within_tolerance = check_sync_offset(
+            video_path, audio_path, tolerance_ms=SYNC_WARN_TOLERANCE_MS
+        )
         console.print(
             f"[yellow]    - [cyan]Audio lang [red]{audio_lang}, [cyan]Path: [red]{audio_path}, "
             f"[cyan]Video duration: [red]{video_duration:.2f}s, [cyan]Audio duration: [red]{audio_duration:.2f}s, "
@@ -222,16 +258,27 @@ def join_audios(
         )
 
         if not within_tolerance:
-            console.print(f"[yellow]    WARN [cyan]Audio lang: [red]'{audio_lang}' [cyan]starts {offset_ms:+.0f}ms "
-                          f"relative to video (tolerance {SYNC_TOLERANCE_MS}ms).")
-
-        # If any audio track has a significant duration difference, use -shortest
-        if diff > limit_duration_diff:
             console.print(
-                f"[yellow]    WARN [cyan]Audio lang: [red]'{audio_lang}' [cyan]has a duration difference of [red]{diff:.2f}s "
-                f"[cyan]which exceeds the limit of [red]{limit_duration_diff}s."
+                f"[yellow]    WARN [cyan]Audio lang: [red]'{audio_lang}' [cyan]starts "
+                f"{offset_ms:+.0f}ms relative to video (warning threshold "
+                f"{SYNC_WARN_TOLERANCE_MS}ms); no -itsoffset is applied."
             )
-            use_shortest = True
+
+        # Never use -shortest: when the audio is shorter it silently truncates
+        # the video and the download is still reported as successful.
+        if diff > limit_duration_diff:
+            if audio_duration and video_duration and audio_duration < video_duration:
+                audio_shorter = True
+                console.print(
+                    f"[red]    ERROR [cyan]Audio lang: [red]'{audio_lang}' [cyan]is "
+                    f"[red]{diff:.2f}s shorter than the video. The video will NOT "
+                    f"be truncated, but the audio may end early."
+                )
+            else:
+                console.print(
+                    f"[yellow]    WARN [cyan]Audio lang: [red]'{audio_lang}' [cyan]is "
+                    f"[red]{diff:.2f}s longer than the video; the video length is kept."
+                )
 
     # Start command with locate ffmpeg
     ffmpeg_cmd = [get_ffmpeg_path()]
@@ -243,33 +290,25 @@ def join_audios(
     # Insert input video path with TS format
     if not os.path.isfile(video_path):
         console.print(f"[red]Input video file not found: {video_path}")
-        return out_path, use_shortest, {}
+        return None, audio_shorter, {}
     if video_path.lower().endswith(".ts"):
         ffmpeg_cmd.extend(["-fflags", "+genpts+igndts+discardcorrupt"])
         ffmpeg_cmd.extend(["-f", "mpegts"])
     ffmpeg_cmd.extend(["-i", video_path])
 
-    video_start = probe_stream_start(video_path, "v")
-
-    # Add audio tracks as input with TS format
-    for i, audio_track in enumerate(audio_tracks):
+    # Add audio tracks as input with TS format. No -itsoffset here: FFmpeg
+    # already shifts each input to the output timeline, so adding the video's
+    # container start offset again delays the audio by that amount.
+    for audio_track in audio_tracks:
         audio_track_path = audio_track.get("path")
         if audio_track_path is None:
             break
         if not os.path.isfile(audio_track_path):
             console.print(f"[red]Input audio file not found: {audio_track_path}")
-            return out_path, use_shortest, {}
+            return None, audio_shorter, {}
         if audio_track_path.lower().endswith(".ts"):
             ffmpeg_cmd.extend(["-fflags", "+genpts+igndts+discardcorrupt"])
             ffmpeg_cmd.extend(["-f", "mpegts"])
-
-        # Allinea l'audio alla partenza del video (-itsoffset, nessuna ricodifica)
-        audio_start = probe_stream_start(audio_track_path, "a")
-        offset = compute_itsoffset(video_start, audio_start, tolerance_ms=SYNC_ITSOFFSET_THRESHOLD_MS)
-        if offset is not None:
-            console.print(f"[yellow]    - [cyan]Audio {audio_track.get('name', i)}: offset iniziale {offset:+.3f}s -> -itsoffset")
-            ffmpeg_cmd.extend(["-itsoffset", f"{offset}"])
-
         ffmpeg_cmd.extend(["-i", audio_track_path])
 
     # Map the video and audio streams
@@ -280,46 +319,48 @@ def join_audios(
 
     # Add language metadata for each audio track
     for i, audio_track in enumerate(audio_tracks):
-        lang_code = audio_track.get("name", "unknown")
-
         # Extract language code (e.g., "ita" from "ita - Italian")
+        lang_code = _subtitle_language_code(
+            audio_track.get("language") or audio_track.get("name") or "und"
+        )
+
         ffmpeg_cmd.extend([f"-metadata:s:a:{i}", f"language={lang_code}"])
         ffmpeg_cmd.extend(
             [f"-metadata:s:a:{i}", f"title={audio_track.get('name', 'unknown')}"]
         )
 
-    # Add encoding parameters (prima di -shortest e output)
+    # Add encoding parameters (prima dell'output)
     add_encoding_params(ffmpeg_cmd)
 
     # Force interleaving so all audio tracks are written alongside the video
     # instead of being buffered and dumped at the end of the file.
     ffmpeg_cmd.extend(["-max_interleave_delta", "0"])
 
-    # Use shortest input path if any audio track has significant difference
-    if use_shortest:
-        ffmpeg_cmd.extend(["-shortest", "-strict", "experimental"])
-
-    # Evita timestamp negativi in output
+    # Evita timestamp negativi in output. This is enough to normalize inputs;
+    # the explicit per-track -itsoffset was a double correction.
     ffmpeg_cmd.extend(["-avoid_negative_ts", "make_zero"])
 
-    # Output file and overwrite
-    ffmpeg_cmd.extend([out_path, "-y"])
+    # Output to a temp file so a failure cannot leave a partial mux behind.
+    tmp_out = _temp_output_path(out_path)
+    ffmpeg_cmd.extend([tmp_out, "-y"])
 
     # Run join
-    result_json = capture_ffmpeg_real_time(
+    result_json, returncode = capture_ffmpeg_real_time(
         ffmpeg_cmd, "[yellow]FFMPEG [cyan]Join audio", log_path
     )
     print()
 
-    # Clean up temp audio files
+    # Clean up temp audio files regardless of the result
     for temp_path in temp_audio_paths:
-        if os.path.exists(temp_path):
-            try:
-                os.remove(temp_path)
-            except OSError as e:
-                logger.error(f"error:{e}")
+        _remove_quietly(temp_path)
 
-    return out_path, use_shortest, result_json
+    if returncode != 0 or not os.path.isfile(tmp_out):
+        console.print(f"[red]FFmpeg join audio failed (exit code {returncode})")
+        _remove_quietly(tmp_out)
+        return None, audio_shorter, result_json or {}
+
+    os.replace(tmp_out, out_path)
+    return out_path, audio_shorter, result_json or {}
 
 
 def join_subtitles(
@@ -374,7 +415,8 @@ def join_subtitles(
 
     if not os.path.isfile(video_path):
         console.print(f"[red]Input video file not found: {video_path}")
-        return out_path, {}
+        return None, {}
+    video_start = probe_stream_start(video_path, "v")
     ffmpeg_cmd = [get_ffmpeg_path(), "-i", video_path]
     output_ext = os.path.splitext(out_path)[1].lower()
 
@@ -387,12 +429,16 @@ def join_subtitles(
     else:
         subtitle_codec = "copy"
 
-    # Add subtitle input files first
+    # Add subtitle input files first. Their timestamps are relative to the
+    # media start, so shift them by the video's container start to keep them
+    # aligned after the audio/video normalization above.
     for subtitle in subtitles_list:
         sub_path = subtitle["path"]
         if not os.path.isfile(sub_path):
             console.print(f"[red]Input subtitle file not found: {sub_path}")
-            return out_path, {}
+            return None, {}
+        if video_start and abs(video_start) > 0.001:
+            ffmpeg_cmd += ["-itsoffset", f"{video_start}"]
         ffmpeg_cmd += ["-i", sub_path]
 
     # Add maps for video and audio streams
@@ -402,12 +448,21 @@ def join_subtitles(
 
     # Add subtitle maps and metadata
     for idx, subtitle in enumerate(subtitles_list):
-        lang_display = subtitle.get("lang", subtitle.get("language", "unknown"))
+        lang_display = (
+            subtitle.get("name")
+            or subtitle.get("language")
+            or subtitle.get("lang")
+            or "unknown"
+        )
+        lang_code = _subtitle_language_code(
+            subtitle.get("lang") or subtitle.get("language") or lang_display
+        )
         console.print(
             f"[yellow]    - [cyan]Subtitle lang [red]{lang_display}, [cyan]Path: [red]{subtitle.get('path', 'unknown')}"
         )
         ffmpeg_cmd += ["-map", f"{idx + 1}:s"]
         ffmpeg_cmd += [f"-metadata:s:s:{idx}", f"title={lang_display}"]
+        ffmpeg_cmd += [f"-metadata:s:s:{idx}", f"language={lang_code}"]
 
     # For subtitles, we always use copy for video/audio
     ffmpeg_cmd.extend(["-c:v", "copy", "-c:a", "copy", "-c:s", subtitle_codec])
@@ -420,9 +475,13 @@ def join_subtitles(
     if SUBTITLE_DISPOSITION and len(subtitles_list) > 0:
         disposition_idx = None
 
-        # Find subtitle matching the configured language
+        # Find subtitle matching the configured language. Prefer the raw track
+        # language code: the display label may be "Italian" while the config
+        # uses "ita"/"forced-ita".
         for idx, subtitle in enumerate(subtitles_list):
-            subtitle_lang = subtitle.get("language", "").lower()
+            subtitle_lang = (
+                subtitle.get("lang") or subtitle.get("language") or ""
+            ).lower()
             for lang in SUBTITLE_DISPOSITION_LANGUAGE:
                 config_lang = lang.lower().strip()
 
@@ -430,7 +489,8 @@ def join_subtitles(
                     config_lang
                 ):
                     console.print(
-                        f"[yellow]    Setting disposition for subtitle: [red]{subtitle.get('language')}"
+                        f"[yellow]    Setting disposition for subtitle: [red]"
+                        f"{subtitle.get('name') or subtitle.get('language')}"
                     )
                     disposition_idx = idx
                     break
@@ -442,13 +502,21 @@ def join_subtitles(
         if disposition_idx is not None:
             ffmpeg_cmd.extend([f"-disposition:s:{disposition_idx}", "default"])
 
-    # Overwrite
-    ffmpeg_cmd += [out_path, "-y"]
+    # Output to a temp file so a failed subtitle mux cannot leave a partial
+    # output behind.
+    tmp_out = _temp_output_path(out_path)
+    ffmpeg_cmd += [tmp_out, "-y"]
 
     # Run join
-    result_json = capture_ffmpeg_real_time(
+    result_json, returncode = capture_ffmpeg_real_time(
         ffmpeg_cmd, "[yellow]FFMPEG [cyan]Join subtitle", log_path
     )
     print()
 
-    return out_path, result_json
+    if returncode != 0 or not os.path.isfile(tmp_out):
+        console.print(f"[red]FFmpeg join subtitles failed (exit code {returncode})")
+        _remove_quietly(tmp_out)
+        return None, result_json or {}
+
+    os.replace(tmp_out, out_path)
+    return out_path, result_json or {}

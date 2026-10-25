@@ -8,12 +8,15 @@ from StreamingCommunity.setup import get_ffmpeg_path, get_ffprobe_path
 from StreamingCommunity.utils.console.shared import console
 
 
-def detect_ts_timestamp_issues(file_path):
+def detect_ts_timestamp_issues(file_path, stream_selector="v:0"):
     """
     Detect if a TS file has timestamp issues by checking for unset timestamps.
 
     Parameters:
         - file_path (str): Path to the TS file.
+        - stream_selector (str): ffprobe stream selector. Use ``a:0`` for an
+          audio-only TS; otherwise the missing video stream makes this
+          function report problems for every audio file.
 
     Returns:
         bool: True if timestamp issues are detected, False otherwise.
@@ -24,7 +27,7 @@ def detect_ts_timestamp_issues(file_path):
         "error",
         "-show_packets",
         "-select_streams",
-        "v:0",
+        stream_selector,
         "-read_intervals",
         "0%+#1",
         "-print_format",

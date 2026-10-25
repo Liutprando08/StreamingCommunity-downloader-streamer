@@ -482,7 +482,6 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
         "subtitle_disposition": false,
         "subtitle_disposition_language": ["forced-ita", "ita-forced"],
         "sync_tolerance_ms": 45,
-        "sync_itsoffset_threshold_ms": 10,
         "extension": "mkv"
     }
 }
@@ -495,7 +494,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
   - Example: `["-c:v", "libx265", "-crf", "28", "-preset", "medium"]` (H.265/HEVC encoding)
 - **`param_audio`**: FFmpeg audio encoding parameters
   - Example: `["-c:a", "libopus", "-b:a", "128k"]` (Opus audio at 128kbps)
-- **`param_final`**: Final FFmpeg parameters (default: `["-c", "copy"]` for stream copy)
+- **`param_final`**: Final FFmpeg parameters applied to the mux output (default: `["-c", "copy"]` for stream copy). When non-empty it replaces `param_video` and `param_audio`; empty it to use the custom encoding parameters.
 - **`audio_order`**: List of strings to order audio tracks (e.g., `["ita", "eng"]`)
 - **`subtitle_order`**: List of strings to order subtitle tracks (e.g., `["ita", "eng"]`)
 - **`merge_audio`**: Merge all audio tracks into a single output file (default: `true`)
@@ -503,8 +502,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 - **`subtitle_disposition`**: Automatically set default subtitle track (default: `false`)
 - **`subtitle_disposition_language`**: Languages to mark as default/forced
   - Example: `["forced-ita", "ita-forced"]` (Italian and Italian forced subtitles)
-- **`sync_tolerance_ms`**: Audio/video start-offset window in milliseconds; a warning is printed when the measured offset exceeds it (default: `45`)
-- **`sync_itsoffset_threshold_ms`**: Minimum start-time difference before an `-itsoffset` correction is added when merging audio (default: `10`)
+- **`sync_tolerance_ms`**: Audio/video start-offset warning threshold in milliseconds (values below `500` are treated as `500`). Audio is aligned by FFmpeg on the output timeline and is never shifted with an extra `-itsoffset` (default: `45`)
 - **`extension`**: Output file format (`"mkv"` or `"mp4"`)
 
 ### Request Settings

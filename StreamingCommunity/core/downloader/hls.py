@@ -360,10 +360,11 @@ class HLS_Downloader:
                 )
                 return None, True
 
-            logger.error("Merge operation failed")
+            merge_error = getattr(self, "error", None) or "Merge failed"
+            logger.error("Merge operation failed: %s", merge_error)
             if self.download_id:
                 download_tracker.complete_download(
-                    self.download_id, success=False, error="Merge failed"
+                    self.download_id, success=False, error=merge_error
                 )
             return None, False
 
@@ -444,17 +445,36 @@ class HLS_Downloader:
                     else None
                 )
                 if not audio_file:
-                    # Fallback: search for the largest audio file in the output dir
+                    # Fallback: use the largest real audio file in the output
+                    # dir, ignoring stale mux/conversion intermediates.
+                    candidates = []
                     for f in os.listdir(self.output_dir):
-                        if f.endswith((".m4a", ".aac", ".mp4", ".ts")):
-                            audio_file = os.path.join(self.output_dir, f)
-                            break
+                        lower = f.lower()
+                        stem = os.path.splitext(f)[0].lower()
+                        if not lower.endswith((".m4a", ".aac", ".mp4", ".ts")):
+                            continue
+                        if (
+                            ".temp." in lower
+                            or ".part." in lower
+                            or stem.endswith(("_joined", "_with_audio", "_final"))
+                        ):
+                            continue
+                        candidates.append(os.path.join(self.output_dir, f))
+                    if candidates:
+                        audio_file = max(candidates, key=os.path.getsize)
                 if audio_file and os.path.exists(audio_file):
                     console.print(
-                        f"[cyan]Audio-only mode: using {os.path.basename(audio_file)}"
+                        f"[cyan]Audio-only mode: remuxing {os.path.basename(audio_file)}"
                     )
-                    shutil.copy2(audio_file, self.output_path)
-                    return self.output_path
+                    merged_file, result_json = join_video(
+                        video_path=audio_file,
+                        out_path=self.output_path,
+                        log_path=os.path.join(self.output_dir, "audio_mux.log"),
+                    )
+                    self.last_merge_result = result_json
+                    if merged_file and os.path.exists(merged_file):
+                        return merged_file
+                    self.error = "Audio-only mux failed"
             return None
 
         video_path = status["video"].get("path")
@@ -473,7 +493,7 @@ class HLS_Downloader:
                 log_path=os.path.join(self.output_dir, "video_mux.log"),
             )
             self.last_merge_result = result_json
-            if os.path.exists(merged_file):
+            if merged_file and os.path.exists(merged_file):
                 return merged_file
             else:
                 self.error = "Video mux failed"
@@ -492,7 +512,7 @@ class HLS_Downloader:
                     f"{self.filename_base}_with_audio.{EXTENSION_OUTPUT}",
                 )
 
-                merged_file, _use_shortest, result_json = join_audios(
+                merged_file, _audio_shorter, result_json = join_audios(
                     video_path=current_file,
                     audio_tracks=status["audios"],
                     out_path=audio_output,
@@ -500,12 +520,14 @@ class HLS_Downloader:
                 )
                 self.last_merge_result = result_json
 
-                if os.path.exists(merged_file):
+                if merged_file and os.path.exists(merged_file):
                     current_file = merged_file
                 else:
+                    self.error = "Audio merge failed"
                     console.print(
-                        "[yellow]Audio merge failed, continuing with video only"
+                        "[red]Audio merge failed; keeping downloaded files for retry."
                     )
+                    return None
             else:
                 console.print("[cyan]Track audio tracks.")
                 self._track_audios_for_copy(status["audios"])
@@ -528,12 +550,14 @@ class HLS_Downloader:
                 )
                 self.last_merge_result = result_json
 
-                if os.path.exists(merged_file):
+                if merged_file and os.path.exists(merged_file):
                     current_file = merged_file
                 else:
+                    self.error = "Subtitle merge failed"
                     console.print(
-                        "[yellow]Subtitle merge failed, continuing without subtitles"
+                        "[red]Subtitle merge failed; keeping downloaded files for retry."
                     )
+                    return None
             else:
                 self._track_subtitles_for_copy(status["subtitles"])
 
@@ -555,7 +579,9 @@ class HLS_Downloader:
         for idx, audio in enumerate(audios_list):
             audio_path = audio.get("path")
             if audio_path and os.path.exists(audio_path):
-                language = audio.get("language", f"audio{idx}")
+                language = (
+                    audio.get("language") or audio.get("name") or f"audio{idx}"
+                )
                 extension = os.path.splitext(audio_path)[1]
                 self.copied_audios.append(
                     {"src": audio_path, "language": language, "extension": extension}

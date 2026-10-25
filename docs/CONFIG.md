@@ -69,7 +69,6 @@ All configuration lives in `Conf/`. See `Conf/README.md` for a quick overview. Y
     "subtitle_disposition": false,
     "subtitle_disposition_language": ["forced-ita", "ita-forced"],
     "sync_tolerance_ms": 45,
-    "sync_itsoffset_threshold_ms": 10,
     "extension": "mkv"
   }
 }

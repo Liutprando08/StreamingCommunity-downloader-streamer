@@ -360,9 +360,10 @@ class DASH_Downloader:
                 download_tracker.complete_download(self.download_id, success=False, error="cancelled")
                 return None, True
                 
-            logging.error("Merge operation failed")
+            merge_error = getattr(self, "error", None) or "Merge failed"
+            logging.error("Merge operation failed: %s", merge_error)
             if self.download_id:
-                download_tracker.complete_download(self.download_id, success=False, error="Merge failed")
+                download_tracker.complete_download(self.download_id, success=False, error=merge_error)
             return None, False
         
         # Move to final location if needed
@@ -436,7 +437,7 @@ class DASH_Downloader:
                 log_path=os.path.join(self.output_dir, "video_mux.log")
             )
             self.last_merge_result = result_json
-            return merged_file if os.path.exists(merged_file) else None
+            return merged_file if merged_file and os.path.exists(merged_file) else None
         
         current_file = video_path
         
@@ -444,16 +445,20 @@ class DASH_Downloader:
         if status['audios']:
             if MERGE_AUDIO:
                 current_file = self._merge_audio_tracks(current_file, status['audios'])
+                if not current_file:
+                    return None
             else:
                 self._track_audios_for_copy(status['audios'])
-        
-       # Merge or track subtitle tracks
+
+        # Merge or track subtitle tracks
         if status['subtitles']:
             if MERGE_SUBTITLES:
                 current_file = self._merge_subtitle_tracks(current_file, status['subtitles'])
+                if not current_file:
+                    return None
             else:
                 self._track_subtitles_for_copy(status['subtitles'])
-        
+
         return current_file
     
     def _merge_audio_tracks(self, current_file, audio_tracks):
@@ -468,12 +473,12 @@ class DASH_Downloader:
             log_path=os.path.join(self.output_dir, "audio_merge.log")
         )
         self.last_merge_result = result_json
-        
-        if os.path.exists(merged_file):
+
+        if merged_file and os.path.exists(merged_file):
             return merged_file
-        else:
-            console.print("[yellow]Audio merge failed, continuing with video only")
-            return current_file
+        self.error = "Audio merge failed"
+        console.print("[red]Audio merge failed; keeping downloaded files for retry.")
+        return None
     
     def _merge_subtitle_tracks(self, current_file, subtitle_tracks):
         """Merge subtitle tracks with current video."""
@@ -487,12 +492,12 @@ class DASH_Downloader:
             log_path=os.path.join(self.output_dir, "sub_merge.log")
         )
         self.last_merge_result = result_json
-        
-        if os.path.exists(merged_file):
+
+        if merged_file and os.path.exists(merged_file):
             return merged_file
-        else:
-            console.print("[yellow]Subtitle merge failed, continuing without subtitles")
-            return current_file
+        self.error = "Subtitle merge failed"
+        console.print("[red]Subtitle merge failed; keeping downloaded files for retry.")
+        return None
     
     def _track_subtitles_for_copy(self, subtitles_list):
         """Track subtitle paths for later copying to final location."""
@@ -534,7 +539,9 @@ class DASH_Downloader:
         for idx, audio in enumerate(audios_list):
             audio_path = audio.get('path')
             if audio_path and os.path.exists(audio_path):
-                language = audio.get('language', f'audio{idx}')
+                language = (
+                    audio.get('language') or audio.get('name') or f'audio{idx}'
+                )
                 extension = os.path.splitext(audio_path)[1]
                 self.copied_audios.append({
                     'src': audio_path,

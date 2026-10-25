@@ -16,10 +16,6 @@ from StreamingCommunity.utils.console.shared import console
 # Internal utilities
 from StreamingCommunity.utils.os import internet_manager
 
-# Variable
-terminate_flag = threading.Event()
-
-
 class ProgressData:
     """Class to store the last progress data"""
 
@@ -41,6 +37,7 @@ def capture_output(
     description: str,
     progress_data: ProgressData,
     log_path: str | None = None,
+    stop_event: threading.Event | None = None,
 ) -> None:
     """
     Function to capture and print output from a subprocess.
@@ -75,8 +72,10 @@ def capture_output(
                         log_f.write(line + "\n")
                         log_f.flush()
 
-                        # Check if termination is requested
-                        if terminate_flag.is_set():
+                        # Check if termination is requested for THIS capture.
+                        # A shared global event used to make concurrent muxes
+                        # kill each other and leave truncated outputs behind.
+                        if stop_event is not None and stop_event.is_set():
                             break
 
                         if "size=" in line:
@@ -141,6 +140,11 @@ def capture_output(
 
     finally:
         try:
+            if process.stdout is not None:
+                process.stdout.close()
+        except Exception:
+            pass
+        try:
             terminate_process(process)
         except Exception as e:
             logging.error(f"Error terminating process: {e}")
@@ -195,7 +199,7 @@ def terminate_process(process):
 
 def capture_ffmpeg_real_time(
     ffmpeg_command: list, description: str, log_path: Optional[str] = None
-) -> dict:
+) -> tuple[dict, int]:
     """
     Function to capture real-time output from ffmpeg process.
 
@@ -204,12 +208,15 @@ def capture_ffmpeg_real_time(
         - description (str): Description of the command being executed.
 
     Returns:
-        dict: JSON dictionary with the last progress data containing
+        tuple[dict, int]: Last progress data and the ffmpeg exit code. The
+        exit code is -1 when the process could not be started or reaped.
     """
-    global terminate_flag
-
-    # Clear the terminate_flag before starting a new capture
-    terminate_flag.clear()
+    # One event per capture: the old shared global let a finishing mux set the
+    # flag while another mux was still running, which killed the other ffmpeg
+    # process and left a truncated output file behind.
+    stop_event = threading.Event()
+    returncode = -1
+    process = None
 
     # Create progress data storage
     progress_data = ProgressData()
@@ -225,7 +232,8 @@ def capture_ffmpeg_real_time(
 
         # Start a thread to capture and print output
         output_thread = threading.Thread(
-            target=capture_output, args=(process, description, progress_data, log_path)
+            target=capture_output,
+            args=(process, description, progress_data, log_path, stop_event),
         )
         output_thread.start()
 
@@ -240,12 +248,20 @@ def capture_ffmpeg_real_time(
             logging.error(f"Error in ffmpeg process: {e}")
 
         finally:
-            terminate_flag.set()
+            stop_event.set()
             output_thread.join()
+            if process.returncode is None:
+                try:
+                    process.wait(timeout=5)
+                except Exception:
+                    pass
 
     except Exception as e:
         logging.error(f"Failed to start ffmpeg process: {e}")
 
-    # Return the last captured progress data
-    return progress_data.get()
+    if process is not None and process.returncode is not None:
+        returncode = process.returncode
+
+    # Return the last captured progress data and the real exit code
+    return progress_data.get(), returncode
 
