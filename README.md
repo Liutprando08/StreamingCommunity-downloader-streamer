@@ -29,49 +29,6 @@
 
 ---
 
-## Installation
-
-### PyPI
-```bash
-pip install StreamingCommunity-download-stream
-streamingcommunity
-```
-
-### Pre-built Binaries
-Download from [GitHub Releases](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest) (Windows/macOS/Linux).
-
-### From Source
-```bash
-git clone https://github.com/Liutprando08/StreamingCommunity-downloader-streamer.git
-cd StreamingCommunity-downloader-streamer
-pip install -e .
-python -m StreamingCommunity
-```
-
-### System Dependencies
-| Tool | Needed for | Install |
-|------|------------|---------|
-| **ffmpeg** / **ffprobe** | muxing, remuxing, merge, NFO, torrent dub | `apt install ffmpeg` · `brew install ffmpeg` · `choco install ffmpeg` |
-| **aria2c** | torrent downloads | `apt install aria2` · `brew install aria2` |
-| **mpv** / **vlc** / **ffplay** | `--stream` playback | see [Streaming](#streaming) |
-
----
-
-## Quick Start
-
-```bash
-# Interactive TUI (default in terminal)
-python -m StreamingCommunity
-
-# Classic CLI menu
-python -m StreamingCommunity --cli
-
-# Search from CLI
-python -m StreamingCommunity --site streamingcommunity --search "interstellar"
-```
-
----
-
 ## Interface
 
 ### TUI (recommended)
@@ -97,51 +54,14 @@ Classic numbered menu. Great for scripts/pipes/non-interactive use.
 
 ---
 
-## Streaming
-```bash
-# Stream (SC/AnimeWorld/MangaWorld)
-python -m StreamingCommunity --stream --site streamingcommunity --search "interstellar" --player mpv
-
-# Custom port
-python -m StreamingCommunity --stream --site animeworld --search "naruto" --stream-port 8080
-```
-
-> AnimeUnity can be streamed from the TUI only. Other services ignore `--stream` and download normally.
-
----
-
-## Configuration
-See [docs/CONFIG.md](docs/CONFIG.md) and `Conf/README.md`. Files in `Conf/`: `config.json`, `login.json`, `domains.json`, `remote_cdm.json`.
-
----
-
-## Disclaimer
-This project is for educational and personal use only.  
-- Do **not** use to infringe copyright or terms of service.  
-- Do **not** bundle or distribute DRM keys, CDM modules, or device files.  
-- You are responsible for compliance with applicable laws in your jurisdiction.  
-- Third-party sites may change without notice; functionality can break.  
-
----
-
-## License
-[GPL-3.0-or-later](LICENSE). See [NOTICE](NOTICE) for attribution.
-
-## Credits
-Based on work from the original StreamingCommunity/VibraVid authors and contributors. Maintained by [Liutprando08](https://github.com/Liutprando08).
-le=for-the-badge&logo=apple&logoColor=white&labelColor=2d3748)](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_macos_x64)
-[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black&labelColor=2d3748)](https://github.com/Liutprando08/StreamingCommunity-downloader-streamer/releases/latest/download/StreamingCommunity_linux_x64)
-
-*⚡ **Quick Start:** `pip install StreamingCommunity-download-stream && streamingcommunity`*
-
-</div>
-
 > **⚠️ If a streaming service doesn't work**, the site URL may have changed.
 > When `check_domain_on_start` is enabled, StreamingCommunity, AnimeWorld and AnimeUnity are re-checked before their first search (see [Automatic Link Updates](#automatic-link-updates)); other services are not updated automatically.
 > You can also open `Conf/domains.json` and update the `full_url` for that service manually, then restart.
 
 ## 📖 Table of Contents
 
+- [Interface](#interface)
+- [Features](#features-reality)
 - [Installation](#installation)
   - [PyPI](#pypi-recommended)
   - [Pre-built Binaries](#pre-built-binaries)
@@ -169,6 +89,9 @@ le=for-the-badge&logo=apple&logoColor=white&labelColor=2d3748)](https://github.c
 - [Environment Variables](#environment-variables)
 - [Logs](#logs)
 - [Related Projects](#related-projects)
+- [Disclaimer](#disclaimer)
+- [License](#license)
+- [Credits](#credits)
 
 ---
 
@@ -1092,6 +1015,16 @@ writes progress/FFmpeg logs next to the output:
 > This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.
 >
 > **If you do not agree with these terms, do not use this software.**
+
+---
+
+## License
+
+[GPL-3.0-or-later](LICENSE). See [NOTICE](NOTICE) for attribution.
+
+## Credits
+
+Based on work from the original StreamingCommunity/VibraVid authors and contributors. Maintained by [Liutprando08](https://github.com/Liutprando08).
 
 ---
 
