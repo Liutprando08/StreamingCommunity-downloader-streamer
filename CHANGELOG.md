@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-10-26
+
+### Changed
+- StreamingCommunity now resolves playlists through the vixsrc API first and uses the vidxgo host only as a fallback.
+
+## [1.3.3] - 2026-10-25
+
 ### Added
 - Docs structure under `docs/` for clearer navigation
 - `NOTICE` and `CHANGELOG.md`

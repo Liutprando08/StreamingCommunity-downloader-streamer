@@ -1,4 +1,4 @@
-# 22.06.26 - StreamingCommunity via vidxgo host, legacy vixsrc API kept as fallback
+# 26.10.26 - StreamingCommunity via vixsrc API, vidxgo host kept as fallback
 
 from __future__ import annotations
 
@@ -126,12 +126,20 @@ def _get_playlist_url(
     season: int | None = None,
     episode: int | None = None,
 ) -> str | None:
-    playlist = _get_vidxgo_playlist_url(imdb_id, is_series, season, episode)
+    try:
+        playlist = _get_vixsrc_playlist_url(imdb_id, is_series, season, episode)
+    except Exception as e:
+        console.print(f"[yellow]vixsrc error: {e}")
+        playlist = None
     if playlist:
         return playlist
 
-    console.print("[yellow]vidxgo unavailable, falling back to vixsrc")
-    return _get_vixsrc_playlist_url(imdb_id, is_series, season, episode)
+    console.print("[yellow]vixsrc unavailable, falling back to vidxgo")
+    try:
+        return _get_vidxgo_playlist_url(imdb_id, is_series, season, episode)
+    except Exception as e:
+        console.print(f"[yellow]vidxgo error: {e}")
+        return None
 
 
 def download_film(select_title: Entries) -> tuple[str | None, Any] | None:
