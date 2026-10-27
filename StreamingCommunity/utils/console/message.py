@@ -1,6 +1,7 @@
 # 3.12.23
 import platform
 import subprocess
+from contextlib import suppress
 
 from StreamingCommunity.utils.console.shared import console
 
@@ -19,14 +20,19 @@ def start_message(clean: bool = True):
 [green]→[purple]                                                              /___/
     """
     if CLEAN and clean:
-        try:
+        with suppress(OSError):
             subprocess.run(
                 "cls" if platform.system() == "Windows" else "clear",
                 shell=False,
                 check=False,
             )
-        except Exception:
-            pass
 
     if SHOW:
+        # Imported lazily: importing ``StreamingCommunity.upload.version`` runs
+        # the ``upload`` package initializer, which itself imports ``utils``.
+        # A module-level import here would create a circular import while the
+        # utils package is still being initialized.
+        from StreamingCommunity.upload.version import __author__, __title__, __version__
+
         console.print(f"[purple]{msg}")
+        console.print(f"[dim]{__title__} {__version__} · {__author__}[/]")

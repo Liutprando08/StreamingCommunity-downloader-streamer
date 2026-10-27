@@ -24,6 +24,16 @@ from StreamingCommunity.upload import binary_update, git_update
 from StreamingCommunity.upload.version import __title__, __version__
 from StreamingCommunity.utils import config_manager, os_manager, start_message
 from StreamingCommunity.utils.console.shared import console
+from StreamingCommunity.utils.errors import report_fatal_error
+from StreamingCommunity.utils.logging_setup import setup_logging
+from StreamingCommunity.utils.site_health import (
+    UNKNOWN,
+    UNREACHABLE,
+    WORKING,
+    check_sites,
+    render_table,
+    summary_counts,
+)
 
 # Internal utilities
 from . import call_global_search
@@ -42,7 +52,6 @@ COLOR_MAP = {
 }
 CATEGORY_MAP = {1: "anime", 2: "Film_serie", 3: "serie"}
 SHOW_DEVICE_INFO = config_manager.config.get_bool("DEFAULT", "show_device_info")
-NOT_CLOSE = config_manager.config.get_bool("DEFAULT", "close_console")
 
 
 def run_function(func: Callable[..., None], search_terms: str = "") -> None:
@@ -69,7 +78,7 @@ def initialize():
     # Attempt GitHub update
     try:
         git_update()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - update failures must not block startup
         console.log(f"[red]Error with loading github: {e!s}")
 
 
@@ -87,7 +96,7 @@ def _should_run_on_current_os(hook: dict) -> bool:
         return True
     try:
         normalized = [str(s).strip().lower() for s in allowed_systems]
-    except Exception:
+    except Exception:  # noqa: BLE001 - tolerate malformed hook config
         return True
     return os_manager.system in normalized
 
@@ -159,7 +168,7 @@ def _iter_hooks(stage: str):
             if not isinstance(hook, dict):
                 continue
             yield hook
-    except Exception:
+    except Exception:  # noqa: BLE001 - malformed hook list is ignored
         return
 
 
@@ -252,77 +261,103 @@ def setup_argument_parser(search_functions):
         epilog=f"Available sites by name: {available_names}\nAvailable sites by index: {available_indices}",
     )
 
-    # Add arguments
-    parser.add_argument("-s", "--search", default=None, help="Search terms")
-    parser.add_argument(
+    search_group = parser.add_argument_group("Search")
+    search_group.add_argument("-s", "--search", default=None, help="Search terms")
+    search_group.add_argument(
         "--auto-first",
         action="store_true",
         help="Auto-download first result (use with --site and --search)",
     )
-    parser.add_argument("--site", type=str, help="Site by name or index")
-    parser.add_argument(
+    search_group.add_argument("--site", type=str, help="Site by name or index")
+    search_group.add_argument(
+        "--global", action="store_true", help="Global search across sites"
+    )
+
+    interface_group = parser.add_argument_group("Interface")
+    interface_group.add_argument(
         "--tui",
         action="store_true",
         help="Start the interactive TUI (now the default; kept for compatibility)",
     )
-    parser.add_argument(
+    interface_group.add_argument(
         "--cli",
         action="store_true",
         help="Use the classic command-line interface instead of the TUI",
     )
-    parser.add_argument(
-        "--global", action="store_true", help="Global search across sites"
-    )
-    parser.add_argument(
-        "--not_close", type=bool, help="Keep console open after last download"
-    )
-    parser.add_argument(
+
+    download_group = parser.add_argument_group("Download and streaming")
+    download_group.add_argument(
         "-sv",
         "--s_video",
         type=str,
         help="""Select video tracks. Example:  1. select best video (best) 2. Select 4K+HEVC video (res="3840*":codecs=hvc1:for=best)""",
     )
-    parser.add_argument(
+    download_group.add_argument(
         "-sa",
         "--s_audio",
         type=str,
         help="""Select audio tracks. Example:  1. Select all (all) 2. Select best eng audio (lang=en:for=best) 3. Select best 2, and language is ja or en (lang="ja|en":for=best2)""",
     )
-    parser.add_argument(
+    download_group.add_argument(
         "-ss",
         "--s_subtitle",
         type=str,
         help="""Select subtitle tracks. Example:  1. Select all subs (all) 2. Select all subs containing "English" (name="English":for=all)""",
     )
-    parser.add_argument(
-        "--use_proxy", action="store_true", help="Enable proxy for requests"
-    )
-    parser.add_argument(
+    download_group.add_argument(
         "--extension", type=str, help="Output file extension (mkv, mp4)"
     )
-    parser.add_argument(
-        "-UP",
-        "--update",
-        action="store_true",
-        help="Auto-update to latest version (binary only)",
-    )
-    parser.add_argument(
-        "--version", action="version", version=f"{__title__} {__version__}"
-    )
-    parser.add_argument(
+    download_group.add_argument(
         "--stream",
         action="store_true",
         help="Stream content in real-time instead of downloading",
     )
-    parser.add_argument(
+    download_group.add_argument(
         "--player",
         type=str,
         default=None,
         choices=["mpv", "vlc", "ffplay"],
         help="Player to use for streaming (mpv, vlc, ffplay)",
     )
-    parser.add_argument(
+    download_group.add_argument(
         "--stream-port", type=int, default=0, help="Local proxy server port (0 = auto)"
+    )
+
+    config_group = parser.add_argument_group("Configuration")
+    config_group.add_argument(
+        "--not_close",
+        action="store_true",
+        default=None,
+        help="Keep the console open after the last download",
+    )
+    config_group.add_argument(
+        "--use_proxy",
+        action="store_true",
+        default=None,
+        help="Enable proxy for requests",
+    )
+
+    maintenance_group = parser.add_argument_group("Maintenance")
+    maintenance_group.add_argument(
+        "-UP",
+        "--update",
+        action="store_true",
+        help="Auto-update to latest version (binary only)",
+    )
+    maintenance_group.add_argument(
+        "--check-sites",
+        action="store_true",
+        help="Check whether every site domain is reachable, then exit",
+    )
+    maintenance_group.add_argument(
+        "--version", action="version", version=f"{__title__} {__version__}"
+    )
+
+    debug_group = parser.add_argument_group("Debugging")
+    debug_group.add_argument(
+        "--debug",
+        action="store_true",
+        help="Show verbose logs and the full traceback on errors",
     )
     return parser
 
@@ -335,14 +370,20 @@ def apply_config_updates(args):
         "s_video": "DOWNLOAD.select_video",
         "s_audio": "DOWNLOAD.select_audio",
         "s_subtitle": "DOWNLOAD.select_subtitle",
-        "not_close": "DEFAULT.close_console",
         "use_proxy": "REQUESTS.use_proxy",
         "extension": "PROCESS.extension",
     }
 
     for arg_name, config_key in arg_mappings.items():
-        if getattr(args, arg_name) is not None:
-            config_updates[config_key] = getattr(args, arg_name)
+        value = getattr(args, arg_name, None)
+        if value is not None:
+            config_updates[config_key] = value
+
+    # ``close_console`` is the opposite of the user-facing flag, and it is only
+    # written when the flag was actually supplied (the argument defaults to
+    # ``None``) so a normal launch cannot overwrite the saved preference.
+    if getattr(args, "not_close", False):
+        config_updates["DEFAULT.close_console"] = False
 
     # Apply updates
     for key, value in config_updates.items():
@@ -405,7 +446,7 @@ def handle_direct_site_selection(
                 console.print(
                     "[yellow]No results found. Falling back to interactive mode."
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - fall back to interactive search
             console.print(f"[red]Auto-first failed: {e!s}")
 
     run_function(func_to_run, search_terms=search_terms)
@@ -457,6 +498,7 @@ _CLI_ONLY_ARGS = (
     "s_subtitle",
     "use_proxy",
     "not_close",
+    "check_sites",
 )
 
 
@@ -473,90 +515,115 @@ def _should_launch_tui(args) -> bool:
     if getattr(args, "tui", False):
         return True
     if any(
-        getattr(args, name, None) not in (None, False, 0, "")
-        for name in _CLI_ONLY_ARGS
+        getattr(args, name, None) not in (None, False, 0, "") for name in _CLI_ONLY_ARGS
     ):
         return False
     return sys.stdout.isatty()
 
 
-def main():
-    execute_hooks("pre_run")
+def _keep_console_open(args) -> bool:
+    """Return True when the classic CLI should keep prompting for searches."""
+    if getattr(args, "not_close", False):
+        return True
+    return not config_manager.config.get_bool("DEFAULT", "close_console", default=True)
+
+
+def _run_site_check() -> int:
+    """Print a reachability report for every configured site."""
+    console.print("[cyan]Checking site domains…[/]")
+    results = check_sites()
+    if not results:
+        console.print("[yellow]No sites configured.[/]")
+        return 0
+
+    console.print(render_table(results))
+    counts = summary_counts(results)
+    console.print(
+        f"[green]{WORKING.capitalize()}: {counts[WORKING]}[/] · "
+        f"[red]{UNREACHABLE.capitalize()}: {counts[UNREACHABLE]}[/] · "
+        f"[yellow]{UNKNOWN.capitalize()}: {counts[UNKNOWN]}[/]"
+    )
+    if counts[UNREACHABLE]:
+        console.print(
+            "[yellow]Some sites did not respond. Check your connection/proxy, "
+            "or retry later.[/]"
+        )
+        return 1
+    console.print("[green]All checked sites responded.[/]")
+    return 0
+
+
+def _run(argv: list[str], *, debug: bool) -> int:
+    search_functions = load_search_functions()
+    parser = setup_argument_parser(search_functions)
+    args = parser.parse_args(argv)
+
+    debug = debug or bool(getattr(args, "debug", False))
+    launch_tui = _should_launch_tui(args)
+
+    # The file handler was installed before parsing; only add the stderr
+    # handler for the classic CLI, otherwise log lines would corrupt the TUI.
+    if debug:
+        setup_logging(debug=True, stream=not launch_tui)
+
+    # ``--check-sites`` is a diagnostic command: skip the banner and the update
+    # notice so its table stays readable and the command returns quickly.
+    if getattr(args, "check_sites", False):
+        return _run_site_check()
+
+    # Show the banner / device info / update notice only after argument parsing:
+    # ``--help`` and ``--version`` must stay fast and side-effect free.
     initialize()
 
-    try:
-        search_functions = load_search_functions()
-        parser = setup_argument_parser(search_functions)
-        args = parser.parse_args()
-
-        # Launch the interactive TUI by default; fall back to the classic CLI
-        # when ``--cli`` (or any CLI-only flag) is used, or stdout is not a TTY.
-        if _should_launch_tui(args):
-            try:
-                from StreamingCommunity.cli.tui import run as run_tui
-            except ImportError as e:
-                console.print(
-                    f"[yellow]TUI dependencies are missing ({e}); "
-                    "falling back to the CLI"
-                )
-            else:
-                run_tui()
-                return
-
-        # Handle auto-update
-        if args.update:
-            console.print("\n[cyan]  AUTO-UPDATE MODE")
-            success = binary_update()
-
-            if success:
-                console.print("\n[green]Update process initiated successfully!")
-            else:
-                console.print("\n[yellow]Update was not performed")
-            return
-
-        apply_config_updates(args)
-
-        if getattr(args, "stream", False):
-            os.environ["STREAMING_MODE"] = "1"
-            if getattr(args, "player", None):
-                os.environ["STREAMING_PLAYER"] = args.player
-            if getattr(args, "stream_port", 0):
-                os.environ["STREAMING_PORT"] = str(args.stream_port)
-            console.print("[cyan]Streaming mode enabled")
-
-        if getattr(args, "global"):
-            call_global_search(args.search)
-            return
-
-        input_to_function, choice_labels, module_name_to_function = (
-            build_function_mappings(search_functions)
-        )
-        if handle_direct_site_selection(
-            args, input_to_function, module_name_to_function, args.search
-        ):
-            return
-
-        if not NOT_CLOSE:
-            while True:
-                category = get_user_site_selection(choice_labels)
-
-                if category == "global":
-                    call_global_search(args.search)
-
-                if category in input_to_function:
-                    run_function(input_to_function[category], search_terms=args.search)
-
-                user_response = msg.ask(
-                    "\n[cyan]Do you want to perform another search?",
-                    choices=["y", "n"],
-                    default="n",
-                )
-                if user_response.lower() != "y":
-                    break
-
-            force_exit()
-
+    # Launch the interactive TUI by default; fall back to the classic CLI
+    # when ``--cli`` (or any CLI-only flag) is used, or stdout is not a TTY.
+    if launch_tui:
+        try:
+            from StreamingCommunity.cli.tui import run as run_tui
+        except ImportError as e:
+            logger.warning("TUI dependencies are missing: %s", e)
+            console.print(
+                f"[yellow]TUI dependencies are missing ({e}); falling back to the CLI"
+            )
         else:
+            run_tui()
+            return 0
+
+    # Handle auto-update
+    if args.update:
+        console.print("\n[cyan]  AUTO-UPDATE MODE")
+        success = binary_update()
+
+        if success:
+            console.print("\n[green]Update process initiated successfully!")
+        else:
+            console.print("\n[yellow]Update was not performed")
+        return 0
+
+    apply_config_updates(args)
+
+    if getattr(args, "stream", False):
+        os.environ["STREAMING_MODE"] = "1"
+        if getattr(args, "player", None):
+            os.environ["STREAMING_PLAYER"] = args.player
+        if getattr(args, "stream_port", 0):
+            os.environ["STREAMING_PORT"] = str(args.stream_port)
+        console.print("[cyan]Streaming mode enabled")
+
+    if getattr(args, "global"):
+        call_global_search(args.search)
+        return 0
+
+    input_to_function, choice_labels, module_name_to_function = build_function_mappings(
+        search_functions
+    )
+    if handle_direct_site_selection(
+        args, input_to_function, module_name_to_function, args.search
+    ):
+        return 0
+
+    if _keep_console_open(args):
+        while True:
             category = get_user_site_selection(choice_labels)
 
             if category == "global":
@@ -565,7 +632,56 @@ def main():
             if category in input_to_function:
                 run_function(input_to_function[category], search_terms=args.search)
 
-            force_exit()
+            user_response = msg.ask(
+                "\n[cyan]Do you want to perform another search?",
+                choices=["y", "n"],
+                default="n",
+            )
+            if user_response.lower() != "y":
+                break
+
+        force_exit()
+
+    else:
+        category = get_user_site_selection(choice_labels)
+
+        if category == "global":
+            call_global_search(args.search)
+
+        if category in input_to_function:
+            run_function(input_to_function[category], search_terms=args.search)
+
+        force_exit()
+
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI/TUI entry point with logging and a friendly top-level error handler."""
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    debug = "--debug" in arguments
+    setup_logging(debug=debug)
+
+    try:
+        execute_hooks("pre_run")
+        return _run(arguments, debug=debug)
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted by user.[/]")
+        logger.info("Interrupted by user")
+        return 130
+
+    except SystemExit:
+        raise
+
+    except Exception as exc:  # noqa: BLE001 - final safety net for the CLI/TUI
+        report_fatal_error(exc, debug=debug)
+        return 1
 
     finally:
-        execute_hooks("post_run")
+        try:
+            execute_hooks("post_run")
+        except SystemExit:
+            raise
+        except Exception:
+            logger.exception("post_run hook stage failed")

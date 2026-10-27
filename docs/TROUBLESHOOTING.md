@@ -1,6 +1,7 @@
 # Troubleshooting
 
 ## Site not working / domain changed
+- Run `python -m StreamingCommunity --check-sites` (or TUI sidebar → `Stato siti`) to see whether domains are reachable.
 - If `check_domain_on_start` is enabled, StreamingCommunity/AnimeWorld/AnimeUnity are re-checked before first search.
 - Otherwise edit `Conf/domains.json` manually and restart.
 - If `fetch_domain_online` is enabled and `domains.json` is missing/empty, it's downloaded from GitHub as bootstrap.
@@ -25,4 +26,6 @@
 - Some trackers need time to scrape.
 
 ## Logs
-Check console output and logs in download folders (`video_mux.log`, `audio_merge.log`, `sub_merge.log`, `*_download.log`, `*_parsing.log`).
+- Application log: `.cache/logs/app.log` (rotating, tokens/URL signatures are redacted).
+- Run with `--debug` for verbose logging and a full traceback on fatal errors.
+- Per-download logs live in the download folders (`video_mux.log`, `audio_merge.log`, `sub_merge.log`, `*_download.log`, `*_parsing.log`).

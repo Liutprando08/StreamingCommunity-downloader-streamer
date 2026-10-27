@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from textual.app import App
+from typing import ClassVar
+
 from rich.terminal_theme import TerminalTheme
+from textual.app import App
 
 from .console_bridge import bridge
 from .screens.home import HomeScreen
@@ -48,10 +50,17 @@ class OsteApp(App):
 
     # Global: works from any screen and, unlike a letter, is not swallowed by
     # the focused Input on the home screen.
-    BINDINGS = [("f2", "open_settings", "Impostazioni")]
+    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
+        ("f2", "open_settings", "Impostazioni")
+    ]
 
     def on_mount(self) -> None:
+        from StreamingCommunity.upload.version import __version__
         from StreamingCommunity.utils import config_manager
+
+        # Keep the brand in the title and surface the running version in the
+        # header subtitle, so bug reports can quote it without opening --help.
+        self.sub_title = f"{__version__} · {self.SUB_TITLE}"
 
         # Built-in Catppuccin Mocha theme for all widgets (buttons, inputs,
         # footer, focus…) plus the matching ANSI mapping for text markup.

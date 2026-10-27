@@ -1,3 +1,3 @@
 from StreamingCommunity.cli.run import main
 
-main()
+raise SystemExit(main())

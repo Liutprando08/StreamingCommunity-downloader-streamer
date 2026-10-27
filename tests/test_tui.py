@@ -47,9 +47,16 @@ from StreamingCommunity.cli.tui.screens.queue import QueueScreen
 from StreamingCommunity.cli.tui.screens.seasons import SeasonsScreen
 from StreamingCommunity.cli.tui.screens.search import SearchScreen
 from StreamingCommunity.cli.tui.screens.settings import SettingsScreen
+from StreamingCommunity.cli.tui.screens.sites import SitesScreen
 from StreamingCommunity.cli.tui.widgets import SelectableTable
 from StreamingCommunity.source.utils.tracker import download_tracker
 from StreamingCommunity.utils import config_manager
+from StreamingCommunity.utils.site_health import (
+    UNKNOWN,
+    UNREACHABLE,
+    WORKING,
+    SiteStatus,
+)
 
 
 class FakeEntry:
@@ -427,6 +434,49 @@ class TestTuiHomeNavigation(unittest.IsolatedAsyncioTestCase):
             await pilot.press("enter")
             await _settle(pilot)
             self.assertFalse(pilot.app.is_running)
+
+    async def test_home_sidebar_has_sites_entry(self):
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            ol = _active(pilot).query_one("#menu-list", OptionList)
+            prompts = [
+                str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)
+            ]
+            self.assertIn("Stato siti", prompts)
+
+    async def test_version_is_visible_in_header_subtitle(self):
+        from StreamingCommunity.upload.version import __version__
+
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            self.assertIn(__version__, pilot.app.sub_title)
+
+
+class TestTuiSitesScreen(unittest.IsolatedAsyncioTestCase):
+    async def test_sites_screen_renders_all_statuses(self):
+        results = [
+            SiteStatus("alpha", "https://a.test", WORKING, 200, 12),
+            SiteStatus("beta", "", UNKNOWN),
+            SiteStatus(
+                "gamma", "https://g.test", UNREACHABLE, None, 30, "connection refused"
+            ),
+        ]
+        screen = SitesScreen(checker=lambda: results)
+
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            pilot.app.push_screen(screen)
+            await _settle(pilot)
+            await pilot.app.workers.wait_for_complete()
+            await _settle(pilot)
+
+            table = screen.query_one("#sites-table", DataTable)
+            self.assertEqual(table.row_count, 3)
+            self.assertIn("Funzionante", str(table.get_row("alpha")[1]))
+            self.assertIn("Non raggiungibile", str(table.get_row("gamma")[1]))
+            self.assertIn("Sconosciuto", str(table.get_row("beta")[1]))
+
+            summary = str(screen.query_one("#sites-summary", Static).render())
+            self.assertIn("Funzionanti: 1", summary)
+            self.assertIn("Non raggiungibili: 1", summary)
+            self.assertIn("Sconosciuti: 1", summary)
 
 
 class TestTuiHomeGlobalSearch(unittest.IsolatedAsyncioTestCase):

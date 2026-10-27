@@ -53,3 +53,27 @@ streamingcommunity -UP
 # pip
 pip install -U StreamingCommunity-download-stream
 ```
+
+## Site health
+```bash
+# Check every configured site domain, then exit
+python -m StreamingCommunity --check-sites
+```
+The table reports `Working` / `Unreachable` / `Unknown`, the HTTP status and
+latency; the command exits with code `1` if any site is unreachable. In the TUI
+the same report is available from the sidebar (`Stato siti`) and can be
+re-run with `r`.
+
+Domains come from `Conf/domains.json`; services that hardcode their host use a
+built-in homepage fallback. `Unknown` means no URL is known for that entry.
+
+## Debugging
+```bash
+# Verbose logs + full traceback on fatal errors
+python -m StreamingCommunity --debug
+
+# Inspect the rotating application log (tokens are redacted)
+tail -f .cache/logs/app.log
+```
+`--debug` is valid in both CLI and TUI mode; in TUI mode the log still goes to
+the file so the interface is not corrupted.

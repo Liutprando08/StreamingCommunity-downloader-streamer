@@ -424,3 +424,27 @@ DataTable > .datatable--header-cursor {
     height: auto;
     margin-top: 1;
 }
+
+/* ── Site health (reachability report) ───────────────────────────────── */
+SitesScreen #sites-title {
+    height: auto;
+    margin-bottom: 1;
+}
+
+SitesScreen #sites-summary {
+    height: auto;
+}
+
+SitesScreen #sites-actions {
+    height: auto;
+    margin-top: 1;
+}
+
+SitesScreen #sites-actions Button {
+    margin-right: 1;
+}
+
+SitesScreen #sites-status {
+    height: auto;
+    margin-top: 1;
+}

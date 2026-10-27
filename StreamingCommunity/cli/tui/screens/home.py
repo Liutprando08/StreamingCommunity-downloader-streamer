@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import partial
+from typing import ClassVar
 
 from textual import on
 from textual.app import ComposeResult
@@ -25,6 +26,7 @@ from .activity import ActivityScreen
 from .detail import DetailScreen
 from .music import MusicScreen
 from .search import SearchScreen
+from .sites import SitesScreen
 
 HOME_MARKUP = (
     "[b][#cba6f7] ██████╗ ███████╗████████╗███████╗[/]\n"
@@ -39,7 +41,7 @@ RESULT_COLUMNS = ("Titolo", "Tipo", "Anno", "Fonte")
 
 
 class HomeScreen(Screen):
-    BINDINGS = [
+    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("a", "open_activity", "Attività"),
         ("/", "focus_search", "Cerca"),
     ]
@@ -57,6 +59,7 @@ class HomeScreen(Screen):
         with Container(classes="home-root"):
             with Container(id="sidebar"):
                 options = [f"{p.name}" for p in registry.all()]
+                options.append("Stato siti")
                 options.append("Esci")
                 yield OptionList(*options, id="menu-list")
             with Container(id="main-content"):
@@ -92,6 +95,8 @@ class HomeScreen(Screen):
         index = event.option_index
         if index < len(providers):
             self.app.push_screen(SearchScreen(providers[index]))
+        elif index == len(providers):
+            self.app.push_screen(SitesScreen())
         else:
             # Last entry is "Esci" (Activity lives on the `a` keybind).
             self.app.exit()

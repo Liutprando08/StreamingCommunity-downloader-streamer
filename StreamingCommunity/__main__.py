@@ -3,4 +3,4 @@
 from .cli.run import main
 
 
-main()
+raise SystemExit(main())
