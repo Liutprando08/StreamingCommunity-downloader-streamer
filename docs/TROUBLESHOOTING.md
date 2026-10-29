@@ -1,7 +1,7 @@
 # Troubleshooting
 
 ## Site not working / domain changed
-- Run `python -m StreamingCommunity --check-sites` (or TUI sidebar → `Stato siti`) to see whether domains are reachable.
+- Run `python -m StreamingCommunity --check-sites` (or press `F3` from the TUI home screen) to see whether domains are reachable.
 - If `check_domain_on_start` is enabled, StreamingCommunity/AnimeWorld/AnimeUnity are re-checked before first search.
 - Otherwise edit `Conf/domains.json` manually and restart.
 - If `fetch_domain_online` is enabled and `domains.json` is missing/empty, it's downloaded from GitHub as bootstrap.

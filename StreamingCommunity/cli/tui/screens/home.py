@@ -42,8 +42,9 @@ RESULT_COLUMNS = ("Titolo", "Tipo", "Anno", "Fonte")
 
 class HomeScreen(Screen):
     BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
-        ("a", "open_activity", "Attività"),
-        ("/", "focus_search", "Cerca"),
+        ("a", "open_activity", "Activity"),
+        ("f3", "open_sites", "Sites Response"),
+        ("/", "focus_search", "Search"),
     ]
 
     def __init__(self, **kwargs):
@@ -59,7 +60,6 @@ class HomeScreen(Screen):
         with Container(classes="home-root"):
             with Container(id="sidebar"):
                 options = [f"{p.name}" for p in registry.all()]
-                options.append("Stato siti")
                 options.append("Esci")
                 yield OptionList(*options, id="menu-list")
             with Container(id="main-content"):
@@ -95,10 +95,8 @@ class HomeScreen(Screen):
         index = event.option_index
         if index < len(providers):
             self.app.push_screen(SearchScreen(providers[index]))
-        elif index == len(providers):
-            self.app.push_screen(SitesScreen())
         else:
-            # Last entry is "Esci" (Activity lives on the `a` keybind).
+            # Last entry is "Esci"; Activity and Site health use keybinds.
             self.app.exit()
 
     # ── small helpers ─────────────────────────────────────────────────────
@@ -249,3 +247,6 @@ class HomeScreen(Screen):
 
     def action_open_activity(self) -> None:
         self.app.push_screen(ActivityScreen())
+
+    def action_open_sites(self) -> None:
+        self.app.push_screen(SitesScreen())

@@ -32,5 +32,5 @@ This list is generated from `StreamingCommunity/services/_base/site_loader.py` (
 > Sites marked `—` are available in the CLI but not surfaced in the TUI. Actual availability changes over time as sites update.
 
 Check current reachability with `python -m StreamingCommunity --check-sites` (or
-TUI sidebar → `Stato siti`). Domains are read from `Conf/domains.json`; services
+`F3` from the TUI home screen). Domains are read from `Conf/domains.json`; services
 with a hardcoded host use a built-in homepage fallback.

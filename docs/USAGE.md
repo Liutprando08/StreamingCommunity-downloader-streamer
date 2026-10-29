@@ -18,7 +18,7 @@ python -m StreamingCommunity
 python -m StreamingCommunity        # default in terminal
 python -m StreamingCommunity --tui  # explicit
 ```
-Shortcuts: `/` focus search, `a` activity, `F2` settings, `Esc` back.
+Shortcuts: `/` focus search, `a` activity, `F3` site health, `F2` settings, `Esc` back.
 
 ## CLI
 ```bash
@@ -61,7 +61,7 @@ python -m StreamingCommunity --check-sites
 ```
 The table reports `Working` / `Unreachable` / `Unknown`, the HTTP status and
 latency; the command exits with code `1` if any site is unreachable. In the TUI
-the same report is available from the sidebar (`Stato siti`) and can be
+the same report is available from the home screen with `F3` and can be
 re-run with `r`.
 
 Domains come from `Conf/domains.json`; services that hardcode their host use a

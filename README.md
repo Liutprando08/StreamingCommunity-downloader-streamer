@@ -211,6 +211,7 @@ python tui.py
 | `Enter` / **Cerca** | Run the search |
 | `/` | Focus the search box |
 | `a` | Open the **Activity** screen (live downloads + history) |
+| `F3` | Open **Site health** (reachability check for every configured site) |
 | `F2` | Open **Settings** |
 | `Esc` | Go back |
 | `Tab` / arrows | Move focus / navigate lists |
@@ -224,7 +225,7 @@ python tui.py
 | **Manga** | Search → Volumes → Chapters (packaged as `.cbz`) |
 | **Single-video sites** (YouTube, MostraGuarda, Ipersphera) | Search → Detail → Queue |
 | **Torrent** | Search → Detail → (optional) audio source → Queue |
-| **Cross-cutting** | Activity, Queue (with embedded log panel), Settings |
+| **Cross-cutting** | Activity, Queue (with embedded log panel), Settings, Site health |
 
 The **Queue** screen runs jobs sequentially, shows a progress bar/speed/status per item and streams the underlying downloader output in an embedded log panel.
 

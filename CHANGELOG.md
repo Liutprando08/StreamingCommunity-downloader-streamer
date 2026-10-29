@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Site health is now opened from the home screen with `F3` instead of being listed in the sidebar.
+
 ## [1.3.4] - 2026-10-26
 
 ### Changed

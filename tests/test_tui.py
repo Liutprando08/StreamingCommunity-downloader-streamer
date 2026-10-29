@@ -435,13 +435,29 @@ class TestTuiHomeNavigation(unittest.IsolatedAsyncioTestCase):
             await _settle(pilot)
             self.assertFalse(pilot.app.is_running)
 
-    async def test_home_sidebar_has_sites_entry(self):
+    async def test_home_sidebar_has_no_sites_entry(self):
         async with OsteApp().run_test(size=(140, 40)) as pilot:
             ol = _active(pilot).query_one("#menu-list", OptionList)
             prompts = [
                 str(ol.get_option_at_index(i).prompt) for i in range(ol.option_count)
             ]
-            self.assertIn("Stato siti", prompts)
+            self.assertNotIn("Stato siti", prompts)
+            self.assertEqual(prompts[-1], "Esci")
+
+    async def test_home_f3_opens_sites(self):
+        class DummySitesScreen(Screen):
+            pass
+
+        async with OsteApp().run_test(size=(140, 40)) as pilot:
+            # The home search box has focus on mount; F3 must still work.
+            self.assertEqual(pilot.app.focused.id, "home-search")
+            with mock.patch(
+                "StreamingCommunity.cli.tui.screens.home.SitesScreen",
+                DummySitesScreen,
+            ):
+                await pilot.press("f3")
+                await _settle(pilot)
+            self.assertIsInstance(_active(pilot), DummySitesScreen)
 
     async def test_version_is_visible_in_header_subtitle(self):
         from StreamingCommunity.upload.version import __version__
