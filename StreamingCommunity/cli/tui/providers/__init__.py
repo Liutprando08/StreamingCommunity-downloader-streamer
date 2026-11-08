@@ -58,6 +58,7 @@ registry = ProviderRegistry()
 # The order below is the sidebar order (and what ``by_flow`` returns), so keep
 # it stable: flagship catalogs, manga, torrent, music, then the video services.
 registry.register(VideoProvider(VIDEO_SPECS["streamingcommunity"]))
+registry.register(VideoProvider(VIDEO_SPECS["altadefinizione"]))
 registry.register(VideoProvider(VIDEO_SPECS["animeunity"]))
 registry.register(VideoProvider(VIDEO_SPECS["animeworld"]))
 registry.register(MangaProvider(MANGA_SPECS["mangaworld"]))

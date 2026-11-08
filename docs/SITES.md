@@ -28,6 +28,7 @@ This list is generated from `StreamingCommunity/services/_base/site_loader.py` (
 | 21 | Goldenmp3 | Music | ✅ | Album only |
 | 22 | Monochrome | Music | ✅ | DRM-free, container auto-detected (M4A/FLAC/Ogg/MP3/WAV) |
 | 23 | MangaWorld | Manga | ✅ | `.cbz` output; CLI `--stream` supported, TUI streaming button hidden |
+| 24 | Altadefinizione | Film / Serie | ✅ | Playback via vixsrc; CLI `--stream` supported |
 
 > Sites marked `—` are available in the CLI but not surfaced in the TUI. Actual availability changes over time as sites update.
 

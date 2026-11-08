@@ -273,6 +273,7 @@ name (`--site animeunity`) or index (`--site 1`).
 | 21 | Goldenmp3 | Music | ✅ |
 | 22 | Monochrome | Music | ✅ |
 | 23 | MangaWorld | Manga | ✅ |
+| 24 | Altadefinizione | Film / Serie | ✅ |
 
 > Sites marked `—` are available from the CLI but not yet surfaced in the TUI.
 

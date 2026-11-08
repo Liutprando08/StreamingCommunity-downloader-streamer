@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Altadefinizione service, available from both the CLI and the TUI, with vixsrc playback.
+
 ### Changed
 - Site health is now opened from the home screen with `F3` instead of being listed in the sidebar.
+
+### Fixed
+- vixsrc embeds now send the required `Referer`, restoring streaming and downloads for StreamingCommunity and Altadefinizione.
 
 ## [1.3.4] - 2026-10-26
 

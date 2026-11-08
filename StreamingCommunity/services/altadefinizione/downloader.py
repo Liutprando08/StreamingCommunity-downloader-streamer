@@ -1,15 +1,13 @@
-# 26.10.26 - StreamingCommunity via vixsrc API, vidxgo host kept as fallback
+# 26.10.26 - Altadefinizione via vixsrc API, vidxgo host kept as fallback
 
 from __future__ import annotations
 
 import os
-import os as _os
 import re
 from typing import Any
 
 # External library
 from httpx2 import HTTPError
-from rich.prompt import Prompt
 
 # Downloader
 from StreamingCommunity.core.downloader import HLS_Downloader
@@ -32,7 +30,6 @@ from StreamingCommunity.utils.http_client import create_client, get_userAgent
 from .scrapper import GetSerieInfo
 
 # Variable
-msg = Prompt()
 extension_output = config_manager.config.get("PROCESS", "extension")
 headers = {"user-agent": get_userAgent()}
 VIXSRC_API = "https://vixsrc.to/api"
@@ -67,21 +64,23 @@ def _get_vidxgo_playlist_url(
     if not numeric:
         return None
 
-    api_url = (
-        f"{VIDXGO_BASE}/t/{numeric}/{season}/{episode}"
+    # Altadefinizione embeds the vidxgo player directly: the movie path is
+    # ``/{imdb}`` and the series path is ``/{imdb}/{season}/{episode}``.
+    embed_url = (
+        f"{VIDXGO_BASE}/{numeric}/{season}/{episode}?se=0"
         if is_series
-        else f"{VIDXGO_BASE}/t/{numeric}"
+        else f"{VIDXGO_BASE}/{numeric}"
     )
 
     try:
-        response = create_client().get(api_url)
-        response.raise_for_status()
-        data = response.json()
-    except (HTTPError, ValueError) as e:
+        source = VideoSource("", is_series, None)
+        source.iframe_src = embed_url
+        source.get_content()
+        master_playlist = source.get_playlist()
+    except Exception as e:
         console.print(f"[yellow]vidxgo error: {e}")
         return None
 
-    master_playlist = data.get("url") if isinstance(data, dict) else None
     if not master_playlist:
         console.print("[yellow]No playlist found in vidxgo response")
         return None
@@ -265,8 +264,8 @@ def stream_film(select_title: Entries):
         console.print("[red]Error: No master playlist found")
         return
 
-    player = _os.environ.get("STREAMING_PLAYER") or None
-    port = int(_os.environ.get("STREAMING_PORT", "0"))
+    player = os.environ.get("STREAMING_PLAYER") or None
+    port = int(os.environ.get("STREAMING_PORT", "0"))
 
     stream_content(
         playlist_url=master_playlist,
@@ -293,8 +292,8 @@ def stream_episode(
         console.print("[red]Error: No master playlist found")
         return
 
-    player = _os.environ.get("STREAMING_PLAYER") or None
-    port = int(_os.environ.get("STREAMING_PORT", "0"))
+    player = os.environ.get("STREAMING_PLAYER") or None
+    port = int(os.environ.get("STREAMING_PORT", "0"))
 
     stream_content(
         playlist_url=master_playlist,

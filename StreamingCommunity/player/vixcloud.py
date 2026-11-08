@@ -63,6 +63,14 @@ class VideoSource:
             self.season_number = None
             self.episode_number = None
 
+    def _ensure_referer(self) -> None:
+        """Send the embed host as Referer; vixsrc rejects requests without it."""
+        if "referer" in self.headers or not self.iframe_src:
+            return
+        parsed = urlparse(str(self.iframe_src))
+        if parsed.scheme and parsed.netloc:
+            self.headers["referer"] = f"{parsed.scheme}://{parsed.netloc}/"
+
     def get_iframe(self, episode_id: int) -> None:
         """
         Retrieve iframe source for specified episode.
@@ -153,6 +161,7 @@ class VideoSource:
 
             # Fetch content from iframe source
             if self.iframe_src is not None:
+                self._ensure_referer()
                 if client := create_client(headers=self.headers):
                     response = client.get(str(self.iframe_src))
                     response.raise_for_status()
@@ -165,8 +174,7 @@ class VideoSource:
                 if not script_tag:
                     scripts = soup.find_all("script")
                     script_tag = scripts[-1] if scripts else None
-                if script_tag:
-                    script = script_tag.text
+                script = script_tag.text if script_tag else ""
 
                 # Parse script to get video information
                 self.parse_script(script_text=script)

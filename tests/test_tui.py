@@ -820,6 +820,50 @@ class TestAnimeWorldProvider(unittest.TestCase):
         self.assertEqual(self.provider.episodes(scraper, 1)[0].name, "Ep1")
 
 
+class TestAltadefinizioneProvider(unittest.TestCase):
+    def setUp(self):
+        self.provider = registry.get("altadefinizione")
+
+    def test_registry_lookup(self):
+        found = registry.get("altadefinizione")
+        self.assertIsInstance(found, VideoProvider)
+        self.assertEqual(found.name, "Altadefinizione")
+        self.assertEqual(found.category, "Film_Serie")
+        self.assertTrue(found.supports_streaming)
+        self.assertTrue(found.supports_seasons)
+
+    def test_columns_expose_imdb(self):
+        values = dict(self.provider.result_columns())
+        self.assertEqual(values["ID"], "imdb_id")
+        self.assertIn("name", values.values())
+        self.assertIn("type", values.values())
+
+    def test_is_series_routing(self):
+        for media_type in ("film", "movie", "Movie", "FILM"):
+            entry = FakeEntry("X", type_=media_type)
+            self.assertFalse(self.provider.is_series(entry), media_type)
+        for media_type in ("tv", "serie", "show"):
+            entry = FakeEntry("X", type_=media_type)
+            self.assertTrue(self.provider.is_series(entry), media_type)
+
+    def test_scraper_factory_uses_imdb_and_url(self):
+        entry = FakeEntry(
+            "Black Doves",
+            type_="tv",
+            imdb_id="tt27995113",
+            url="https://example.test/titles/28300-black-doves-streaming",
+        )
+        with mock.patch(
+            "StreamingCommunity.services.altadefinizione.scrapper.GetSerieInfo"
+        ) as scraper_cls:
+            self.provider.new_series_scraper(entry)
+        scraper_cls.assert_called_once_with(
+            "tt27995113",
+            "Black Doves",
+            url="https://example.test/titles/28300-black-doves-streaming",
+        )
+
+
 class TestMangaWorldProvider(unittest.TestCase):
     def setUp(self):
         self.provider = registry.get("mangaworld")
@@ -1148,6 +1192,7 @@ class TestMusicProviders(unittest.TestCase):
             [p.name for p in registry.by_flow("episode")],
             [
                 "Streamingcommunity",
+                "Altadefinizione",
                 "Animeunity",
                 "AnimeWorld",
                 "MangaWorld",
@@ -1226,6 +1271,7 @@ class TestProviderRegistry(unittest.TestCase):
         self.assertEqual(
             sorted(p.name for p in registry.all()),
             [
+                "Altadefinizione",
                 "AnimeWorld",
                 "Animeunity",
                 "Crunchyroll",

@@ -36,6 +36,7 @@ SITE_REGISTRY = {
     "goldenmp3": {"indice": 21, "use_for": "Music"},
     "monochrome": {"indice": 22, "use_for": "Music"},
     "mangaworld": {"indice": 23, "use_for": "Manga"},
+    "altadefinizione": {"indice": 24, "use_for": "Film_Serie"},
 }
 
 

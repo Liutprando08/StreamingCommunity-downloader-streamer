@@ -81,6 +81,18 @@ def _description_streamingcommunity(entry: Any) -> str | None:
     return service.get_full_description(entry)
 
 
+def _scraper_altadefinizione(entry: Any) -> Any:
+    from StreamingCommunity.services.altadefinizione.scrapper import GetSerieInfo
+
+    return GetSerieInfo(entry.imdb_id, entry.name, url=entry.url)
+
+
+def _description_altadefinizione(entry: Any) -> str | None:
+    import StreamingCommunity.services.altadefinizione as service
+
+    return service.get_full_description(entry)
+
+
 def _scraper_animeunity(entry: Any) -> Any:
     # ``new_scraper`` resolves the site URL from inside the service package,
     # which ``site_constants`` requires (it inspects the call stack).
@@ -314,6 +326,23 @@ _VIDEO_SPECS: tuple[VideoSpec, ...] = (
         series_test=_type_in(_SERIES_TYPES),
         new_scraper=_scraper_streamingcommunity,
         description=_description_streamingcommunity,
+    ),
+    VideoSpec(
+        name="Altadefinizione",
+        alias="altadefinizione",
+        module="altadefinizione",
+        category="Film_Serie",
+        supports_streaming=True,
+        downloads_films=True,
+        columns=(
+            ("Nome", "name"),
+            ("Tipo", "type"),
+            ("Anno", "year"),
+            ("ID", "imdb_id"),
+        ),
+        series_test=_type_in(_SERIES_TYPES),
+        new_scraper=_scraper_altadefinizione,
+        description=_description_altadefinizione,
     ),
     VideoSpec(
         name="Animeunity",
