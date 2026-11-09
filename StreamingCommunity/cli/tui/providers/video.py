@@ -93,6 +93,12 @@ def _description_altadefinizione(entry: Any) -> str | None:
     return service.get_full_description(entry)
 
 
+def _description_hd4me(entry: Any) -> str | None:
+    import StreamingCommunity.services.hd4me as service
+
+    return service.get_full_description(entry)
+
+
 def _scraper_animeunity(entry: Any) -> Any:
     # ``new_scraper`` resolves the site URL from inside the service package,
     # which ``site_constants`` requires (it inspects the call stack).
@@ -418,6 +424,24 @@ _VIDEO_SPECS: tuple[VideoSpec, ...] = (
         fuzzy_sort=False,
         columns=ATOMIC_COLUMNS,
         series_test=_never_series,
+    ),
+    VideoSpec(
+        name="HD4ME",
+        alias="hd4me",
+        module="hd4me",
+        category="Film_Serie",
+        flow="atomic",
+        supports_seasons=False,
+        downloads_films=True,
+        fuzzy_sort=False,
+        columns=(
+            ("Nome", "name"),
+            ("Tipo", "type"),
+            ("Anno", "year"),
+            ("Size", "size"),
+        ),
+        series_test=_never_series,
+        description=_description_hd4me,
     ),
     # ── Film/Serie TV services (episode flow, no streaming) ────────────────
     VideoSpec(

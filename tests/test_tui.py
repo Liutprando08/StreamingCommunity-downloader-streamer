@@ -1212,7 +1212,7 @@ class TestMusicProviders(unittest.TestCase):
         )
         self.assertEqual(
             [p.name for p in registry.by_flow("atomic")],
-            ["Torrent", "YouTube", "MostraGuarda", "Ipersphera"],
+            ["Torrent", "YouTube", "MostraGuarda", "Ipersphera", "HD4ME"],
         )
         self.assertEqual([p.name for p in registry.by_flow("music")],
                          ["Musicmp3", "Goldenmp3", "Monochrome"])
@@ -1281,6 +1281,7 @@ class TestProviderRegistry(unittest.TestCase):
                 "Food Network",
                 "Goldenmp3",
                 "Guardaserie",
+                "HD4ME",
                 "Home Garden TV",
                 "Ipersphera",
                 "MangaWorld",
@@ -1422,13 +1423,14 @@ class TestTvServiceProviders(unittest.TestCase):
 
 
 class TestFilmServiceProviders(unittest.TestCase):
-    """The single-video services (YouTube, MostraGuarda, Ipersphera)."""
+    """The single-video services (YouTube, MostraGuarda, Ipersphera, HD4ME)."""
 
     def test_registry_metadata(self):
         expected = {
             "youtube": ("YouTube", "Film_Serie"),
             "mostraguarda": ("MostraGuarda", "Film"),
             "ipersphera": ("Ipersphera", "Film_Serie"),
+            "hd4me": ("HD4ME", "Film_Serie"),
         }
         for alias, (name, category) in expected.items():
             provider = registry.get(alias)
@@ -1440,13 +1442,13 @@ class TestFilmServiceProviders(unittest.TestCase):
             self.assertFalse(provider.supports_streaming, alias)
 
     def test_implements_atomic_protocol(self):
-        for alias in ("youtube", "mostraguarda", "ipersphera"):
+        for alias in ("youtube", "mostraguarda", "ipersphera", "hd4me"):
             provider = registry.get(alias)
             for attr in ("search", "result_columns", "is_series", "download_film"):
                 self.assertTrue(callable(getattr(provider, attr, None)), (alias, attr))
 
     def test_every_result_is_a_single_download(self):
-        for alias in ("youtube", "mostraguarda", "ipersphera"):
+        for alias in ("youtube", "mostraguarda", "ipersphera", "hd4me"):
             provider = registry.get(alias)
             for media_type in ("film", "movie", "tv", "serie", None):
                 entry = FakeEntry("X", type_=media_type)

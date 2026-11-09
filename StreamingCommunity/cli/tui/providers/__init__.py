@@ -15,7 +15,7 @@
 #
 #   "episode" -> streamingcommunity, animeunity, mangaworld, raiplay, ...
 #   "music"   -> musicmp3, goldenmp3, monochrome
-#   "atomic"  -> torrent, youtube, mostraguarda, ipersphera
+#   "atomic"  -> torrent, youtube, mostraguarda, ipersphera, hd4me
 #
 # When every service is registered the TUI home screen becomes the main layout.
 
@@ -71,6 +71,7 @@ registry.register(MusicProvider(MUSIC_SPECS["monochrome"]))
 registry.register(VideoProvider(VIDEO_SPECS["youtube"]))
 registry.register(VideoProvider(VIDEO_SPECS["mostraguarda"]))
 registry.register(VideoProvider(VIDEO_SPECS["ipersphera"]))
+registry.register(VideoProvider(VIDEO_SPECS["hd4me"]))
 
 # Film/Serie TV services (episode flow).
 registry.register(VideoProvider(VIDEO_SPECS["raiplay"]))

@@ -223,7 +223,7 @@ python tui.py
 | **Film / Serie / Anime** | Search → Detail → Season list → Episode list → Queue |
 | **Music** | Search (Song / Album / Artist) → Albums → Tracks → Queue |
 | **Manga** | Search → Volumes → Chapters (packaged as `.cbz`) |
-| **Single-video sites** (YouTube, MostraGuarda, Ipersphera) | Search → Detail → Queue |
+| **Single-video sites** (YouTube, MostraGuarda, Ipersphera, HD4ME) | Search → Detail → Queue |
 | **Torrent** | Search → Detail → (optional) audio source → Queue |
 | **Cross-cutting** | Activity, Queue (with embedded log panel), Settings, Site health |
 
@@ -274,6 +274,7 @@ name (`--site animeunity`) or index (`--site 1`).
 | 22 | Monochrome | Music | ✅ |
 | 23 | MangaWorld | Manga | ✅ |
 | 24 | Altadefinizione | Film / Serie | ✅ |
+| 25 | HD4ME | Film / Serie | ✅ |
 
 > Sites marked `—` are available from the CLI but not yet surfaced in the TUI.
 
