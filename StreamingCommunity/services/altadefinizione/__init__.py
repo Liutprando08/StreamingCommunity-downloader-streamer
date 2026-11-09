@@ -16,6 +16,7 @@ from StreamingCommunity.services._base.site_search_manager import (
 # Internal utilities
 from StreamingCommunity.utils import TVShowManager
 from StreamingCommunity.utils.console.shared import console
+from StreamingCommunity.utils.domain_check import check_altadefinizione_domain
 from StreamingCommunity.utils.http_client import create_client
 
 # Logic
@@ -27,6 +28,23 @@ _useFor = "Film_Serie"
 
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
+_domain_checked = False
+
+
+def _ensure_domain() -> None:
+    """Refresh the Altadefinizione domain once per process, before the first search.
+
+    Altadefinizione changes host often; scraping the GiardiniBlog link tracker
+    keeps requests on the current domain. A failed check never blocks a search.
+    """
+    global _domain_checked
+    if _domain_checked:
+        return
+    _domain_checked = True
+    try:
+        check_altadefinizione_domain()
+    except HTTPError as exc:
+        console.print(f"[yellow]Domain check skipped: {exc}")
 
 
 def _search_archive(query: str) -> int | None:
@@ -92,6 +110,7 @@ def _build_entry(item: dict) -> Entries | None:
 
 
 def title_search(query: str) -> int:
+    _ensure_domain()
     entries_manager.clear()
     table_show_manager.clear()
 

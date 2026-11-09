@@ -55,7 +55,7 @@ Classic numbered menu. Great for scripts/pipes/non-interactive use.
 ---
 
 > **⚠️ If a streaming service doesn't work**, the site URL may have changed.
-> When `check_domain_on_start` is enabled, StreamingCommunity, AnimeWorld and AnimeUnity are re-checked before their first search (see [Automatic Link Updates](#automatic-link-updates)); other services are not updated automatically.
+> When `check_domain_on_start` is enabled, StreamingCommunity, AnimeWorld, AnimeUnity and Altadefinizione are re-checked before their first search (see [Automatic Link Updates](#automatic-link-updates)); other services are not updated automatically.
 > You can also open `Conf/domains.json` and update the `full_url` for that service manually, then restart.
 
 ## 📖 Table of Contents
@@ -550,7 +550,7 @@ OPTIONS: id=REGEX:lang=REGEX:name=REGEX:codecs=REGEX:res=REGEX:frame=REGEX:
 - **`show_message`**: Show console messages (set it to `false` for quieter output) (default: `true`)
 - **`show_device_info`**: Display device information (default: `true`)
 - **`fetch_domain_online`**: Download `domains.json` from GitHub when the local copy is missing or empty (default: `true`)
-- **`check_domain_on_start`**: Re-check the StreamingCommunity, AnimeWorld and AnimeUnity domains before their first search and update `domains.json` if they changed (default: `true`)
+- **`check_domain_on_start`**: Re-check the StreamingCommunity, AnimeWorld, AnimeUnity and Altadefinizione domains before their first search and update `domains.json` if they changed (default: `true`)
 
 ### YouTube Settings
 
@@ -824,9 +824,9 @@ If `Conf/domains.json` is missing or empty, the app downloads the current copy f
 }
 ```
 
-### StreamingCommunity / AnimeWorld / AnimeUnity link check (`check_domain_on_start`)
+### StreamingCommunity / AnimeWorld / AnimeUnity / Altadefinizione link check (`check_domain_on_start`)
 
-These three services change their domains very often. When enabled, the app verifies the current domain before the first search of each service by scraping the corresponding link tracker page (giardiniblog.it for StreamingCommunity and AnimeWorld, natchecker.com for AnimeUnity). If the domain changed, `Conf/domains.json` is updated automatically — no restart required. Other services are not checked automatically.
+These four services change their domains very often. When enabled, the app verifies the current domain before the first search of each service by scraping the corresponding link tracker page (giardiniblog.it for StreamingCommunity, AnimeWorld and Altadefinizione, natchecker.com for AnimeUnity). If the domain changed, `Conf/domains.json` is updated automatically — no restart required. Other services are not checked automatically.
 
 ```json
 {

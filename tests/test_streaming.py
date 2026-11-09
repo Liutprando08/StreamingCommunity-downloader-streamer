@@ -213,6 +213,38 @@ class TestDirectMedia(unittest.TestCase):
             "https://animeworld.to",
         )
 
+    def test_domain_check_altadefinizione_pattern(self):
+        html = (
+            '<p>Nuovo indirizzo: '
+            '<strong>https://altadefinizionex.bar/</strong></p>'
+        )
+        self.assertEqual(
+            domain_check._extract_domain(
+                html, domain_check.ALTADEFINIZIONE_URL_PATTERN
+            ),
+            "https://altadefinizionex.bar",
+        )
+        # The name is followed by either a dot or a suffix (altadefinizione.tv,
+        # altadefinizionex.bar), and the advertised host may omit the scheme.
+        for host in (
+            "https://altadefinizione.tv/",
+            "https://www.altadefinizione01.com",
+        ):
+            self.assertEqual(
+                domain_check._extract_domain(
+                    host, domain_check.ALTADEFINIZIONE_URL_PATTERN
+                ),
+                host.rstrip("/"),
+            )
+        # GiardiniBlog asset URLs must not be mistaken for the site domain.
+        self.assertIsNone(
+            domain_check._extract_domain(
+                "https://www.giardiniblog.it/wp-content/uploads/"
+                "altadefinizione-cover.jpg",
+                domain_check.ALTADEFINIZIONE_URL_PATTERN,
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

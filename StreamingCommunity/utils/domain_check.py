@@ -1,4 +1,5 @@
-# 11.08.26 - Auto-detect StreamingCommunity / AnimeWorld domain changes
+# 11.08.26 - Auto-detect StreamingCommunity / AnimeWorld / AnimeUnity /
+# Altadefinizione domain changes
 
 import logging
 import re
@@ -19,6 +20,10 @@ ANIMEWORLD_SITE_NAME = "animeworld"
 ANIMEWORLD_SCRAPER_URL = "https://www.giardiniblog.it/animeworld-nuovo/"
 ANIMEUNITY_SITE_NAME = "animeunity"
 ANIMEUNITY_SCRAPER_URL = "https://natchecker.com/it/blog/animeunity"
+ALTADEFINIZIONE_SITE_NAME = "altadefinizione"
+ALTADEFINIZIONE_SCRAPER_URL = (
+    "https://www.giardiniblog.it/altadefinizione-nuovo-link/"
+)
 DEFAULT_TIMEOUT = 10.0
 URL_PATTERN = re.compile(r"https?://streaming-community\.[a-z0-9.-]+/?")
 ANIMEWORLD_URL_PATTERN = re.compile(
@@ -26,6 +31,12 @@ ANIMEWORLD_URL_PATTERN = re.compile(
 )
 ANIMEUNITY_URL_PATTERN = re.compile(
     r"https?://(?:www\.)?animeunity\.[a-z0-9.-]+/?"
+)
+# Altadefinizione rotates between hosts such as altadefinizione.tv and
+# altadefinizionex.bar, so the token after the name is not always a dot.
+ALTADEFINIZIONE_URL_PATTERN = re.compile(
+    r"https?://(?:www\.)?altadefinizione[a-z0-9-]*\.[a-z0-9.-]+/?",
+    re.IGNORECASE,
 )
 logger = logging.getLogger(__name__)
 
@@ -177,4 +188,18 @@ def check_animeunity_domain() -> bool:
     """
     return _check_domain(
         ANIMEUNITY_SITE_NAME, ANIMEUNITY_SCRAPER_URL, ANIMEUNITY_URL_PATTERN
+    )
+
+
+def check_altadefinizione_domain() -> bool:
+    """Check the current Altadefinizione domain and update domains.json if it changed.
+
+    Uses the GiardiniBlog Altadefinizione link page, with redirect detection on
+    the configured domain as a fallback. Called once before the first
+    Altadefinizione search.
+    """
+    return _check_domain(
+        ALTADEFINIZIONE_SITE_NAME,
+        ALTADEFINIZIONE_SCRAPER_URL,
+        ALTADEFINIZIONE_URL_PATTERN,
     )
