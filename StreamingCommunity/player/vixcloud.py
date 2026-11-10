@@ -255,6 +255,12 @@ class VideoSourceAnime(VideoSource):
             embed_url = response.text.strip()
             self.iframe_src = embed_url
 
+            # vixcloud.cc (AnimeUnity embed host) rejects requests without a
+            # Referer with a Cloudflare 403, which then surfaces as "No master
+            # playlist found". Send the embed host as Referer, like
+            # ``get_content`` already does for vixsrc.
+            self._ensure_referer()
+
             # Fetch video content using embed URL
             video_response = create_client(headers=self.headers).get(embed_url)
             video_response.raise_for_status()
