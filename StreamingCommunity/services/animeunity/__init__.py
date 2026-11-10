@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import urllib.parse
 
 # External library
@@ -20,7 +21,12 @@ from StreamingCommunity.utils.domain_check import check_animeunity_domain
 from StreamingCommunity.utils.http_client import create_client_curl, get_userAgent
 
 # Logic
-from .downloader import download_film, download_series
+from .downloader import (
+    download_film,
+    download_series,
+    stream_film,
+    stream_series,
+)
 
 # Variable
 indice = 1
@@ -187,10 +193,14 @@ def process_search_result(select_title, selections=None, scrape_serie=None):
     """
     Wrapper for the generalized process_search_result function.
     """
+    # ``--stream`` sets STREAMING_MODE=1 in the CLI. Without this switch
+    # AnimeUnity ignored it and always downloaded instead of streaming.
+    streaming_mode = os.environ.get("STREAMING_MODE") == "1"
+
     return base_process_search_result(
         select_title=select_title,
-        download_film_func=download_film,
-        download_series_func=download_series,
+        download_film_func=stream_film if streaming_mode else download_film,
+        download_series_func=stream_series if streaming_mode else download_series,
         media_search_manager=entries_manager,
         table_show_manager=table_show_manager,
         selections=selections,

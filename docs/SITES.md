@@ -5,7 +5,7 @@ This list is generated from `StreamingCommunity/services/_base/site_loader.py` (
 | # | Site | Type | TUI | Notes |
 |---|------|------|:---:|-------|
 | 0 | StreamingCommunity | Film / Serie | ✅ | CLI `--stream` supported |
-| 1 | AnimeUnity | Anime | ✅ | TUI streaming only (CLI `--stream` not wired) |
+| 1 | AnimeUnity | Anime | ✅ | CLI `--stream` and TUI streaming supported |
 | 2 | MostraGuarda | Film | ✅ |  |
 | 3 | MediasetInfinity | Film / Serie | ✅ | May require auth/token in `login.json` |
 | 4 | Guardaserie | Serie | ✅ |  |

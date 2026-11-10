@@ -46,7 +46,7 @@ Classic numbered menu. Great for scripts/pipes/non-interactive use.
 - **Music** — Musicmp3, Goldenmp3 (album), Monochrome (DRM-free, auto-detected formats)
 - **Manga** — MangaWorld → `.cbz`
 - **Torrent** — multi-tracker search via aria2c, optional Italian audio dub mux (`-c copy`)
-- **Streaming** — local proxy + player launch (SC/AnimeWorld/MangaWorld via CLI; AnimeUnity via TUI)
+- **Streaming** — local proxy + player launch (SC/AnimeUnity/AnimeWorld/MangaWorld via CLI and TUI)
 - **NFO/Metadata** — minimal `generate_nfo` or full Kodi/Jellyfin/Emby via `kodi_nfo` + TMDB
 - **Domain auto-handling** — bootstrap `domains.json` when missing; re-check SC/AnimeWorld/AnimeUnity on start if enabled
 - **Hooks** — `pre_run`/`post_run` scripts
@@ -912,8 +912,7 @@ Hooks are automatically executed before (`pre_run`) and after (`post_run`) the m
 
 Stream content in real-time using a local proxy server instead of downloading.
 
-> CLI `--stream` is implemented for StreamingCommunity, AnimeWorld and MangaWorld.
-> AnimeUnity can be streamed from the TUI only (its CLI path always downloads).
+> CLI `--stream` is implemented for StreamingCommunity, AnimeUnity, AnimeWorld and MangaWorld.
 > On all other services `--stream` is ignored and the normal download path runs.
 
 ### Basic Usage
