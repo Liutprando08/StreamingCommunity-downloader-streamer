@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import StreamingCommunity.services.hd4me as hd4me
 from StreamingCommunity.cli.tui.providers import registry
+from StreamingCommunity.core.downloader.mega import MEGA_Downloader
 from StreamingCommunity.services._base import Entries, site_constants
 from StreamingCommunity.services.hd4me import downloader, scrapper
 
@@ -226,11 +229,34 @@ class TestPostDetail(unittest.TestCase):
 class FakeMega:
     calls: list = []
 
-    def __init__(self, choose_files=False):
-        FakeMega.calls.append(("init", choose_files))
+    def __init__(self, choose_files=False, series_layout="tv"):
+        self.choose_files = choose_files
+        self.series_layout = series_layout
+        FakeMega.calls.append(
+            {
+                "kind": "init",
+                "choose_files": choose_files,
+                "series_layout": series_layout,
+            }
+        )
 
-    def download_url(self, url, dest_path=None):
-        FakeMega.calls.append((url, dest_path))
+    def download_url(
+        self,
+        url,
+        dest_path=None,
+        *,
+        series_name=None,
+        season_hint=None,
+    ):
+        FakeMega.calls.append(
+            {
+                "kind": "download",
+                "url": url,
+                "dest_path": dest_path,
+                "series_name": series_name,
+                "season_hint": season_hint,
+            }
+        )
         return "/tmp/output"
 
 
@@ -238,12 +264,12 @@ class TestDownloader(unittest.TestCase):
     def setUp(self):
         FakeMega.calls = []
 
-    def _run(self, detail):
+    def _run(self, detail, name="…altrimenti ci arrabbiamo!", year="1974"):
         entry = Entries(
             id=9672,
-            name="…altrimenti ci arrabbiamo!",
+            name=name,
             type="film",
-            year="1974",
+            year=year,
         )
         with (
             mock.patch.object(downloader.scrapper, "get_post", return_value=detail),
@@ -251,27 +277,62 @@ class TestDownloader(unittest.TestCase):
         ):
             return downloader.download_film(entry)
 
+    def test_series_hints(self):
+        self.assertEqual(
+            downloader._series_hints("Breaking Bad – 1 Stagione"),
+            ("Breaking Bad", 1),
+        )
+        self.assertEqual(
+            downloader._series_hints("Prison Break - 4 Stagione"),
+            ("Prison Break", 4),
+        )
+        self.assertEqual(downloader._series_hints("Fringe"), ("Fringe", None))
+        self.assertEqual(
+            downloader._series_hints("Un’arida stagione bianca"),
+            ("Un’arida stagione bianca", None),
+        )
+
     def test_downloads_mega_file_into_movie_folder(self):
         result = self._run(POST_DETAIL)
 
         self.assertEqual(result, "/tmp/output")
-        self.assertEqual(FakeMega.calls[0], ("init", False))
-        url, dest_path = FakeMega.calls[1]
-        self.assertEqual(url, POST_DETAIL["movie"]["test"])
-        self.assertTrue(dest_path.startswith(site_constants.MOVIE_FOLDER))
-        self.assertIn("altrimenti", dest_path.lower())
+        self.assertEqual(
+            FakeMega.calls[0],
+            {"kind": "init", "choose_files": False, "series_layout": "tv"},
+        )
+        download = FakeMega.calls[1]
+        self.assertEqual(download["url"], POST_DETAIL["movie"]["test"])
+        self.assertTrue(
+            download["dest_path"].startswith(site_constants.MOVIE_FOLDER)
+        )
+        self.assertIn("altrimenti", download["dest_path"].lower())
+        self.assertIsNone(download["series_name"])
+        self.assertIsNone(download["season_hint"])
 
-    def test_downloads_mega_folder_into_series_folder(self):
+    def test_downloads_mega_folder_into_standard_series_layout(self):
         detail = {
             "online": True,
             "movie": {"test": "https://mega.nz/folder/abc#def"},
         }
 
-        result = self._run(detail)
+        result = self._run(
+            detail,
+            name="Breaking Bad – 1 Stagione",
+            year="2008",
+        )
 
         self.assertEqual(result, "/tmp/output")
-        _, dest_path = FakeMega.calls[1]
-        self.assertEqual(os.path.dirname(dest_path), site_constants.SERIES_FOLDER)
+        self.assertEqual(
+            FakeMega.calls[0],
+            {"kind": "init", "choose_files": False, "series_layout": "standard"},
+        )
+        download = FakeMega.calls[1]
+        self.assertEqual(
+            os.path.dirname(download["dest_path"]),
+            site_constants.SERIES_FOLDER,
+        )
+        self.assertEqual(download["series_name"], "Breaking Bad")
+        self.assertEqual(download["season_hint"], 1)
 
     def test_rejects_offline_posts(self):
         detail = {"online": False, "movie": {"test": "https://mega.nz/file/x#y"}}
@@ -287,6 +348,132 @@ class TestDownloader(unittest.TestCase):
         detail = {"online": True, "movie": {"test": "https://i.hd4me.net/?x#y"}}
         self.assertIsNone(self._run(detail))
         self.assertEqual(FakeMega.calls, [])
+
+
+class _FakeProcess:
+    stdout = []
+    returncode = 0
+    args = []
+
+    def wait(self):
+        return 0
+
+
+class TestMegaSeriesLayout(unittest.TestCase):
+    def _downloader(self, layout: str) -> MEGA_Downloader:
+        # Bypass __init__ so the test does not need megatools installed.
+        instance = object.__new__(MEGA_Downloader)
+        instance.megatools_exe = "/bin/true"
+        instance.choose_files = False
+        instance.series_layout = layout
+        return instance
+
+    def _make_files(self, root: Path) -> Path:
+        root.mkdir(parents=True, exist_ok=True)
+        for name in (
+            "Breaking.Bad.S01E01.ITA.ENG.BRRip.720p.mkv",
+            "Breaking.Bad.1x02.Senza.ritorno.ITA.ENG.BRRip.720p-DEMN.mkv",
+            "Breaking.Bad.02x01.Tutto.Cambia.ITA-ENG.BDRip.720p.mkv",
+        ):
+            (root / name).write_bytes(b"x")
+        return root
+
+    def test_standard_layout_uses_show_and_s_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = self._make_files(Path(tmp) / "download")
+            destination = Path(tmp) / "Serie"
+
+            result = self._downloader("standard")._organize_series(
+                base,
+                destination,
+                series_name="Breaking Bad",
+                season_hint=1,
+            )
+
+            self.assertTrue(Path(result).is_dir())
+            self.assertTrue(Path(result).is_relative_to(destination))
+            self.assertEqual(
+                len(list((destination / "Breaking Bad" / "S1").glob("S01E0*"))),
+                2,
+            )
+            self.assertEqual(
+                len(list((destination / "Breaking Bad" / "S2").glob("S02E0*"))),
+                1,
+            )
+            self.assertFalse((destination / "TV").exists())
+
+    def test_legacy_layout_keeps_tv_and_season_folders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = self._make_files(Path(tmp) / "download")
+            destination = Path(tmp) / "Serie" / "TV"
+
+            self._downloader("tv")._organize_series(
+                base,
+                destination,
+                series_name="Breaking Bad",
+                season_hint=1,
+            )
+
+            self.assertTrue(
+                (destination / "Breaking Bad" / "Season 01").is_dir()
+            )
+            self.assertTrue(
+                (destination / "Breaking Bad" / "Season 02").is_dir()
+            )
+            self.assertFalse((Path(tmp) / "Serie" / "Breaking Bad").exists())
+
+    def _run_folder_download(self, layout: str, tmp: str):
+        obj = self._downloader(layout)
+        language_root = Path(tmp) / "lang"
+        language_root.mkdir()
+        dest_path = str(Path(tmp) / "Serie" / "Breaking Bad (2008)")
+
+        with (
+            mock.patch.object(
+                obj, "_select_language_folder", return_value=language_root
+            ),
+            mock.patch.object(
+                obj, "_organize_series", return_value="ok"
+            ) as organize,
+            mock.patch(
+                "StreamingCommunity.core.downloader.mega.subprocess.Popen",
+                return_value=_FakeProcess(),
+            ),
+        ):
+            result = obj._download_folder_megatools(
+                "https://mega.nz/folder/abc#def",
+                dest_path=dest_path,
+                series_name="Breaking Bad",
+                season_hint=1,
+            )
+
+        self.assertEqual(result, "ok")
+        args, kwargs = organize.call_args
+        return args, kwargs
+
+    def test_folder_download_uses_standard_destination_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args, kwargs = self._run_folder_download("standard", tmp)
+
+            self.assertEqual(Path(args[0]), Path(tmp) / "lang")
+            self.assertEqual(Path(args[1]), Path(tmp) / "Serie")
+            self.assertEqual(kwargs["series_name"], "Breaking Bad")
+            self.assertEqual(kwargs["season_hint"], 1)
+
+    def test_folder_download_keeps_tv_destination_root_for_legacy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args, _ = self._run_folder_download("tv", tmp)
+
+            self.assertEqual(Path(args[1]), Path(tmp) / "Serie" / "TV")
+
+    def test_default_layout_is_legacy(self):
+        with mock.patch(
+            "StreamingCommunity.core.downloader.mega.get_megatools_path",
+            return_value="/bin/true",
+        ):
+            instance = MEGA_Downloader()
+
+        self.assertEqual(instance.series_layout, "tv")
 
 
 class FakeEntry:

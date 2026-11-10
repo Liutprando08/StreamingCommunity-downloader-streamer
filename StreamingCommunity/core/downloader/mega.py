@@ -4,6 +4,7 @@ import re
 import os
 import subprocess
 import shutil
+from pathlib import Path
 
 
 # External libraries
@@ -21,7 +22,9 @@ class MEGA_Downloader:
     # Episode patterns for series organization
     EP_PATTERNS = [
         re.compile(r'[Ss](\d{1,2})[Ee](\d{1,2})'),
-        re.compile(r'[_\s-]+(\d{1,2})x(\d{1,2})', re.IGNORECASE)
+        # HD4ME season packs often use dotted names such as "1x02" or
+        # "02x01"; include "." as a valid separator.
+        re.compile(r'[._\s-]+(\d{1,2})x(\d{1,2})', re.IGNORECASE)
     ]
 
     LANG_PRIORITY = [
@@ -31,17 +34,32 @@ class MEGA_Downloader:
     
     VIDEO_EXTENSIONS = {'.mkv', '.mp4', '.avi', '.m4v', '.mov', '.wmv'}
     
-    def __init__(self, choose_files=False):
+    def __init__(self, choose_files=False, series_layout="tv"):
         self.megatools_exe = get_megatools_path()
         self.choose_files = choose_files
+        # "tv" keeps the historical Serie/TV/<Show>/Season XX layout.
+        # "standard" mirrors the other services: Serie/<Show>/S<season>.
+        self.series_layout = series_layout
         
         if not self.megatools_exe:
             raise RuntimeError("Megatools executable not found. Please ensure it is installed.")
 
-    def download_url(self, url, dest_path=None):
+    def download_url(
+        self,
+        url,
+        dest_path=None,
+        *,
+        series_name=None,
+        season_hint=None,
+    ):
         """Download a file or folder by its public url"""
         if "/folder/" in url:
-            return self._download_folder_megatools(str(url).strip(), dest_path)
+            return self._download_folder_megatools(
+                str(url).strip(),
+                dest_path,
+                series_name=series_name,
+                season_hint=season_hint,
+            )
         else:
             return self._download_movie_megatools(str(url).strip(), dest_path)
 
@@ -69,7 +87,14 @@ class MEGA_Downloader:
         console.print("[green]Download completato!")
         return str(output_dir)
 
-    def _download_folder_megatools(self, url, dest_path=None):
+    def _download_folder_megatools(
+        self,
+        url,
+        dest_path=None,
+        *,
+        series_name=None,
+        season_hint=None,
+    ):
         """Download and organize a series folder using megatools"""
         # Sanitize dest_path if provided
         if dest_path:
@@ -77,8 +102,14 @@ class MEGA_Downloader:
             base_dir = os.path.dirname(dest_path)
         else:
             base_dir = "./"
-        
-        tv_dir = os.path.join(base_dir, "TV")
+
+        # The legacy MEGA layout adds a "TV" level; the standard layout writes
+        # directly under Serie/ so it matches the other services.
+        destination_root = (
+            os.path.join(base_dir, "TV")
+            if self.series_layout == "tv"
+            else base_dir
+        )
         
         # Use a shorter temp directory name to avoid path length issues
         import uuid
@@ -111,6 +142,7 @@ class MEGA_Downloader:
                 
                 if parsed:
                     show, season, episode, ep_title = parsed
+                    show = series_name or show
                     ep_display = f"S{season:02d}E{episode:02d}"
                     if ep_title:
                         ep_display += f" - {ep_title}"
@@ -121,8 +153,13 @@ class MEGA_Downloader:
         if process.returncode != 0:
             raise subprocess.CalledProcessError(process.returncode, process.args)
 
-        series_root = self._select_language_folder(tmp_dir)
-        result_path = self._organize_series(series_root, tv_dir)
+        language_root = self._select_language_folder(tmp_dir)
+        result_path = self._organize_series(
+            language_root,
+            destination_root,
+            series_name=series_name,
+            season_hint=season_hint,
+        )
 
         shutil.rmtree(tmp_dir)
         return result_path
@@ -139,12 +176,22 @@ class MEGA_Downloader:
                     console.print(f"[green]Select language: {f.name}")
                     return f
 
-        return folders[0]
+        # No language folder: keep the whole root so nested season folders
+        # are all processed instead of only the first one.
+        return base
     
-    def _organize_series(self, base, tv_dir):
+    def _organize_series(
+        self,
+        base,
+        destination_root,
+        *,
+        series_name=None,
+        season_hint=None,
+    ):
         """Organize series files into proper structure"""
-        tv_dir.mkdir(parents=True, exist_ok=True)
-        show_name = None
+        base = Path(base)
+        destination_root = Path(destination_root)
+        destination_root.mkdir(parents=True, exist_ok=True)
         last_path = None
         
         for file in base.rglob("*"):
@@ -158,14 +205,19 @@ class MEGA_Downloader:
             if not parsed:
                 continue
 
-            show, season, episode, ep_title = parsed
-            
-            if show_name is None:
-                show_name = show
-            
+            parsed_show, season, episode, ep_title = parsed
+            show = series_name or parsed_show
+            if season is None:
+                season = season_hint
+            if season is None:
+                continue
+
             # Sanitize show name
             clean_show = os_manager.get_sanitize_file(show)
-            season_dir = tv_dir / clean_show / f"Season {season:02d}"
+            if self.series_layout == "standard":
+                season_dir = destination_root / clean_show / f"S{season}"
+            else:
+                season_dir = destination_root / clean_show / f"Season {season:02d}"
             season_dir.mkdir(parents=True, exist_ok=True)
 
             name = f"S{season:02d}E{episode:02d}"
@@ -182,7 +234,7 @@ class MEGA_Downloader:
             
             shutil.move(file, last_path)
         
-        return str(last_path.parent) if last_path else str(tv_dir)
+        return str(last_path.parent) if last_path else str(destination_root)
 
     def _parse_episode(self, filename):
         """Parse episode information from filename"""

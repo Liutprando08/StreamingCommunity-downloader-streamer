@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import os
+import re
 from urllib.parse import urlparse
 
 # Downloader
@@ -20,6 +21,20 @@ from StreamingCommunity.utils.console.shared import console
 
 # Logic
 from . import scrapper
+
+# HD4ME titles season packs as "Show – 1 Stagione" (or "Show - 1 Stagione").
+_SERIES_SEASON_RE = re.compile(
+    r"\s*[–—−-]\s*(\d+)\s+Stagione\b", re.IGNORECASE
+)
+
+
+def _series_hints(name: str) -> tuple[str, int | None]:
+    """Split a HD4ME title into the show name and an optional season hint."""
+    text = str(name or "").strip()
+    match = _SERIES_SEASON_RE.search(text)
+    if not match:
+        return text, None
+    return text[: match.start()].strip(), int(match.group(1))
 
 
 def download_film(select_title: Entries) -> str | None:
@@ -47,9 +62,11 @@ def download_film(select_title: Entries) -> str | None:
 
     host = (urlparse(url).hostname or "").lower()
     if host == "mega.nz" or host.endswith(".mega.nz"):
+        is_folder = "/folder/" in url
+        series_name, season_hint = _series_hints(select_title.name)
         folder = (
             site_constants.SERIES_FOLDER
-            if "/folder/" in url
+            if is_folder
             else site_constants.MOVIE_FOLDER
         )
         dest_path = os.path.join(
@@ -58,8 +75,14 @@ def download_film(select_title: Entries) -> str | None:
         )
 
         try:
-            return MEGA_Downloader(choose_files=False).download_url(
-                url=url, dest_path=dest_path
+            return MEGA_Downloader(
+                choose_files=False,
+                series_layout="standard" if is_folder else "tv",
+            ).download_url(
+                url=url,
+                dest_path=dest_path,
+                series_name=series_name if is_folder else None,
+                season_hint=season_hint if is_folder else None,
             )
         except Exception as exc:
             console.print(f"[red]HD4ME: MEGA download failed: {exc}")

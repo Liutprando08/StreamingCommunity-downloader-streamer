@@ -29,7 +29,7 @@ This list is generated from `StreamingCommunity/services/_base/site_loader.py` (
 | 22 | Monochrome | Music | ✅ | DRM-free, container auto-detected (M4A/FLAC/Ogg/MP3/WAV) |
 | 23 | MangaWorld | Manga | ✅ | `.cbz` output; CLI `--stream` supported, TUI streaming button hidden |
 | 24 | Altadefinizione | Film / Serie | ✅ | Playback via vixsrc; CLI `--stream` supported |
-| 25 | HD4ME | Film / Serie | ✅ | Index downloaded on every search; MEGA links (single file or season folder) |
+| 25 | HD4ME | Film / Serie | ✅ | Index downloaded on every search; MEGA links. Films go to `Movie/`, season packs to `Serie/<Show>/S<season>/` |
 
 > Sites marked `—` are available in the CLI but not surfaced in the TUI. Actual availability changes over time as sites update.
 
