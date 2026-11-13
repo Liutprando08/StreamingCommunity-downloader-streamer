@@ -8,13 +8,91 @@ from pathlib import Path
 
 
 # External libraries
+from rich.markup import escape
+
 # Internal utilities
+from StreamingCommunity.core.ui.bar_manager import DownloadBarManager
+from StreamingCommunity.source.utils.tracker import context_tracker, download_tracker
 from StreamingCommunity.utils.os import os_manager
 from StreamingCommunity.utils.console.shared import console
 from StreamingCommunity.setup import get_megatools_path
 
 
 # Variable
+
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+# megatools output (tools.c: tool_show_progress / dl.c):
+#   file.mkv: 18.74% - 764.8 MiB (801,943,240 bytes) of 4.0 GiB (5.5 MiB/s)
+#   file.mkv: 0.00% - 0 bytes of 4.0 GiB
+#   file.mkv: 100.00% - done 4.0 GiB (avg. 5.2 MiB/s)
+MEGA_PROGRESS_RE = re.compile(
+    r"^(?P<file>.+?):\s+(?P<pct>\d+(?:[.,]\d+)?)%\s+-\s+"
+    r"(?P<done>.+?)\s+of\s+(?P<total>[^(]+?)"
+    r"(?:\s+\((?P<speed>[^)]+)\))?\s*$"
+)
+MEGA_DONE_RE = re.compile(
+    r"^(?P<file>.+?):\s+(?P<pct>\d+(?:[.,]\d+)?)%\s+-\s+done\s+"
+    r"(?P<total>.+?)\s+\(avg\.\s+(?P<speed>[^)]+)\)\s*$"
+)
+
+# The statically linked megatools build tries to load GLib's GIO modules and
+# prints harmless warnings such as:
+#   Dynamic loading not supported
+#   Failed to load module: /usr/lib/gio/modules/libgvfsdbus.so
+# Keep them out of the TUI log: they look like fatal errors but the download
+# proceeds normally.
+_MEGATOOLS_NOISE = (
+    "Dynamic loading not supported",
+    "Failed to load module:",
+)
+
+
+def _parse_megatools_progress(line):
+    """Translate one megatools output line into a DownloadBarManager payload.
+
+    Returns ``None`` when the line is not a progress line. The ``size`` field
+    mirrors the MP4 downloader format (``done/total``) so the tracker renders
+    both the same way.
+    """
+    if not line:
+        return None
+
+    text = _ANSI_ESCAPE_RE.sub("", line).strip()
+
+    done_match = MEGA_DONE_RE.match(text)
+    if done_match:
+        total = done_match.group("total").strip()
+        return {
+            "task_key": "video",
+            "label": "MEGA",
+            "pct": 100.0,
+            "speed": done_match.group("speed").strip(),
+            "size": f"{total}/{total}",
+        }
+
+    match = MEGA_PROGRESS_RE.match(text)
+    if not match:
+        return None
+
+    # Newer megatools print "764.8 MiB (801,943,240 bytes)"; keep the compact
+    # part for the size column.
+    done = match.group("done").split(" (")[0].strip()
+    total = match.group("total").strip()
+    speed = (match.group("speed") or "").strip()
+
+    try:
+        pct = float(match.group("pct").replace(",", "."))
+    except ValueError:
+        return None
+
+    return {
+        "task_key": "video",
+        "label": "MEGA",
+        "pct": pct,
+        "speed": speed,
+        "size": f"{done}/{total}",
+    }
 
 
 class MEGA_Downloader:
@@ -51,39 +129,167 @@ class MEGA_Downloader:
         *,
         series_name=None,
         season_hint=None,
+        download_id=None,
     ):
         """Download a file or folder by its public url"""
+        # Mirror progress into the shared tracker when the caller did not pass
+        # an id explicitly (the TUI sets it in ``context_tracker``).
+        if not download_id:
+            download_id = context_tracker.download_id
+
+        # The TUI Queue normally opens this entry before calling the downloader,
+        # but keep the downloader self-sufficient (and safe if the entry was
+        # removed) so progress always reaches the bar/activity screens.
+        self._ensure_tracker_entry(download_id, dest_path)
+
         if "/folder/" in url:
             return self._download_folder_megatools(
                 str(url).strip(),
                 dest_path,
                 series_name=series_name,
                 season_hint=season_hint,
+                download_id=download_id,
             )
         else:
-            return self._download_movie_megatools(str(url).strip(), dest_path)
+            return self._download_movie_megatools(
+                str(url).strip(), dest_path, download_id=download_id
+            )
 
-    def _download_movie_megatools(self, url, dest_path=None):
+    @staticmethod
+    def _ensure_tracker_entry(download_id, dest_path=None):
+        if not download_id:
+            return
+        try:
+            if download_id in download_tracker.downloads:
+                return
+            download_tracker.start_download(
+                download_id,
+                context_tracker.title or "Download",
+                context_tracker.site_name or "MEGA",
+                context_tracker.media_type or "Film",
+                path=dest_path,
+            )
+            download_tracker.update_status(download_id, "Downloading ...")
+        except Exception:
+            # Tracking is best-effort: never let it break the download.
+            pass
+
+    @staticmethod
+    def _terminate(process):
+        try:
+            process.terminate()
+        except OSError:
+            pass
+
+    def _consume_megatools_output(
+        self,
+        process,
+        bar_mgr,
+        download_id=None,
+        on_file=None,
+    ):
+        """Read megatools output, driving the progress bar and tracker.
+
+        Returns ``True`` when the download was cancelled. Raw megatools output
+        is never written straight to stdout: in the Textual TUI that bypasses
+        ``ConsoleBridge`` and corrupts the screen.
+        """
+        stopped = False
+
+        for raw in process.stdout or ():
+            line = raw.rstrip("\r\n")
+            if not line:
+                continue
+
+            if download_id and download_tracker.is_stopped(download_id):
+                stopped = True
+                self._terminate(process)
+                break
+
+            parsed = _parse_megatools_progress(line)
+            if parsed:
+                bar_mgr.handle_progress_line(parsed)
+                continue
+
+            if line.startswith("F "):
+                if on_file:
+                    on_file(line[2:].strip())
+                continue
+
+            if line.startswith("Downloaded "):
+                bar_mgr.handle_progress_line(
+                    {"task_key": "video", "label": "MEGA", "pct": 100.0}
+                )
+                continue
+
+            if line.startswith(_MEGATOOLS_NOISE):
+                continue
+
+            if line.startswith("ERROR:"):
+                console.print(escape(line), style="red")
+                continue
+            if line.startswith("WARNING:"):
+                console.print(escape(line), style="yellow")
+                continue
+
+            # Anything else is informational; route it through the console so
+            # the TUI log panel captures it instead of corrupting the screen.
+            console.print(escape(line), style="dim")
+
+        if not stopped and download_id and download_tracker.is_stopped(download_id):
+            stopped = True
+            self._terminate(process)
+
+        return stopped
+
+    def _mark_cancelled(self, download_id):
+        if not download_id:
+            return
+        try:
+            download_tracker.complete_download(
+                download_id, success=False, error="cancelled"
+            )
+        except Exception:
+            pass
+
+    def _download_movie_megatools(self, url, dest_path=None, download_id=None):
         """Download a single movie file using megatools"""
         output_dir = os.path.dirname(dest_path) if dest_path else "./Movies"
         os.makedirs(output_dir, exist_ok=True)
-        
+
         cmd = [str(self.megatools_exe), "dl", url, "--path", output_dir]
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
-        
-        for line in process.stdout:
-            print(line, end='')
-        
-        process.wait()
-        if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, process.args)
-        
+
+        with DownloadBarManager(download_id) as bar_mgr:
+            bar_mgr.add_prebuilt_tasks([("video", "MEGA")])
+
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            if download_id:
+                download_tracker.register_process(download_id, process)
+
+            stopped = self._consume_megatools_output(
+                process, bar_mgr, download_id
+            )
+            process.wait()
+
+            if stopped:
+                self._mark_cancelled(download_id)
+                console.print("[yellow]Download annullato")
+                return None
+
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(process.returncode, process.args)
+
+            bar_mgr.handle_progress_line(
+                {"task_key": "video", "label": "MEGA", "pct": 100.0}
+            )
+            bar_mgr.finish_all_tasks()
+
         console.print("[green]Download completato!")
         return str(output_dir)
 
@@ -94,6 +300,7 @@ class MEGA_Downloader:
         *,
         series_name=None,
         season_hint=None,
+        download_id=None,
     ):
         """Download and organize a series folder using megatools"""
         # Sanitize dest_path if provided
@@ -125,33 +332,52 @@ class MEGA_Downloader:
         if self.choose_files:
             cmd.append("--choose-files")
 
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
-        
-        for line in process.stdout:
-            print(line, end='')
-            
-            if line.startswith('F ') and not self.choose_files:
-                filename = line.split('\\')[-1].strip()
-                parsed = self._parse_episode(filename)
-                
-                if parsed:
-                    show, season, episode, ep_title = parsed
-                    show = series_name or show
-                    ep_display = f"S{season:02d}E{episode:02d}"
-                    if ep_title:
-                        ep_display += f" - {ep_title}"
-                    
-                    console.print(f"\n[cyan]Download: [yellow]{show} [magenta]{ep_display}\n")
-        
-        process.wait()
-        if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, process.args)
+        def on_file(local_path):
+            if self.choose_files:
+                return
+            filename = local_path.split('\\')[-1].strip()
+            parsed = self._parse_episode(filename)
+
+            if parsed:
+                show, season, episode, ep_title = parsed
+                show = series_name or show
+                ep_display = f"S{season:02d}E{episode:02d}"
+                if ep_title:
+                    ep_display += f" - {ep_title}"
+
+                console.print(f"\n[cyan]Download: [yellow]{show} [magenta]{ep_display}\n")
+
+        with DownloadBarManager(download_id) as bar_mgr:
+            bar_mgr.add_prebuilt_tasks([("video", "MEGA")])
+
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            if download_id:
+                download_tracker.register_process(download_id, process)
+
+            stopped = self._consume_megatools_output(
+                process, bar_mgr, download_id, on_file=on_file
+            )
+            process.wait()
+
+            if stopped:
+                self._mark_cancelled(download_id)
+                console.print("[yellow]Download annullato")
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+                return None
+
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(process.returncode, process.args)
+
+            bar_mgr.handle_progress_line(
+                {"task_key": "video", "label": "MEGA", "pct": 100.0}
+            )
+            bar_mgr.finish_all_tasks()
 
         language_root = self._select_language_folder(tmp_dir)
         result_path = self._organize_series(

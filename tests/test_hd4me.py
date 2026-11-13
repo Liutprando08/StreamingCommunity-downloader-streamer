@@ -247,6 +247,7 @@ class FakeMega:
         *,
         series_name=None,
         season_hint=None,
+        download_id=None,
     ):
         FakeMega.calls.append(
             {
@@ -255,6 +256,7 @@ class FakeMega:
                 "dest_path": dest_path,
                 "series_name": series_name,
                 "season_hint": season_hint,
+                "download_id": download_id,
             }
         )
         return "/tmp/output"

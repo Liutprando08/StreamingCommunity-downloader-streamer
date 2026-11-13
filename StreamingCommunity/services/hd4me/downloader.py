@@ -16,6 +16,7 @@ from StreamingCommunity.core.downloader import MEGA_Downloader
 
 # Internal utilities
 from StreamingCommunity.services._base import Entries, site_constants
+from StreamingCommunity.source.utils.tracker import context_tracker
 from StreamingCommunity.utils import os_manager, start_message
 from StreamingCommunity.utils.console.shared import console
 
@@ -83,6 +84,7 @@ def download_film(select_title: Entries) -> str | None:
                 dest_path=dest_path,
                 series_name=series_name if is_folder else None,
                 season_hint=season_hint if is_folder else None,
+                download_id=context_tracker.download_id,
             )
         except Exception as exc:
             console.print(f"[red]HD4ME: MEGA download failed: {exc}")
