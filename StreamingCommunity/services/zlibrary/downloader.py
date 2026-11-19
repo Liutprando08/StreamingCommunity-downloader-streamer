@@ -147,12 +147,16 @@ def download_book(entry) -> str | None:
     console.print(f"\n[cyan]Download libro: [magenta]{name}[/] → [green]{folder}")
 
     try:
-        result = _run(client, entry, folder, reporter, cancel_event)
+        result = zclient.run_with_mirror_retry(
+            lambda active: _run(active, entry, folder, reporter, cancel_event)
+        )
     except SessionExpired:
         # Cookies expired: one silent password re-login, then a single retry.
         try:
-            client = zclient.relogin(client)
-            result = _run(client, entry, folder, reporter, cancel_event)
+            zclient.relogin(client)
+            result = zclient.run_with_mirror_retry(
+                lambda active: _run(active, entry, folder, reporter, cancel_event)
+            )
         except Cancelled:
             console.print("[yellow]Download annullato.")
             reporter.complete(False, error="cancelled")

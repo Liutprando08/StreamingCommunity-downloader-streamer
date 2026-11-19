@@ -19,10 +19,13 @@ from StreamingCommunity.services.zlibrary.mapper import (
 from StreamingCommunity.source.utils.tracker import context_tracker, download_tracker
 from StreamingCommunity.zlib_engine import (
     Book,
+    BotProtection,
     DownloadResult,
+    NoDomain,
     NotLoggedIn,
     SearchResult,
 )
+from StreamingCommunity.zlib_engine.domain_probe import DomainCheck, DomainStatus
 
 
 def _book(**overrides) -> Book:
@@ -342,6 +345,88 @@ class TestDownloader(unittest.TestCase):
         ), mock.patch.object(dl.os_manager, "create_path", return_value=True):
             folder = dl.book_output_dir(entry)
         self.assertEqual(folder, "/tmp/books/Unknown")
+
+
+class TestMirrorFallback(unittest.TestCase):
+    """Anti-bot blocks are mirror-local, so a rejected host must rotate."""
+
+    def setUp(self):
+        zclient.reset_client()
+        self._previous_resolved = zclient._resolved_domain
+        zclient._resolved_domain = ""
+        self.addCleanup(zclient.reset_client)
+        self.addCleanup(setattr, zclient, "_resolved_domain", self._previous_resolved)
+
+    @staticmethod
+    def _check(domain, status=DomainStatus.HEALTHY, eapi=True):
+        return DomainCheck(
+            domain=domain, status=status, zlib_eapi=eapi, http_status=200
+        )
+
+    def test_picks_first_healthy_eapi_mirror(self):
+        checks = [
+            self._check("https://blocked.sk", DomainStatus.DIAMWALL_BLOCKED, False),
+            self._check("https://good.gl"),
+        ]
+        with mock.patch.object(
+            zclient, "configured_domain", return_value="https://blocked.sk"
+        ), mock.patch.object(
+            zclient,
+            "known_domains",
+            return_value=["https://blocked.sk", "https://good.gl"],
+        ), mock.patch.object(
+            zclient, "configured_proxy", return_value=""
+        ), mock.patch.object(
+            zclient, "probe_domains", return_value=checks
+        ):
+            self.assertEqual(zclient.find_working_domain(), "https://good.gl")
+
+    def test_raises_when_every_mirror_is_blocked(self):
+        checks = [
+            self._check("https://a.sk", DomainStatus.DIAMWALL_BLOCKED, False),
+            self._check("https://b.sk", DomainStatus.NETWORK_ERROR, False),
+        ]
+        with mock.patch.object(
+            zclient, "configured_domain", return_value=""
+        ), mock.patch.object(
+            zclient, "known_domains", return_value=["https://a.sk", "https://b.sk"]
+        ), mock.patch.object(
+            zclient, "configured_proxy", return_value=""
+        ), mock.patch.object(
+            zclient, "probe_domains", return_value=checks
+        ):
+            with self.assertRaises(NoDomain):
+                zclient.find_working_domain()
+
+    def test_retry_switches_mirror_on_bot_protection(self):
+        class _Client:
+            domain = "https://blocked.sk"
+
+            def __init__(self):
+                self.domains = []
+
+            def set_domain(self, domain):
+                self.domains.append(domain)
+                self.domain = domain
+
+        fake = _Client()
+        seen = []
+
+        def call(client):
+            seen.append(client.domain)
+            if client.domain == "https://blocked.sk":
+                raise BotProtection("HTTP 513")
+            return "ok"
+
+        with mock.patch.object(
+            zclient, "get_client", return_value=fake
+        ), mock.patch.object(
+            zclient, "find_working_domain", return_value="https://good.gl"
+        ):
+            self.assertEqual(zclient.run_with_mirror_retry(call), "ok")
+
+        self.assertEqual(seen, ["https://blocked.sk", "https://good.gl"])
+        self.assertEqual(fake.domains, ["https://good.gl"])
 
 
 class TestServiceContract(unittest.TestCase):

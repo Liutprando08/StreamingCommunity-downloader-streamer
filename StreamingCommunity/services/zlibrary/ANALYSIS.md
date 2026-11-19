@@ -131,13 +131,38 @@ lacks the new keys still works.
 
 ---
 
-## 8. Known limitations / follow-ups
+## 8. Mirror fallback
+
+Z-Library hands different mirrors to different users and several of them sit
+behind a DiamWall interstitial that answers **HTTP 513** to EAPI. The configured
+`Conf/domains.json` → `zlibrary.full_url` can therefore be a dead end even
+though the account is fine. `services/zlibrary/client.py` recovers from it:
+
+- `find_working_domain()` probes the configured mirror first, then the engine's
+  `known_domains()`, using the read-only `probe_domains(...,
+  path="/eapi/info/domains")` check (no credentials sent). The first
+  `HEALTHY` mirror that returns real EAPI JSON wins, and is cached for the rest
+  of the process.
+- `run_with_mirror_retry(call)` runs the call, and on `BotProtection`,
+  `NoDomain` or `TransportError` switches to another healthy mirror and retries
+  once. Auth, quota and parse errors are propagated untouched.
+- `get_client()` applies the same rotation when the *login* itself is blocked,
+  since cookies and credentials are mirror-independent.
+- Both `title_search` and `download_book` go through it, so a blocked mirror
+  heals itself instead of failing the search.
+
+Observed locally: `z-lib.sk`, `1lib.sk`, `z-library.im` and `z-library.sk` are
+DiamWall-blocked; `article.sk`, `articles.sk`, `z-lib.by`, `z-lib.gd`,
+`z-lib.gl`, `z-library.ec`, `z-library.qa`, `z-library.website` and `zlib.bz`
+answer EAPI. A blocked search now completes in ~2 s after the switch.
+
+## 9. Known limitations / follow-ups
 
 1. **Login is mandatory.** Z-Library EAPI rejects anonymous search; there is no
    guest mode to fall back to.
-2. **Bot protection / mirror churn.** The engine detects challenge pages
-   (`domain_probe`, `http_util`) but v1 only surfaces the error. Wiring
-   `probe_domains()` into `--check-sites` would make mirror recovery automatic.
+2. **Mirror churn.** The fallback probes at runtime; the resolved mirror is only
+   cached in memory, so each new process pays the probe once when the
+   configured mirror is blocked. Persisting it would be a small follow-up.
 3. **Daily quota.** `Client.get_limits()` / `get_profile()` exist but are not
    surfaced yet; a rejected download shows the engine's error message.
 4. **No cover rendering.** `fetch_cover` is wired as a config flag but the TUI
@@ -152,6 +177,8 @@ lacks the new keys still works.
 ## 9. Verification
 
 - `python -m unittest discover -s tests/zlib_engine -t . -q` → 98 tests.
-- `python -m unittest tests.test_zlibrary_service -q` → 22 tests.
+- `python -m unittest tests.test_zlibrary_service -q` → 25 tests.
 - `python -m unittest tests.test_tui.TestProviderRegistry tests.test_tui.TestBookProvider tests.test_tui.TestGlobalSearchEngine -q` → 15 tests.
 - `python -m StreamingCommunity --help` lists `zlibrary` as site 26.
+- Live: `BookProvider.search("dune")` → 20 rows in ~2.7 s, after the client
+  switched from `https://z-lib.sk` to `https://article.sk`.

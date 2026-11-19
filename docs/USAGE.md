@@ -65,8 +65,10 @@ python -m StreamingCommunity --site zlibrary --search "dune"
 
 Books are saved to `OUTPUT.book_folder_name` (default `Books/`), grouped by the
 first author. They appear in the TUI queue as type **Book** with live progress
-and cancel support. If the mirror is blocked, set `zlibrary.full_url` in
-`Conf/domains.json` to a working one.
+and cancel support. If the configured mirror is blocked by anti-bot protection,
+the client probes the known mirrors, switches to a working one and retries — no
+manual edit required. Setting `zlibrary.full_url` in `Conf/domains.json` to a
+known-good mirror only saves that probe.
 
 ## Updates
 ```bash

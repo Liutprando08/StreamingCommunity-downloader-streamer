@@ -1375,6 +1375,24 @@ class TestBookProvider(unittest.TestCase):
         self.assertEqual(fake.queries, ["dune"])
         self.assertEqual([entry.name for entry in results], ["Dune", "Zebra"])
 
+    def test_search_surfaces_the_service_error(self):
+        from StreamingCommunity.services._base import EntriesManager
+
+        class _FailingService:
+            def __init__(self):
+                self.entries_manager = EntriesManager()
+                self.last_error = "blocked by anti-bot protection (HTTP 513)"
+
+            def title_search(self, query):
+                return 0
+
+        provider = registry.get("zlibrary")
+        provider._service = _FailingService()
+
+        with self.assertRaises(RuntimeError) as ctx:
+            provider.search("dune")
+        self.assertIn("anti-bot", str(ctx.exception))
+
     def test_download_routes_to_book_downloader(self):
         captured = {}
 

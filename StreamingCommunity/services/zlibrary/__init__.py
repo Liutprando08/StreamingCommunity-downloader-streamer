@@ -30,6 +30,10 @@ msg = None  # set lazily; only the interactive path needs it
 entries_manager = EntriesManager()
 table_show_manager = TVShowManager()
 
+# Last failure surfaced by ``title_search``. The TUI reads it to show the real
+# reason instead of an empty results table (the CLI already prints it).
+last_error: str | None = None
+
 
 def _not_logged_in_hint() -> None:
     console.print(f"\n[red]{zclient.missing_credentials_message()}")
@@ -37,25 +41,31 @@ def _not_logged_in_hint() -> None:
 
 def title_search(query: str) -> int:
     """Search Z-Library and load the hits into ``entries_manager``."""
+    global last_error
+
     entries_manager.clear()
     table_show_manager.clear()
+    last_error = None
 
     query = (query or "").strip()
     if not query:
         return 0
 
+    count = zclient.configured_search_count()
+    options = zclient.search_options()
+
     try:
-        client = zclient.get_client()
-        result = client.search(
-            query,
-            page=1,
-            count=zclient.configured_search_count(),
-            options=zclient.search_options(),
+        result = zclient.run_with_mirror_retry(
+            lambda client: client.search(
+                query, page=1, count=count, options=options
+            )
         )
     except NotLoggedIn:
+        last_error = zclient.missing_credentials_message()
         _not_logged_in_hint()
         return 0
     except ZlibError as error:
+        last_error = str(error)
         console.print(f"\n[red]Z-Library: {error}")
         return 0
 
@@ -143,6 +153,7 @@ __all__ = [
     "_useFor",
     "entries_manager",
     "table_show_manager",
+    "last_error",
     "title_search",
     "get_full_description",
     "process_search_result",

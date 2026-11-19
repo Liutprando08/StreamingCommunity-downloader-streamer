@@ -75,6 +75,12 @@ class BookProvider:
         with service_search_lock(self._spec.module):
             service.entries_manager.clear()
             service.title_search(query)
+            # The service swallows engine errors so the CLI can print them and
+            # keep running; the TUI has a status line, so surface the reason
+            # instead of showing a silent empty table.
+            error = getattr(service, "last_error", None)
+            if error and not service.entries_manager.media_list:
+                raise RuntimeError(error)
             service.entries_manager.sort_by_fuzzy_score(query)
             return list(service.entries_manager.media_list)
 

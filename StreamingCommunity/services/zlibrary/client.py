@@ -10,17 +10,28 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from typing import Callable, TypeVar
 
 # Engine
 from StreamingCommunity.zlib_engine import (
+    BotProtection,
     Client,
     Extension,
     Language,
+    NoDomain,
     NotLoggedIn,
     Session,
     SessionExpired,
+    TransportError,
     load_session,
     save_session,
+)
+from StreamingCommunity.zlib_engine.domain_probe import (
+    EAPI_DOMAINS_INFO_PATH,
+    DomainProbeOptions,
+    DomainStatus,
+    known_domains,
+    probe_domains,
 )
 from StreamingCommunity.zlib_engine.model import SearchOptions
 from StreamingCommunity.zlib_engine.urls import normalize_domain
@@ -33,6 +44,13 @@ logger = logging.getLogger(__name__)
 _lock = threading.RLock()
 _client: Client | None = None
 _client_key: tuple[str, str, int] = ("", "", 0)
+
+# Last mirror that answered EAPI in this process. Mirrors churn and the
+# configured one may be behind an anti-bot interstitial, so remember a working
+# alternative until the process exits.
+_resolved_domain = ""
+
+T = TypeVar("T")
 
 _MISSING_CREDENTIALS = (
     "Z-Library richiede un account. Compila Conf/login.json nella sezione "
@@ -151,12 +169,100 @@ def missing_credentials_message() -> str:
     return _MISSING_CREDENTIALS
 
 
+# ── mirror selection ────────────────────────────────────────────────────────
+#
+# Z-Library serves different mirrors to different users and some of them sit
+# behind a DiamWall interstitial that answers 513 to EAPI. The engine ships a
+# read-only probe (no credentials) that classifies a mirror and checks whether
+# ``/eapi/info/domains`` really returns JSON, which is a reliable "this mirror
+# speaks EAPI" signal.
+
+
+def _candidate_domains() -> list[str]:
+    configured = configured_domain()
+    ordered: list[str] = [configured] if configured else []
+    for domain in known_domains():
+        if domain not in ordered:
+            ordered.append(domain)
+    return ordered
+
+
+def find_working_domain(exclude: set[str] | None = None) -> str:
+    """Probe the known mirrors and return the first usable one.
+
+    The configured domain is tried first so an explicit choice keeps winning.
+    Results are cached for the rest of the process.
+    """
+    global _resolved_domain
+
+    excluded = set(exclude or ())
+    with _lock:
+        if _resolved_domain and _resolved_domain not in excluded:
+            return _resolved_domain
+
+    candidates = [domain for domain in _candidate_domains() if domain not in excluded]
+    if not candidates:
+        raise NoDomain(
+            "zlibrary: every known Z-Library mirror is blocked from this network"
+        )
+
+    checks = probe_domains(
+        candidates,
+        DomainProbeOptions(
+            proxy_url=configured_proxy(), path=EAPI_DOMAINS_INFO_PATH
+        ),
+    )
+    order = {domain: index for index, domain in enumerate(candidates)}
+    usable = [
+        check
+        for check in checks
+        if check.status == DomainStatus.HEALTHY and check.zlib_eapi
+    ]
+    usable.sort(key=lambda check: order.get(check.domain, len(order)))
+
+    if not usable:
+        raise NoDomain(
+            "zlibrary: no reachable Z-Library mirror (all known domains are "
+            "blocked or offline). Set ZLIBRARY.proxy or try again later."
+        )
+
+    domain = usable[0].domain
+    with _lock:
+        _resolved_domain = domain
+    logger.info("zlibrary: using mirror %s", domain)
+    return domain
+
+
+def _switch_mirror(client: Client, *, exclude: set[str] | None = None) -> None:
+    """Point ``client`` at another healthy mirror, keeping its session."""
+    domain = find_working_domain(exclude=exclude)
+    if domain != client.domain:
+        client.set_domain(domain)
+        logger.warning("zlibrary: switched mirror to %s", domain)
+
+
+def run_with_mirror_retry(call: Callable[[Client], T]) -> T:
+    """Run ``call`` and retry once on another mirror when it is blocked.
+
+    Bot protection, dead mirrors and transport failures are all mirror-local:
+    the same account and cookies work on another host. Anything else (auth,
+    quota, parse errors) is propagated untouched.
+    """
+    client = get_client()
+    try:
+        return call(client)
+    except (BotProtection, NoDomain, TransportError) as error:
+        logger.warning("zlibrary: %s; probing another mirror", error)
+        _switch_mirror(client, exclude={client.domain})
+        return call(client)
+
+
 # ── client lifecycle ────────────────────────────────────────────────────────
 
 
 def _build_client() -> Client:
     return Client(
-        domain=configured_domain() or None,
+        domain=_resolved_domain or configured_domain() or None,
         proxy=configured_proxy() or None,
         download_retries=configured_retries(),
     )
@@ -197,7 +303,18 @@ def get_client(*, force_new: bool = False) -> Client:
         if _client is None or force_new or key != _client_key:
             _client = _build_client()
             _client_key = key
-        _ensure_login(_client)
+        try:
+            _ensure_login(_client)
+        except BotProtection as error:
+            # Login itself can land on an anti-bot interstitial. Cookies and
+            # credentials are mirror-independent, so retry on another host.
+            logger.warning(
+                "zlibrary: login blocked on %s (%s); probing another mirror",
+                _client.domain,
+                error,
+            )
+            _switch_mirror(_client, exclude={_client.domain})
+            _ensure_login(_client)
         return _client
 
 
@@ -240,6 +357,8 @@ __all__ = [
     "configured_credentials",
     "has_configured_credentials",
     "missing_credentials_message",
+    "find_working_domain",
+    "run_with_mirror_retry",
     "get_client",
     "reset_client",
     "relogin",
