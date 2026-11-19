@@ -3,9 +3,10 @@ from __future__ import annotations
 import os
 import urllib.parse
 
+from curl_cffi.requests.exceptions import RequestException as CurlRequestException
+
 # External library
 from httpx2 import HTTPError
-from curl_cffi.requests.exceptions import RequestException as CurlRequestException
 from rich.prompt import Prompt
 
 from StreamingCommunity.services._base import Entries, EntriesManager, site_constants
@@ -62,9 +63,7 @@ def get_token(user_agent: str) -> dict:
 
         return {k: urllib.parse.unquote(v) for k, v in all_cookies.items()}
     except (HTTPError, CurlRequestException, OSError, Exception) as e:
-        console.print(
-            f"[red]Site: {site_constants.SITE_NAME}, get_token error: {e}"
-        )
+        console.print(f"[red]Site: {site_constants.SITE_NAME}, get_token error: {e}")
         raise
 
 
@@ -105,15 +104,13 @@ def title_search(query: str) -> int:
 
     # First call: /livesearch
     try:
-        response1 = create_client_curl(headers=headers).post(
-            f"{site_constants.FULL_URL}/livesearch",
+        response1 = create_client_curl(headers=headers).get(
+            f"{site_constants.FULL_URL}/api/search",
+            params={"q": query},
             cookies=cookies,
-            data={"title": query},
         )
         response1.raise_for_status()
-        process_results(
-            response1.json().get("records", []), seen_titles, entries_manager
-        )
+        process_results(response1.json().get("data", []), seen_titles, entries_manager)
 
     except (HTTPError, CurlRequestException, OSError, Exception) as e:
         console.print(
@@ -135,7 +132,7 @@ def title_search(query: str) -> int:
             "season": False,
         }
         response2 = create_client_curl(headers=headers).post(
-            f"{site_constants.FULL_URL}/archivio/get-animes",
+            f"{site_constants.FULL_URL}/archive",
             cookies=cookies,
             json=json_data,
         )
@@ -230,4 +227,3 @@ def search(
         selections=selections,
         scrape_serie=scrape_serie,
     )
-

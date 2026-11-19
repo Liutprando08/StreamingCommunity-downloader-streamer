@@ -102,7 +102,8 @@ class ScrapeSerieAnime:
         try:
             # Get initial episode count
             response = create_client_curl(headers=self.headers).get(
-                f"{self.url}/info_api/{self.media_id}/"
+                f"{self.url}/api/search",
+                params={"q": self.media_id},
             )
             response.raise_for_status()
             initial_count = response.json()["episodes_count"]
@@ -117,7 +118,8 @@ class ScrapeSerieAnime:
                 params = {"start_range": start_range, "end_range": end_range}
 
                 response = create_client_curl(headers=self.headers).get(
-                    f"{self.url}/info_api/{self.media_id}/{season_number}", params=params
+                    f"{self.url}/info_api/{self.media_id}/{season_number}",
+                    params=params,
                 )
                 response.raise_for_status()
 
