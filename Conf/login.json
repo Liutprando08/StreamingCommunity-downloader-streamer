@@ -15,5 +15,11 @@
   },
   "discoveryeu": {
     "st": ""
+  },
+  "zlibrary": {
+    "email": "",
+    "password": "",
+    "remix_userid": "",
+    "remix_userkey": ""
   }
 }

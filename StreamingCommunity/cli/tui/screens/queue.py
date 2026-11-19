@@ -28,6 +28,7 @@ from StreamingCommunity.source.utils.tracker import download_tracker
 from ..formatting import progress_bar, status_badge
 from ..providers.base import (
     AnyProvider,
+    BookProtocol,
     MangaProtocol,
     MusicProtocol,
     SeriesFlowProvider,
@@ -44,6 +45,7 @@ MEDIA_TYPES = {
     "episode": "Episode",
     "track": "Track",
     "album": "Album",
+    "book": "Book",
 }
 
 
@@ -225,6 +227,9 @@ class QueueScreen(Screen):
         elif kind == "album":
             provider = cast(MusicProtocol, self.provider)
             result = provider.download_album(item["entry"])
+        elif kind == "book":
+            provider = cast(BookProtocol, self.provider)
+            result = self._result_path(provider.download_book(item["entry"]))
         else:
             provider = cast(SeriesFlowProvider, self.provider)
             result = self._result_path(

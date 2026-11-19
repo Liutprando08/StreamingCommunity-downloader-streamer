@@ -23,6 +23,7 @@ SECTORS: tuple[tuple[str, str], ...] = (
     ("all", "Tutti"),
     ("film", "Film"),
     ("music", "Music"),
+    ("books", "Libri"),
     ("other", "Altro"),
 )
 
@@ -46,6 +47,8 @@ def sector_of(provider: Any) -> str:
     category = str(getattr(provider, "category", "") or "")
     if category == "Music" or getattr(provider, "flow", "") == "music":
         return "music"
+    if category == "Books":
+        return "books"
     if category in _FILM_CATEGORIES:
         return "film"
     return "other"

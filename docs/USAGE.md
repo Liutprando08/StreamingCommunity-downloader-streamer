@@ -45,6 +45,29 @@ python -m StreamingCommunity --global -s "cars"
 python -m StreamingCommunity --site torrent --search "interstellar"
 ```
 
+## Books (Z-Library)
+Z-Library search and downloads require an account. Add it to `Conf/login.json`:
+
+```json
+{
+  "zlibrary": {
+    "email": "you@example.com",
+    "password": "your-password"
+  }
+}
+```
+
+Then search from the CLI or the TUI (`Libri` tab / sidebar):
+
+```bash
+python -m StreamingCommunity --site zlibrary --search "dune"
+```
+
+Books are saved to `OUTPUT.book_folder_name` (default `Books/`), grouped by the
+first author. They appear in the TUI queue as type **Book** with live progress
+and cancel support. If the mirror is blocked, set `zlibrary.full_url` in
+`Conf/domains.json` to a working one.
+
 ## Updates
 ```bash
 # Binary

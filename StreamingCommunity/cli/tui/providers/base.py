@@ -1,10 +1,10 @@
 # Contracts every service provider must satisfy so the TUI can drive it
 # generically.
 #
-# The provider layer exposes exactly four kinds of providers -- VideoProvider,
-# MusicProvider, TorrentProvider and MangaProvider -- each configured per
-# service. The protocols below describe what a screen may rely on for each
-# kind:
+# The provider layer exposes exactly five kinds of providers -- VideoProvider,
+# MusicProvider, TorrentProvider, MangaProvider and BookProvider -- each
+# configured per service. The protocols below describe what a screen may rely
+# on for each kind:
 #
 #   VideoProtocol   flow = "episode" -> search -> detail -> seasons -> episodes -> queue
 #                   flow = "atomic"  -> search -> detail -> queue
@@ -15,6 +15,8 @@
 #                   (one result is one indivisible download)
 #   MangaProtocol   flow = "episode" -> search -> detail -> volumes -> chapters -> queue
 #                   (seasons are volumes, episodes are chapters)
+#   BookProtocol    flow = "atomic"  -> search -> detail -> queue
+#                   (one book is one downloadable file)
 #
 # ``supports_streaming`` and ``supports_seasons`` further narrow what the
 # detail screen may offer.
@@ -160,6 +162,53 @@ class MangaProtocol(Protocol):
         ...
 
 
+class BookProtocol(Protocol):
+    """
+    Book providers (zlibrary).
+
+    A book is a single downloadable file, so books use the atomic flow:
+    search -> detail -> queue. They never stream and have no seasons. The
+    queue records them as ``kind="book"`` so the activity screen reports
+    "Book" instead of "Film".
+    """
+
+    name: str
+    category: str
+    alias: str
+    flow: str
+    supports_streaming: bool
+    supports_seasons: bool
+    queue_kind: str
+
+    def search(self, query: str) -> list[Any]:
+        """Search the provider and return the raw Entries list."""
+        ...
+
+    def result_columns(self) -> tuple[tuple[str, str], ...]:
+        """Return (header, entry attribute) pairs for the results table."""
+        ...
+
+    def is_series(self, entry: Any) -> bool:
+        """Return False: a book is always a single download."""
+        ...
+
+    def entry_description(self, entry: Any) -> str | None:
+        """Return the synopsis, fetching it when the search payload omits it."""
+        ...
+
+    def download_book(self, entry: Any) -> Any:
+        """Download one book."""
+        ...
+
+    def download_film(self, entry: Any) -> Any:
+        """Alias of ``download_book`` for the shared atomic entry point."""
+        ...
+
+    def stream_film(self, entry: Any) -> Any:
+        """Never offered: books have no stream path, returns None."""
+        ...
+
+
 class MusicProtocol(Protocol):
     """
     Music services (musicmp3, goldenmp3, monochrome).
@@ -259,9 +308,11 @@ class TorrentProtocol(Protocol):
         ...
 
 
-# What every screen accepts: the union of the four provider kinds. Screens that
+# What every screen accepts: the union of the five provider kinds. Screens that
 # only care about "some provider" type their constructor with this alias.
-AnyProvider = VideoProtocol | MusicProtocol | TorrentProtocol | MangaProtocol
+AnyProvider = (
+    VideoProtocol | MusicProtocol | TorrentProtocol | MangaProtocol | BookProtocol
+)
 
 # The kinds that actually walk the season flow. Torrent is atomic and music
 # drills down into albums, so only video and manga reach those screens.

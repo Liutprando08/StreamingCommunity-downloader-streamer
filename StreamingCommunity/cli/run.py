@@ -49,6 +49,7 @@ COLOR_MAP = {
     "torrent": "magenta",
     "music": "cyan",
     "manga": "green",
+    "books": "bright_cyan",
 }
 CATEGORY_MAP = {1: "anime", 2: "Film_serie", 3: "serie"}
 SHOW_DEVICE_INFO = config_manager.config.get_bool("DEFAULT", "show_device_info")

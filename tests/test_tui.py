@@ -27,6 +27,7 @@ from StreamingCommunity.cli.tui.formatting import (
 )
 from StreamingCommunity.cli.tui.parse import parse_ranges
 from StreamingCommunity.cli.tui.providers import (
+    BookProvider,
     MangaProvider,
     MusicProvider,
     TorrentProvider,
@@ -327,6 +328,8 @@ class TestGlobalSearchEngine(unittest.TestCase):
         film = {p.name for p in global_search.providers_for_sector("film")}
         self.assertIn("Streamingcommunity", film)
         self.assertIn("Torrent", film)
+        books = {p.name for p in global_search.providers_for_sector("books")}
+        self.assertEqual(books, {"Z-Library"})
         self.assertEqual(
             len(global_search.providers_for_sector("all")), len(registry.all())
         )
@@ -1296,6 +1299,7 @@ class TestProviderRegistry(unittest.TestCase):
                 "Streamingcommunity",
                 "Torrent",
                 "YouTube",
+                "Z-Library",
             ],
         )
 
@@ -1307,11 +1311,17 @@ class TestProviderRegistry(unittest.TestCase):
         for provider in registry.all():
             self.assertIn(provider.flow, {"episode", "music", "atomic"}, provider.name)
 
-    def test_every_provider_is_one_of_the_four_kinds(self):
+    def test_every_provider_is_one_of_the_known_kinds(self):
         for provider in registry.all():
             self.assertIsInstance(
                 provider,
-                (VideoProvider, MusicProvider, TorrentProvider, MangaProvider),
+                (
+                    VideoProvider,
+                    MusicProvider,
+                    TorrentProvider,
+                    MangaProvider,
+                    BookProvider,
+                ),
                 provider.name,
             )
 
@@ -1322,6 +1332,72 @@ class TestProviderRegistry(unittest.TestCase):
         registry_under_test.register(registry.get("musicmp3"))
         with self.assertRaises(ValueError):
             registry_under_test.register(registry.get("musicmp3"))
+
+
+class TestBookProvider(unittest.TestCase):
+    """Z-Library is an atomic book provider: one result = one file."""
+
+    def test_registered_as_atomic_book_provider(self):
+        provider = registry.get("zlibrary")
+        self.assertIsInstance(provider, BookProvider)
+        self.assertEqual(provider.flow, "atomic")
+        self.assertEqual(provider.queue_kind, "book")
+        self.assertEqual(provider.sector, "books")
+        self.assertEqual(provider.category, "Books")
+        self.assertFalse(provider.supports_streaming)
+        self.assertFalse(provider.supports_seasons)
+        self.assertFalse(provider.is_series(FakeEntry("Dune")))
+
+    def test_search_returns_fuzzy_sorted_entries(self):
+        from StreamingCommunity.services._base import Entries, EntriesManager
+
+        class _FakeService:
+            def __init__(self):
+                self.entries_manager = EntriesManager()
+                self.queries = []
+
+            def title_search(self, query):
+                self.queries.append(query)
+                self.entries_manager.add(
+                    Entries(id="1:h", name="Dune", type="book", year="1965")
+                )
+                self.entries_manager.add(
+                    Entries(id="2:h", name="Zebra", type="book", year="2000")
+                )
+                return len(self.entries_manager)
+
+        provider = registry.get("zlibrary")
+        fake = _FakeService()
+        provider._service = fake
+
+        results = provider.search("dune")
+
+        self.assertEqual(fake.queries, ["dune"])
+        self.assertEqual([entry.name for entry in results], ["Dune", "Zebra"])
+
+    def test_download_routes_to_book_downloader(self):
+        captured = {}
+
+        class _FakeDownloader:
+            @staticmethod
+            def download_book(entry):
+                captured["entry"] = entry
+                return "/tmp/book.epub"
+
+        provider = registry.get("zlibrary")
+        provider._downloader = lambda: _FakeDownloader
+        entry = FakeEntry("Dune")
+
+        # Both the book and the shared atomic entry point must agree.
+        self.assertEqual(provider.download_book(entry), "/tmp/book.epub")
+        self.assertEqual(provider.download_film(entry), "/tmp/book.epub")
+        self.assertIs(captured["entry"], entry)
+        self.assertIsNone(provider.stream_film(entry))
+
+    def test_queue_reports_book_media_type(self):
+        from StreamingCommunity.cli.tui.screens.queue import MEDIA_TYPES
+
+        self.assertEqual(MEDIA_TYPES["book"], "Book")
 
 
 class TestTvServiceProviders(unittest.TestCase):

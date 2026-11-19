@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Altadefinizione service, available from both the CLI and the TUI, with vixsrc playback.
+- Z-Library book service (CLI site 26, TUI `Libri` sector) backed by the vendored
+  `StreamingCommunity.zlib_engine`, with an atomic book queue kind, progress and
+  cancel bridging, and credentials from `Conf/login.json`.
 
 ### Changed
 - Site health is now opened from the home screen with `F3` instead of being listed in the sidebar.

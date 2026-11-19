@@ -43,6 +43,7 @@ FALLBACK_URLS: dict[str, str] = {
     "dmax": "https://www.dmax.it",
     "nove": "https://www.nove.tv",
     "homegardentv": "https://www.homegardentv.it",
+    "zlibrary": "https://z-lib.gd",
 }
 
 # A health check should fail fast: waiting for the normal request timeout on

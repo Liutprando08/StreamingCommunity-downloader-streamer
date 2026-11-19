@@ -83,6 +83,16 @@ class SiteConstant:
             config_manager.config.get("OUTPUT", "manga_folder_name", default="Manga"),
         )
 
+    @property
+    def BOOK_FOLDER(self):
+        base_path = self.ROOT_PATH
+        if config_manager.config.get_bool("OUTPUT", "add_siteName"):
+            base_path = os.path.join(base_path, self.SITE_NAME)
+        return os.path.join(
+            base_path,
+            config_manager.config.get("OUTPUT", "book_folder_name", default="Books"),
+        )
+
 
 site_constants = SiteConstant()
 

@@ -1,12 +1,13 @@
 # Provider registry.
 #
-# The TUI has exactly four provider kinds, one per media family:
+# The TUI has exactly five provider kinds, one per media family:
 #
 #   VideoProvider   film/serie catalogs, the TV cluster and the single-video
 #                   services (flow "episode" or "atomic")
 #   MusicProvider   music services (flow "music")
 #   TorrentProvider torrent search (flow "atomic")
 #   MangaProvider   manga catalogs (flow "episode", volumes/chapters)
+#   BookProvider    book catalogs (flow "atomic", one file per book)
 #
 # Every registered provider is one of those classes configured for a single
 # service (youtube, crunchyroll, monochrome, ...), so ``registry.get(alias)``
@@ -15,19 +16,22 @@
 #
 #   "episode" -> streamingcommunity, animeunity, mangaworld, raiplay, ...
 #   "music"   -> musicmp3, goldenmp3, monochrome
-#   "atomic"  -> torrent, youtube, mostraguarda, ipersphera, hd4me
+#   "atomic"  -> torrent, youtube, mostraguarda, ipersphera, hd4me, zlibrary
 #
 # When every service is registered the TUI home screen becomes the main layout.
 
 from __future__ import annotations
 
+from .book import BOOK_SPECS, BookProvider
 from .manga import MANGA_SPECS, MangaProvider
 from .music import MUSIC_SPECS, MusicProvider
 from .torrent import TorrentProvider
 from .video import VIDEO_SPECS, VideoProvider
 
 # The union of what ``registry`` may hold.
-Provider = VideoProvider | MusicProvider | TorrentProvider | MangaProvider
+Provider = (
+    VideoProvider | MusicProvider | TorrentProvider | MangaProvider | BookProvider
+)
 
 
 class ProviderRegistry:
@@ -62,6 +66,7 @@ registry.register(VideoProvider(VIDEO_SPECS["altadefinizione"]))
 registry.register(VideoProvider(VIDEO_SPECS["animeunity"]))
 registry.register(VideoProvider(VIDEO_SPECS["animeworld"]))
 registry.register(MangaProvider(MANGA_SPECS["mangaworld"]))
+registry.register(BookProvider(BOOK_SPECS["zlibrary"]))
 registry.register(TorrentProvider())
 registry.register(MusicProvider(MUSIC_SPECS["musicmp3"]))
 registry.register(MusicProvider(MUSIC_SPECS["goldenmp3"]))
@@ -88,6 +93,7 @@ registry.register(VideoProvider(VIDEO_SPECS["homegardentv"]))
 registry.register(VideoProvider(VIDEO_SPECS["crunchyroll"]))
 
 __all__ = [
+    "BookProvider",
     "MangaProvider",
     "MusicProvider",
     "Provider",

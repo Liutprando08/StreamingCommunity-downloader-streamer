@@ -5,7 +5,7 @@ All config files live here. You can edit them directly or via the TUI (`F2` → 
 | File | Purpose | Notes |
 |------|---------|-------|
 | `config.json` | Main app settings (output, download, processing, requests, hooks, torrent, youtube, defaults) | Most things work out of the box. Edit with care. |
-| `login.json` | Credentials/tokens for services that require auth | Leave empty if unused (TMDB, Crunchyroll, TubiTV, MediasetInfinity, DiscoveryEU). |
+| `login.json` | Credentials/tokens for services that require auth | Leave empty if unused (TMDB, Crunchyroll, TubiTV, MediasetInfinity, DiscoveryEU, Z-Library). |
 | `domains.json` | Base URLs for each site | Downloaded from GitHub if missing/empty. StreamingCommunity/AnimeWorld/AnimeUnity are re-checked before first search when enabled. |
 | `remote_cdm.json` | Remote CDM endpoints/config for DRM (DASH/ISM) | This repo does **not** bundle Widevine/PlayReady device files or keys. Replace with a CDM you're legally allowed to use. |
 

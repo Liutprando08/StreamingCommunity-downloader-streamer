@@ -13,6 +13,7 @@
         "anime_folder_name": "Anime",
         "music_folder_name": "Music",
         "manga_folder_name": "Manga",
+        "book_folder_name": "Books",
         "map_episode_name": "%(episode_name) S%(season)E%(episode)",
         "add_siteName": false
     },
@@ -84,5 +85,13 @@
     "YOUTUBE": {
         "format": "",
         "max_height": 1080
+    },
+    "ZLIBRARY": {
+        "download_retries": 3,
+        "search_count": 20,
+        "default_language": "",
+        "default_extension": "",
+        "fetch_cover": false,
+        "proxy": ""
     }
 }

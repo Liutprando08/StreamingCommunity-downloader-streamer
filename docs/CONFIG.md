@@ -14,6 +14,7 @@ All configuration lives in `Conf/`. See `Conf/README.md` for a quick overview. Y
     "anime_folder_name": "Anime",
     "music_folder_name": "Music",
     "manga_folder_name": "Manga",
+    "book_folder_name": "Books",
     "map_episode_name": "%(episode_name) S%(season)E%(episode)",
     "add_siteName": false
   }
@@ -136,6 +137,26 @@ All configuration lives in `Conf/`. See `Conf/README.md` for a quick overview. Y
 }
 ```
 
+### ZLIBRARY
+```json
+{
+  "ZLIBRARY": {
+    "download_retries": 3,
+    "search_count": 20,
+    "default_language": "",
+    "default_extension": "",
+    "fetch_cover": false,
+    "proxy": ""
+  }
+}
+```
+- `search_count` is clamped to 1–50 (the EAPI page size limit).
+- `default_language` (`english`, `italian`, …) and `default_extension`
+  (`EPUB`, `PDF`, …) are optional search filters; empty means no filter.
+- `proxy` overrides the global `REQUESTS` proxy for Z-Library only.
+- The mirror comes from `domains.json` → `zlibrary.full_url`; when that is
+  empty the engine falls back to its built-in default (or `ZLIB_DOMAIN`).
+
 ## `login.json`
 ```json
 {
@@ -143,9 +164,19 @@ All configuration lives in `Conf/`. See `Conf/README.md` for a quick overview. Y
   "crunchyroll": {"device_id": "", "etp_rt": ""},
   "tubi": {"email": "", "password": ""},
   "mediasetinfinity": {"beToken": ""},
-  "discoveryeu": {"st": ""}
+  "discoveryeu": {"st": ""},
+  "zlibrary": {
+    "email": "",
+    "password": "",
+    "remix_userid": "",
+    "remix_userkey": ""
+  }
 }
 ```
+Z-Library credentials are resolved in this order: `remix_userid`/`remix_userkey`
+cookies, then the engine session cached in `~/.config/zlib/session.json`
+(mode 0600), then `email`/`password` (a successful login is cached there).
+Search and downloads require a logged-in account.
 
 ## `domains.json`
 Maps sites to their base URL. Downloaded if missing/empty. StreamingCommunity/AnimeWorld/AnimeUnity re-checked before first search when enabled. Trackers may use `mirrors`.

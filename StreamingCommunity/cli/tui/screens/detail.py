@@ -193,7 +193,7 @@ class DetailScreen(Screen):
 
         items = [
             {
-                "kind": "film",
+                "kind": getattr(self.provider, "queue_kind", "film"),
                 "label": f"{name} ({mode})",
                 "mode": mode,
                 "entry": self.entry,
