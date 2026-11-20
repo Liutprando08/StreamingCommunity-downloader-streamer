@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import logging
 
-from httpx2 import HTTPError
-
 from StreamingCommunity.services._base import site_constants
 from StreamingCommunity.services._base.object import (
     Episode,
@@ -97,38 +95,41 @@ class ScrapeSerieAnime:
 
     def _fetch_all_episodes(self, season_number: int = SINGLE_SEASON):
         """
-        Fetch all episodes data at once and cache it
+        Fetch all episodes data at once and cache it.
+
+        AnimeUnity exposes a paginated JSON endpoint:
+        ``/api/anime/{anime}/episodes?start={start}``.
+        Each response contains the next ``tab_size`` episodes and the total
+        number of episodes for the title.
         """
         try:
-            # Get initial episode count
-            response = create_client_curl(headers=self.headers).get(
-                f"{self.url}/api/search",
-                params={"q": self.media_id},
-            )
-            response.raise_for_status()
-            initial_count = response.json()["episodes_count"]
+            endpoint = f"{self.url}/api/anime/{self.media_id}/episodes"
+            client = create_client_curl(headers=self.headers)
 
-            all_episodes = []
-            start_range = 1
+            all_episodes: list[dict] = []
+            start = 0
+            total = None
 
-            # Fetch episodes in chunks
-            while start_range <= initial_count:
-                end_range = min(start_range + 119, initial_count)
-
-                params = {"start_range": start_range, "end_range": end_range}
-
-                response = create_client_curl(headers=self.headers).get(
-                    f"{self.url}/info_api/{self.media_id}/{season_number}",
-                    params=params,
-                )
+            while total is None or start < total:
+                response = client.get(endpoint, params={"start": start})
                 response.raise_for_status()
+                payload = response.json()
 
-                chunk_episodes = response.json().get("episodes", [])
+                if total is None:
+                    total = int(payload.get("total") or 0)
+
+                chunk_episodes = payload.get("episodes") or []
+                if not chunk_episodes:
+                    break
+
                 all_episodes.extend(chunk_episodes)
-                start_range = end_range + 1
+                tab_size = int(payload.get("tab_size") or len(chunk_episodes) or 1)
+                if tab_size <= 0:
+                    break
+                start += tab_size
 
             self._episodes_by_season[season_number] = all_episodes
-        except HTTPError as e:
+        except Exception as e:
             logger.error(f"Error fetching all episodes: {e}")
             self._episodes_by_season[season_number] = None
 
@@ -182,7 +183,30 @@ class ScrapeSerieAnime:
 def _build_episode(raw: dict) -> Episode:
     """
     Map a raw AnimeUnity episode payload to an Episode.
+
+    New AnimeUnity episodes carry one video per available audio track. The
+    downloader needs the video id (not the episode id) to resolve the embed
+    URL, so pick the Italian track when available and fall back to the first
+    visible one.
     """
     number = raw.get("number")
     name = raw.get("title") or raw.get("name") or f"Episode {number}"
-    return Episode(id=raw.get("id"), number=number, name=name)
+
+    videos = [video for video in (raw.get("videos") or []) if isinstance(video, dict)]
+    visible_videos = [video for video in videos if not video.get("is_hidden")]
+    preferred_video = next(
+        (
+            video
+            for video in visible_videos
+            if str(video.get("language", "")).lower() == "ita"
+        ),
+        visible_videos[0] if visible_videos else None,
+    )
+
+    return Episode(
+        id=raw.get("id"),
+        video_id=preferred_video.get("id") if preferred_video else None,
+        number=number,
+        name=name,
+        videos=videos,
+    )

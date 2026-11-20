@@ -76,7 +76,7 @@ def get_real_title(record: dict) -> str:
     elif record.get("title"):
         return record["title"]
     else:
-        return record.get("title_it", "")
+        return record.get("title_it") or ""
 
 
 def title_search(query: str) -> int:
@@ -102,7 +102,7 @@ def title_search(query: str) -> int:
         "x-xsrf-token": data.get("XSRF-TOKEN", ""),
     }
 
-    # First call: /livesearch
+    # First call: full-text search
     try:
         response1 = create_client_curl(headers=headers).get(
             f"{site_constants.FULL_URL}/api/search",
@@ -112,40 +112,28 @@ def title_search(query: str) -> int:
         response1.raise_for_status()
         process_results(response1.json().get("data", []), seen_titles, entries_manager)
 
-    except (HTTPError, CurlRequestException, OSError, Exception) as e:
+    except Exception as e:
         console.print(
             f"[red]Site: {site_constants.SITE_NAME}, request search error: {e}"
         )
-        return 0
 
-    # Second call: /archivio/get-animes
+    # Second call: archive search. The old POST /archive endpoint was replaced
+    # by the paginated GET /api/archive JSON endpoint (query parameter: query).
     try:
-        json_data = {
-            "title": query,
-            "type": False,
-            "year": False,
-            "order": False,
-            "status": False,
-            "genres": False,
-            "offset": 0,
-            "dubbed": False,
-            "season": False,
-        }
-        response2 = create_client_curl(headers=headers).post(
-            f"{site_constants.FULL_URL}/archive",
+        response2 = create_client_curl(headers=headers).get(
+            f"{site_constants.FULL_URL}/api/archive",
+            params={"query": query},
             cookies=cookies,
-            json=json_data,
         )
         response2.raise_for_status()
         process_results(
-            response2.json().get("records", []), seen_titles, entries_manager
+            response2.json().get("data", []), seen_titles, entries_manager
         )
 
-    except (HTTPError, CurlRequestException, OSError, Exception) as e:
+    except Exception as e:
         console.print(
             f"[red]Site: {site_constants.SITE_NAME}, request search error: {e}"
         )
-        return 0
 
     result_count = len(entries_manager)
     return result_count
@@ -160,23 +148,38 @@ def process_results(
     for dict_title in records:
         try:
             title_id = dict_title.get("id")
-            if title_id in seen_titles:
+            if title_id is None or title_id in seen_titles:
                 continue
 
             seen_titles.add(title_id)
             dict_title["name"] = get_real_title(dict_title)
 
+            slug = dict_title.get("slug", "")
+            variants = dict_title.get("variants") or []
+            languages = {
+                str(variant.get("language", "")).lower()
+                for variant in variants
+                if isinstance(variant, dict)
+            }
+
             entry = Entries.__new__(Entries)
             entry.id = title_id
             entry.name = dict_title.get("name", "")
             entry.type = dict_title.get("type", "")
-            entry.url = dict_title.get("url", "")
+            entry.url = dict_title.get("url") or (
+                f"{site_constants.FULL_URL}/anime/{title_id}-{slug}" if slug else ""
+            )
             entry.size = dict_title.get("size", "")
             entry.score = dict_title.get("score", "")
             entry.desc = dict_title.get("desc", "")
-            entry.slug = dict_title.get("slug", "")
-            entry.year = str(dict_title.get("year", ""))
-            entry.provider_language = dict_title.get("provider_language", "")
+            entry.slug = slug
+            entry.year = str(dict_title.get("year") or "")
+            if "ita" in languages:
+                entry.provider_language = "ITA"
+            elif languages:
+                entry.provider_language = "Sub ITA"
+            else:
+                entry.provider_language = dict_title.get("provider_language", "")
             entry.tmdb_id = dict_title.get("tmdb_id", "")
 
             entries_manager.add(entry)

@@ -1,6 +1,8 @@
 # 01.03.24
 from __future__ import annotations
 
+import html
+import json
 import logging
 import re
 from types import SimpleNamespace
@@ -14,7 +16,6 @@ from urllib.parse import (
 
 # External libraries
 from bs4 import BeautifulSoup
-from httpx2 import HTTPError
 
 # Internal utilities
 from StreamingCommunity.utils.console.shared import console
@@ -235,24 +236,77 @@ class VideoSourceAnime(VideoSource):
         self.iframe_src = None
         self.tmdb_id = None
 
-    def get_embed(self, episode_id: int, prefer_mp4: bool = True) -> str | None:
+    @staticmethod
+    def _extract_embed_url(page_html: str) -> str | None:
+        """
+        Extract the vixcloud embed URL from an Inertia episode page.
+
+        AnimeUnity renders the embed URL in the ``data-page`` JSON prop, e.g.
+        ``props.embedUrl = "https://vixcloud.cc/embed/123?token=..."``.
+        """
+        match = re.search(r'data-page="([^"]*)"', page_html or "")
+        if not match:
+            return None
+
+        try:
+            payload = json.loads(html.unescape(match.group(1)))
+        except (TypeError, ValueError):
+            return None
+
+        embed_url = (payload.get("props") or {}).get("embedUrl")
+        return str(embed_url).strip() if embed_url else None
+
+    def get_embed(
+        self,
+        episode_id: int | None = None,
+        prefer_mp4: bool = True,
+        *,
+        video_id: int | str | None = None,
+        anime_id: int | str | None = None,
+        anime_slug: str | None = None,
+    ) -> str | None:
         """
         Retrieve embed URL and extract video source.
 
         Args:
-            episode_id (int): Unique identifier for episode
+            episode_id: Legacy episode identifier, used only when ``video_id``
+                is not supplied.
+            prefer_mp4: Extract the direct MP4 URL instead of the HLS playlist.
+            video_id: AnimeUnity video id (the ``videos[].id`` of an episode).
+            anime_id: AnimeUnity anime id.
+            anime_slug: Anime slug; only used to build a human-readable URL.
 
         Returns:
             str: Parsed script content
         """
+        target_video = video_id if video_id is not None else episode_id
+        if target_video is None:
+            logger.error("Missing episode/video id for AnimeUnity embed")
+            return None
+
         try:
-            response = create_client_curl(headers=self.headers).get(
-                f"{self.url}/embed-url/{episode_id}"
-            )
+            if anime_id is not None:
+                # The old /embed-url/{id} route no longer exists. The embed URL
+                # is rendered in the episode page props (Inertia data-page).
+                slug = anime_slug or "x"
+                page_url = f"{self.url}/anime/{anime_id}-{slug}/{target_video}"
+            else:
+                page_url = f"{self.url}/embed-url/{target_video}"
+
+            response = create_client_curl(headers=self.headers).get(page_url)
             response.raise_for_status()
 
-            # Extract and clean embed URL
-            embed_url = response.text.strip()
+            page_text = response.text.strip()
+            if page_text.startswith(("http://", "https://")):
+                # Legacy /embed-url response: plain embed URL.
+                embed_url = page_text
+            else:
+                embed_url = self._extract_embed_url(page_text)
+
+            if not embed_url:
+                logger.error("Embed URL not found in AnimeUnity episode page")
+                return None
+
             self.iframe_src = embed_url
 
             # vixcloud.cc (AnimeUnity embed host) rejects requests without a
@@ -287,11 +341,11 @@ class VideoSourceAnime(VideoSource):
                     self.src_mp4 = dl_match.group(1)
 
             if not prefer_mp4:
-                self.get_content()
+                self.parse_script(script)
                 self.master_playlist = self.get_playlist()
 
             return script
 
-        except HTTPError as e:
+        except Exception as e:
             logger.error(f"Error fetching embed URL: {e}")
             return None

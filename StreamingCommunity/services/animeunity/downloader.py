@@ -71,8 +71,15 @@ def download_episode(
         f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{scrape_serie.series_name} ([cyan]E{obj_episode.number}) \n"
     )
 
-    # Collect mp4 url
-    video_source.get_embed(obj_episode.id, not DOWNOAD_HLS)
+    # Collect mp4 url. AnimeUnity now resolves the embed from the episode page,
+    # which requires the anime id/slug and the video id (not the episode id).
+    video_source.get_embed(
+        obj_episode.id,
+        not DOWNOAD_HLS,
+        video_id=getattr(obj_episode, "video_id", None),
+        anime_id=scrape_serie.media_id,
+        anime_slug=scrape_serie.series_name,
+    )
 
     if DOWNOAD_HLS and not video_source.master_playlist:
         console.print("[red]Error: No master playlist found")
@@ -220,7 +227,13 @@ def stream_episode(
     )
 
     # ``prefer_mp4=False`` resolves the HLS master playlist
-    video_source.get_embed(obj_episode.id, False)
+    video_source.get_embed(
+        obj_episode.id,
+        False,
+        video_id=getattr(obj_episode, "video_id", None),
+        anime_id=scrape_serie.media_id,
+        anime_slug=scrape_serie.series_name,
+    )
     master_playlist = video_source.master_playlist
     if not master_playlist:
         console.print("[red]Error: No master playlist found")

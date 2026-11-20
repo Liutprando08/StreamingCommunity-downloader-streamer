@@ -12,6 +12,14 @@ EMBED_URL = (
     "?token=embedtoken&expires=1799492226&canPlayFHD=1"
 )
 
+# AnimeUnity serves the embed URL inside the Inertia ``data-page`` prop of the
+# episode page (``/anime/{anime}-{slug}/{video}``).
+EMBED_PAGE_HTML = (
+    '<html><body><div id="app" data-page="'
+    '{&quot;component&quot;:&quot;Anime&quot;,&quot;props&quot;:'
+    '{&quot;embedUrl&quot;:&quot;' + EMBED_URL + '&quot;}}"></div></body></html>'
+)
+
 EMBED_HTML = """<!DOCTYPE html>
 <html>
   <body>
@@ -56,8 +64,8 @@ class FakeClient:
 
     def get(self, url):
         self.gets.append(str(url))
-        if "/embed-url/" in str(url):
-            return FakeResponse(EMBED_URL)
+        if "/anime/" in str(url) or "/embed-url/" in str(url):
+            return FakeResponse(EMBED_PAGE_HTML)
         return FakeResponse(EMBED_HTML)
 
 
@@ -76,7 +84,13 @@ class TestVideoSourceAnimeEmbed(unittest.TestCase):
             mock.patch.object(vixcloud, "get_userAgent", return_value="test-agent"),
         ):
             source = vixcloud.VideoSourceAnime("https://www.animeunity.co")
-            result = source.get_embed(5987, prefer_mp4)
+            result = source.get_embed(
+                5987,
+                prefer_mp4,
+                video_id=5987,
+                anime_id=1469,
+                anime_slug="naruto",
+            )
 
         return source, result, clients
 
@@ -121,8 +135,8 @@ class TestVideoSourceAnimeEmbed(unittest.TestCase):
         class ForbiddenClient(FakeClient):
             def get(self, url):
                 self.gets.append(str(url))
-                if "/embed-url/" in str(url):
-                    return FakeResponse(EMBED_URL)
+                if "/anime/" in str(url) or "/embed-url/" in str(url):
+                    return FakeResponse(EMBED_PAGE_HTML)
                 return FakeResponse("Forbidden", status_code=403)
 
         clients: list[FakeClient] = []
@@ -138,7 +152,15 @@ class TestVideoSourceAnimeEmbed(unittest.TestCase):
             mock.patch.object(vixcloud, "get_userAgent", return_value="test-agent"),
         ):
             source = vixcloud.VideoSourceAnime("https://www.animeunity.co")
-            self.assertIsNone(source.get_embed(5987, prefer_mp4=False))
+            self.assertIsNone(
+                source.get_embed(
+                    5987,
+                    prefer_mp4=False,
+                    video_id=5987,
+                    anime_id=1469,
+                    anime_slug="naruto",
+                )
+            )
 
         self.assertIsNone(source.master_playlist)
 
