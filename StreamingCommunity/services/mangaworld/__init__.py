@@ -48,7 +48,7 @@ def _search_html(query: str) -> int:
         return 0
 
     soup = BeautifulSoup(response.text, "html.parser")
-    tiles = soup.select(".entry, .manga-card, .comic, .book, .slider-tile")
+    tiles = soup.select(".entry, .card-cover, .comic, .book, .slider-tile")
 
     if not tiles:
         console.print("[yellow]No results found on search page")
@@ -134,9 +134,13 @@ def process_search_result(select_title, selections=None, scrape_serie=None):
     streaming_mode = os.environ.get("STREAMING_MODE") == "1"
 
     if streaming_mode:
-        result = stream_chapter(select_title, season_selection, episode_selection, scrape_serie)
+        result = stream_chapter(
+            select_title, season_selection, episode_selection, scrape_serie
+        )
     else:
-        result = download_manga(select_title, season_selection, episode_selection, scrape_serie)
+        result = download_manga(
+            select_title, season_selection, episode_selection, scrape_serie
+        )
 
     if table_show_manager:
         table_show_manager.clear()
