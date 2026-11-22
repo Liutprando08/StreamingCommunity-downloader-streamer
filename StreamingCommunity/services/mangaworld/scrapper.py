@@ -69,7 +69,7 @@ class GetMangaInfo:
 
     def _parse_page(self, soup: BeautifulSoup) -> None:
         # Primary structure: #chapterList -> .volume-element (one per volume)
-        volume_elements = soup.select(".volume-element")
+        volume_elements = soup.select(".volume")
 
         if not volume_elements:
             # Fallback: every chapter link on the page, grouped under one volume
@@ -96,8 +96,8 @@ class GetMangaInfo:
 
     def _add_chapters_from_container(self, season: Season, container) -> None:
         chapter_number_fallback = 1
-        for chapter in container.select(".chapter"):
-            link = chapter.select_one("a.chap[href]")
+        for chapter in container.select(".ch-row"):
+            link = chapter.select_one("a.ch[href]")
             if not link:
                 continue
             href = link.get("href", "")

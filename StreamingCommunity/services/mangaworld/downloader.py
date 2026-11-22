@@ -30,6 +30,7 @@ PAGES_RE = re.compile(r'"pages":\[([^\]]*)\]')
 
 # ── Chapter page extraction ────────────────────────────────────────────────
 
+
 def _fetch_reader_html(url: str) -> str | None:
     try:
         response = client.get(url)
@@ -44,6 +45,7 @@ def get_chapter_page_urls(url: str) -> list[str]:
     """Return the ordered list of page image URLs for a chapter reader URL."""
     html = _fetch_reader_html(url)
     if not html:
+        print("html empty")
         return []
 
     soup = BeautifulSoup(html, "html.parser")
@@ -64,6 +66,7 @@ def get_chapter_page_urls(url: str) -> list[str]:
             parsed = json.loads(f"[{match.group(1)}]")
             pages = [str(p) for p in parsed if p]
         except ValueError:
+            print("value error")
             pages = []
 
     if base_url and pages:
@@ -80,6 +83,7 @@ def get_chapter_page_urls(url: str) -> list[str]:
 
 
 # ── Single chapter download ────────────────────────────────────────────────
+
 
 def download_chapter(
     episode,
@@ -101,7 +105,9 @@ def download_chapter(
         return None
 
     safe_manga = os_manager.get_sanitize_file(manga_name)
-    chapter_label = getattr(episode, "name", None) or f"Capitolo {getattr(episode, 'number', '')}"
+    chapter_label = (
+        getattr(episode, "name", None) or f"Capitolo {getattr(episode, 'number', '')}"
+    )
     safe_chapter = os_manager.get_sanitize_file(str(chapter_label))
 
     folder = os.path.join(site_constants.MANGA_FOLDER, safe_manga)
@@ -110,7 +116,9 @@ def download_chapter(
     os_manager.create_path(folder)
 
     cbz_path = os.path.join(folder, f"{safe_manga} - {safe_chapter}.cbz")
-    console.print(f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{safe_manga} - {chapter_label}")
+    console.print(
+        f"\n[yellow]Download: [red]{site_constants.SITE_NAME} → [cyan]{safe_manga} - {chapter_label}"
+    )
     console.print(f"[cyan]Pages: [red]{len(page_urls)}")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -142,6 +150,7 @@ def download_chapter(
 
 
 # ── Manga level download flow ──────────────────────────────────────────────
+
 
 def download_manga(
     select_title,
@@ -179,7 +188,9 @@ def download_manga(
         )
     else:
         last_command = season_selection
-        console.print(f"\n[cyan]Using provided volume selection: [yellow]{season_selection}")
+        console.print(
+            f"\n[cyan]Using provided volume selection: [yellow]{season_selection}"
+        )
 
     selected_volumes = manage_selection(last_command, len(volumes))
 
@@ -240,4 +251,6 @@ def stream_chapter(
     scrape_serie=None,
 ):
     """Streaming a manga is not supported; fall back to downloading the chapter(s)."""
-    return download_manga(select_title, season_selection, episode_selection, scrape_serie)
+    return download_manga(
+        select_title, season_selection, episode_selection, scrape_serie
+    )

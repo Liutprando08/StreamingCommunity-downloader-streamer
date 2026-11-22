@@ -34,6 +34,8 @@ _description_cache: dict[str, str] = {}
 
 def _search_html(query: str) -> int:
     """Search MangaWorld's archive page and parse the resulting cards."""
+    from urllib.parse import urljoin
+
     search_url = f"{site_constants.FULL_URL}/archive"
     params = {"keyword": query}
 
@@ -48,7 +50,7 @@ def _search_html(query: str) -> int:
         return 0
 
     soup = BeautifulSoup(response.text, "html.parser")
-    tiles = soup.select(".entry, .card-cover, .comic, .book, .slider-tile")
+    tiles = soup.select("a.card-cover")
 
     if not tiles:
         console.print("[yellow]No results found on search page")
@@ -57,13 +59,10 @@ def _search_html(query: str) -> int:
     seen_ids: set[str] = set()
     for tile in tiles:
         try:
-            link = tile.select_one('a[href*="/manga/"]')
-            if not link:
+            href = tile.get("href", "")
+            if not isinstance(href, str) or not href:
                 continue
 
-            href = link.get("href", "")
-            if not isinstance(href, str):
-                continue
             match = re.search(r"/manga/(\d+)[-/]([^/?#]+)", href)
             if not match:
                 continue
@@ -72,19 +71,24 @@ def _search_html(query: str) -> int:
             if title_id in seen_ids:
                 continue
             seen_ids.add(title_id)
-            slug = match.group(2).rstrip("/")
-            title_url = (
-                href if href.startswith("http") else f"{site_constants.FULL_URL}{href}"
-            )
 
+            slug = match.group(2).rstrip("/")
+            title_url = urljoin(site_constants.FULL_URL, href)
+
+            img = tile.select_one("img")
             name = (
-                link.get("title")
-                or (tile.select_one("img") and tile.select_one("img").get("alt"))
+                tile.get("title")
+                or (img.get("alt") if img else None)
                 or slug.replace("-", " ").title()
             )
-            year = link.get("data-year") or ""
-            img = tile.select_one("img")
             poster = img.get("src", "") if img else ""
+
+            card = tile.find_parent("article")
+            plot_el = card.select_one(".archive-plot") if card else None
+            desc = plot_el.get_text(" ", strip=True) if plot_el else ""
+
+            rating_el = card.select_one(".rating-chip strong") if card else None
+            score = rating_el.get_text(strip=True) if rating_el else ""
 
             entry = Entries(
                 id=int(title_id),
@@ -93,10 +97,10 @@ def _search_html(query: str) -> int:
                 url=title_url,
             )
             entry.size = ""
-            entry.score = ""
-            entry.desc = ""
+            entry.score = score
+            entry.desc = desc
             entry.slug = slug
-            entry.year = str(year) if year else ""
+            entry.year = ""
             entry.provider_language = ""
             entry.imdb_id = ""
             entry.image = poster
