@@ -177,7 +177,28 @@ def search(
 
 
 def _extract_plot(page: str) -> str | None:
-    """Extract the full synopsis from the `"trama"` field of the page payload."""
+    """Extract the full synopsis from a manga page.
+
+    The current layout renders it in ``<p class="manga-plot">``; older pages
+    embedded it in a ``"trama"`` JSON field, and the meta description is a
+    final fallback.
+    """
+    soup = BeautifulSoup(page or "", "html.parser")
+
+    plot_el = soup.select_one(".manga-plot")
+    if plot_el:
+        text = plot_el.get_text(" ", strip=True)
+        if text:
+            return text
+
+    meta = soup.find("meta", attrs={"name": "description"}) or soup.find(
+        "meta", attrs={"property": "og:description"}
+    )
+    if meta:
+        content = meta.get("content")
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+
     marker = '"trama":'
     index = page.find(marker)
     while index != -1:

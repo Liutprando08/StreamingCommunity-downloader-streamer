@@ -41,45 +41,54 @@ def _fetch_reader_html(url: str) -> str | None:
         return None
 
 
+def _is_chapter_image(src: str) -> bool:
+    """True for a source pointing at a chapter page image on the CDN."""
+    return isinstance(src, str) and "/chapters/" in src
+
+
 def get_chapter_page_urls(url: str) -> list[str]:
     """Return the ordered list of page image URLs for a chapter reader URL."""
     html = _fetch_reader_html(url)
     if not html:
-        print("html empty")
         return []
 
     soup = BeautifulSoup(html, "html.parser")
 
-    # Base directory = the folder of the first chapter image rendered in the DOM.
-    base_url = ""
-    for img in soup.select("img.img-fluid"):
-        src = img.get("src") or ""
-        if isinstance(src, str) and "cdn.mangaworld" in src and "/chapters/" in src:
-            base_url = src.rsplit("/", 1)[0]
-            break
+    # Current reader layout: one <img class="reader-page"> per page, in order.
+    # Older layouts used <img class="img-fluid">; accept both (and the
+    # data-reader-image marker) so a layout change does not break downloads.
+    page_images: list[str] = []
+    for img in soup.select("img.reader-page, img.img-fluid, img[data-reader-image]"):
+        src = img.get("src") or img.get("data-src") or ""
+        if _is_chapter_image(src) and src not in page_images:
+            page_images.append(src)
 
-    # Page file names live in the embedded `"chapter":{"pages":[...]}` payload.
-    pages: list[str] = []
+    if page_images:
+        return page_images
+
+    # Legacy fallback: page file names live in the embedded
+    # `"chapter":{"pages":[...]}` payload, relative to the image directory.
+    base_url = ""
     match = PAGES_RE.search(html)
     if match:
         try:
             parsed = json.loads(f"[{match.group(1)}]")
-            pages = [str(p) for p in parsed if p]
+            names = [str(p) for p in parsed if p]
         except ValueError:
-            print("value error")
-            pages = []
+            names = []
+        if names:
+            first = names[0]
+            if first.startswith("http"):
+                return names
+            for img in soup.select("img"):
+                src = img.get("src") or ""
+                if _is_chapter_image(src):
+                    base_url = src.rsplit("/", 1)[0]
+                    break
+            if base_url:
+                return [f"{base_url}/{name}" for name in names]
 
-    if base_url and pages:
-        return [f"{base_url}/{name}" for name in pages]
-
-    # Fallback: use whatever reader images are present in the DOM.
-    fallback = []
-    for img in soup.select("img.img-fluid"):
-        src = img.get("src") or ""
-        if isinstance(src, str) and "cdn.mangaworld" in src and "/chapters/" in src:
-            if src not in fallback:
-                fallback.append(src)
-    return fallback or pages
+    return []
 
 
 # ── Single chapter download ────────────────────────────────────────────────

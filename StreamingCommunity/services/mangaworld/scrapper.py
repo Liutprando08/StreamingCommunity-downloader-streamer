@@ -80,7 +80,9 @@ class GetMangaInfo:
             return
 
         for index, element in enumerate(volume_elements, 1):
-            volume_label = element.select_one(".volume")
+            volume_label = element.select_one(".volume-name") or element.select_one(
+                ".volume-head"
+            )
             volume_name = (
                 volume_label.get_text(" ", strip=True)
                 if volume_label
@@ -104,7 +106,14 @@ class GetMangaInfo:
             if not isinstance(href, str) or not href:
                 continue
 
-            name = link.get_text(" ", strip=True)
+            # Prefer the dedicated name node: the anchor text also contains the
+            # release date, which would leak into episode names and file names.
+            name_label = link.select_one(".ch-name")
+            name = (
+                name_label.get_text(" ", strip=True)
+                if name_label
+                else link.get_text(" ", strip=True)
+            )
             number = _parse_chapter_number(name, chapter_number_fallback)
             chapter_number_fallback = int(number) + 1
             url = href if href.startswith("http") else urljoin(self.url or "", href)
