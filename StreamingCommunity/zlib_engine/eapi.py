@@ -81,6 +81,9 @@ def eapi_request(
 
     headers = {
         "Accept": "application/json",
+        # Search rejects requests without a client source ("Access denied"),
+        # credentials or not; the rest of the EAPI does not check it.
+        "source": "android",
         "User-Agent": DEFAULT_USER_AGENT,
     }
     if method.upper() != "GET":
