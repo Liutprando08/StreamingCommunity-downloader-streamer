@@ -85,7 +85,6 @@ jobs:
         with:
           name: StreamingCommunity-${{ runner.os }}
           path: dist/StreamingCommunity*
-
   attach-binaries:
     if: github.event_name == 'release'
     needs: build
@@ -98,11 +97,18 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Attach binaries to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/*
-
+      - name: Attach binaries to release via gh CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Se la Release non esiste, creala prima (senza allegare file)
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --generate-notes
+          fi
+          # Carica i file utilizzando gh, --clobber sovrascrive i file con lo stesso nome
+          gh release upload "$TAG" artifacts/* --clobber
   publish-pypi:
     if: github.event_name == 'release'
     needs: build
