@@ -18,6 +18,8 @@
         "add_siteName": false
     },
     "DOWNLOAD": {
+        "engine": "ytdlp",
+        "ytdlp_format": "",
         "skip_download": false,
         "thread_count": 8,
         "retry_count": 30,

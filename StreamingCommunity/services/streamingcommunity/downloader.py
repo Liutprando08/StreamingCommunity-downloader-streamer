@@ -12,7 +12,7 @@ from httpx2 import HTTPError
 from rich.prompt import Prompt
 
 # Downloader
-from StreamingCommunity.core.downloader import HLS_Downloader
+from StreamingCommunity.core.downloader import download_hls
 
 # Player
 from StreamingCommunity.player.vixcloud import VideoSource
@@ -166,12 +166,12 @@ def download_film(select_title: Entries) -> tuple[str | None, Any] | None:
         site_constants.MOVIE_FOLDER, mp4_name.replace(f".{extension_output}", "")
     )
 
-    return HLS_Downloader(
-        m3u8_url=master_playlist,
+    return download_hls(
+        url=master_playlist,
         output_path=os.path.join(mp4_path, mp4_name),
         headers=_get_vidxgo_headers(),
         playlist_resolver=resolve_playlist,
-    ).start()
+    )
 
 
 def download_episode(
@@ -199,12 +199,12 @@ def download_episode(
         f"S{index_season_selected}",
     )
 
-    return HLS_Downloader(
-        m3u8_url=master_playlist,
+    return download_hls(
+        url=master_playlist,
         output_path=os.path.join(mp4_path, mp4_name),
         headers=_get_vidxgo_headers(),
         playlist_resolver=resolve_playlist,
-    ).start()
+    )
 
 
 def download_series(

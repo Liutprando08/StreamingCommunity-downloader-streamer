@@ -8,7 +8,7 @@ import os
 from rich.prompt import Prompt
 
 # Downloader
-from StreamingCommunity.core.downloader import HLS_Downloader, MP4_Downloader
+from StreamingCommunity.core.downloader import download_hls, download_mp4
 
 # Player
 from StreamingCommunity.player.vixcloud import VideoSourceAnime
@@ -105,17 +105,17 @@ def download_episode(
 
     # Start downloading
     if not DOWNOAD_HLS:
-        path, kill_handler = MP4_Downloader(
+        path, kill_handler = download_mp4(
             url=str(video_source.src_mp4).strip(),
-            path=os.path.join(mp4_path, f"{mp4_name}.mp4"),
+            output_path=os.path.join(mp4_path, f"{mp4_name}.mp4"),
         )
         return path, kill_handler
 
     else:
-        path, kill_handler = HLS_Downloader(
-            m3u8_url=str(video_source.master_playlist),
+        path, kill_handler = download_hls(
+            url=str(video_source.master_playlist),
             output_path=os.path.join(mp4_path, f"{mp4_name}.{extension_output}"),
-        ).start()
+        )
         return path, kill_handler
 
 

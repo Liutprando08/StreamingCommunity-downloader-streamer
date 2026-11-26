@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 
 from rich.prompt import Prompt
 
-from StreamingCommunity.core.downloader import MP4_Downloader
+from StreamingCommunity.core.downloader import download_mp4
 from StreamingCommunity.player.sweetpixel import VideoSource
 from StreamingCommunity.services._base import Entries, site_constants
 from StreamingCommunity.services._base.tv_display_manager import (
@@ -115,9 +115,10 @@ def download_episode(
         mp4_path = os_manager.get_sanitize_path(site_constants.MOVIE_FOLDER)
 
     os_manager.create_path(mp4_path)
-    path, kill_handler = MP4_Downloader(
+    path, kill_handler = download_mp4(
         url=str(mp4_link).strip(),
-        path=os.path.join(mp4_path, mp4_name),
+        output_path=os.path.join(mp4_path, mp4_name),
+        headers=_video_headers(),
     )
 
     return path, kill_handler
