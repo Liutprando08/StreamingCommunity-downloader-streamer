@@ -1,0 +1,22 @@
+[project]
+name = "oste-mobile"
+version = "0.1.0"
+description = "Flet mobile/Android interface for StreamingCommunity-downloader-streamer"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Liutprando08" }]
+license = "GPL-3.0-or-later"
+dependencies = [
+  "flet==0.28.3",
+  "StreamingCommunity-download-stream",
+]
+
+[tool.flet]
+org = "com.liutprando08"
+product = "OSTE Mobile"
+company = "Liutprando08"
+copyright = "Copyright (C) 2026 by Liutprando08"
+build_number = 1
+
+[tool.flet.app]
+path = "src"

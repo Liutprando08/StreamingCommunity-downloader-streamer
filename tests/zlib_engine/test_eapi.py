@@ -78,6 +78,7 @@ class LoginAndSearchTests(unittest.TestCase):
             self.assertEqual(login.form()["email"], ["reader@example.com"])
             self.assertEqual(login.form()["password"], ["secret"])
             self.assertEqual(login.header("accept"), "application/json")
+            self.assertEqual(login.header("source"), "android")
 
     def test_search_sends_filters_and_maps_books(self) -> None:
         seen = []
@@ -105,6 +106,7 @@ class LoginAndSearchTests(unittest.TestCase):
             self.assertEqual(form["languages[]"], ["chinese", "english"])
             self.assertEqual(form["extensions[]"], ["epub"])
             self.assertEqual(form["order"], ["bestmatch"])
+            self.assertEqual(request.header("source"), "android")
             self.assertEqual(request.header("remix-userid"), "123")
             self.assertEqual(request.header("remix-userkey"), "key123")
 
