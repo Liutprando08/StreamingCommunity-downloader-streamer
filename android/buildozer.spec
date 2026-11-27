@@ -19,8 +19,8 @@ version = 0.1.0
 # v1 targets the clear HLS services (StreamingCommunity / Altadefinizione).
 # curl-cffi, textual and the legacy DRM binaries are deliberately excluded:
 # they are native/desktop-only.
-requirements = python3,kivy==2.3.0,httpx2,bs4,rich,unidecode,pathvalidate,ua-generator,jsbeautifier,ttconv,yt-dlp,requests,certifi,urllib3,idna,pycryptodomex
 
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.0,httpx2,httpcore,anyio,sniffio,h11,typing-extensions,bs4,soupsieve,rich,markdown-it-py,mdurl,pygments,unidecode,pathvalidate,ua-generator,jsbeautifier,ttconv,yt-dlp,requests,certifi,urllib3,idna,pycryptodomex
 # ── Android ───────────────────────────────────────────────────────────────
 orientation = portrait
 fullscreen = 0
