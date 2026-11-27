@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Android v1 Kivy shell (`android/`) for the clear-HLS services that already use
+  `yt-dlp`: StreamingCommunity and Altadefinizione, with search, seasons/episodes,
+  progress and cancel.
+- `StreamingCommunity.mobile` headless API (`bootstrap`, `search`, `get_details`,
+  `download`, `download_state`, `cancel`).
+- `tests/test_mobile_api.py` for the mobile bootstrap and API helpers.
 - Altadefinizione service, available from both the CLI and the TUI, with vixsrc playback.
 - Z-Library book service (CLI site 26, TUI `Libri` sector) backed by the vendored
   `StreamingCommunity.zlib_engine`, with an atomic book queue kind, progress and

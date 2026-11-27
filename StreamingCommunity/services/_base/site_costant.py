@@ -31,6 +31,10 @@ class SiteConstant:
 
     @property
     def ROOT_PATH(self) -> str:
+        # Embedded hosts (Android) set an explicit output directory.
+        override = os.environ.get("STREAMINGCOMMUNITY_OUTPUT")
+        if override:
+            return override
         return config_manager.config.get("OUTPUT", "root_path")
 
     @property

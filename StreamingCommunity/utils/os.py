@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import platform
 import shutil
 
 from pathvalidate import sanitize_filename, sanitize_filepath
@@ -13,7 +14,6 @@ from rich.prompt import Prompt
 from unidecode import unidecode
 
 # Internal utilities
-from ..setup.binary_paths import binary_paths
 from StreamingCommunity.utils.console.shared import console
 
 # Variable
@@ -23,7 +23,9 @@ logger = logging.getLogger(__name__)
 
 class OsManager:
     def __init__(self):
-        self.system = binary_paths._detect_system()
+        # Keep this import-free: ``os_manager`` is instantiated at module import
+        # time, and ``setup.binary_paths`` imports this package (circular).
+        self.system = platform.system().lower()
         self.max_length = self._get_max_length()
 
     def _get_max_length(self) -> int:

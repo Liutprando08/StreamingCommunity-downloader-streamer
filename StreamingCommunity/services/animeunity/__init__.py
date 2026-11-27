@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import urllib.parse
 
-from curl_cffi.requests.exceptions import RequestException as CurlRequestException
+from StreamingCommunity.utils.http_client import CurlRequestException
 
 # External library
 from httpx2 import HTTPError

@@ -194,7 +194,12 @@ class ConfigManager:
         """Initialize the ConfigManager with caching."""
 
         self.base_path = None
-        if getattr(sys, "frozen", False):
+        env_home = os.environ.get("STREAMINGCOMMUNITY_HOME")
+        if env_home:
+            # Android / embedded hosts pass an explicit writable home. The
+            # working directory is not reliable there.
+            self.base_path = os.path.abspath(os.path.expanduser(env_home))
+        elif getattr(sys, "frozen", False):
             self.base_path = os.path.dirname(sys.executable)
             bundled_conf = os.path.join(sys._MEIPASS, "Conf")  # type: ignore[attr-defined]
             user_conf = os.path.join(self.base_path, "Conf")
@@ -215,6 +220,10 @@ class ConfigManager:
         if not os.path.exists(self.conf_path):
             os.makedirs(self.conf_path, exist_ok=True)
             console.print(f"[green]Created Conf directory: {self.conf_path}")
+
+        # Seed the user config from the repository/APK copy when available.
+        # This avoids a network round-trip on the very first Android launch.
+        self._seed_conf_from_bundle()
 
         # Initialize file paths using conf directory
         self.config_file_path = os.path.join(self.conf_path, CONFIG_FILENAME)
@@ -250,6 +259,36 @@ class ConfigManager:
         # Load the configuration
         self.fetch_domain_online = True
         self.load_all_configs()
+
+    def _seed_conf_from_bundle(self) -> None:
+        """Copy bundled configuration files into the writable home when missing.
+
+        ``StreamingCommunity/Conf`` ships inside the repository (and the APK
+        when ``source.dir`` is the project root). Seeding it avoids downloading
+        ``config.json``/``domains.json`` on the first offline launch.
+        """
+        bundle_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "Conf",
+        )
+        if not os.path.isdir(bundle_dir) or os.path.abspath(bundle_dir) == os.path.abspath(
+            self.conf_path
+        ):
+            return
+
+        for name in (
+            CONFIG_FILENAME,
+            LOGIN_FILENAME,
+            DOMAINS_FILENAME,
+            REMOTE_CDM_PATH,
+        ):
+            source = os.path.join(bundle_dir, name)
+            target = os.path.join(self.conf_path, name)
+            if os.path.isfile(source) and not os.path.exists(target):
+                try:
+                    shutil.copyfile(source, target)
+                except OSError as e:
+                    logger.warning("Could not seed %s: %s", name, e)
 
     def load_all_configs(self) -> None:
         """Load all configuration files."""

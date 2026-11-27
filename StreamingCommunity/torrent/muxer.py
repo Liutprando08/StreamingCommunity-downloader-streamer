@@ -7,7 +7,10 @@ import shutil
 import subprocess
 
 # External library
-from curl_cffi.requests.exceptions import HTTPError
+try:
+    from curl_cffi.requests.exceptions import HTTPError
+except Exception:  # Android: curl_cffi is not shipped
+    from httpx2 import HTTPError  # type: ignore[assignment]
 
 # Internal utilities (lazy to avoid circular imports via torrent/__init__.py)
 from StreamingCommunity.utils.console.shared import console

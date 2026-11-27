@@ -1,11 +1,29 @@
 from __future__ import annotations
 
+import os
 from typing import Any, cast
 
 import httpx2
 import ua_generator
-from curl_cffi import requests
-from curl_cffi.requests import BrowserTypeLiteral, ProxySpec
+
+# curl_cffi is a native extension: it is unavailable on Android. The rest of
+# the code keeps calling ``create_client_curl``; on hosts without the native
+# module we transparently fall back to httpx2.
+try:
+    if os.environ.get("STREAMINGCOMMUNITY_DISABLE_CURL_CFFI"):
+        raise ImportError("curl_cffi disabled by environment")
+
+    from curl_cffi import requests as curl_requests
+    from curl_cffi.requests import BrowserTypeLiteral, ProxySpec
+    from curl_cffi.requests.exceptions import RequestException as CurlRequestException
+
+    HAS_CURL_CFFI = True
+except Exception:  # ImportError or a broken native build
+    curl_requests = None  # type: ignore[assignment]
+    BrowserTypeLiteral = str  # type: ignore[misc,assignment]
+    ProxySpec = dict  # type: ignore[misc,assignment]
+    CurlRequestException = httpx2.HTTPError  # type: ignore[misc,assignment]
+    HAS_CURL_CFFI = False
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager
@@ -132,11 +150,31 @@ def create_client_curl(
     proxies: ProxySpec | None = None,
     impersonate: BrowserTypeLiteral | None = "chrome142",
     allow_redirects: bool = True,
-) -> requests.Session:
-    """Factory for a configured curl_cffi session."""
+) -> Any:
+    """Factory for a configured curl_cffi session.
+
+    Falls back to :class:`httpx2.Client` when curl_cffi is not installed
+    (Android builds ship without the native module).
+    """
     proxy_value = proxies if proxies is not None else _get_proxies()
 
-    session = requests.Session(
+    if not HAS_CURL_CFFI:
+        proxy_arg: str | None = None
+        if isinstance(proxy_value, dict):
+            proxy_arg = proxy_value.get("https") or proxy_value.get("http")
+        elif isinstance(proxy_value, str):
+            proxy_arg = proxy_value
+
+        return httpx2.Client(
+            headers=_default_headers(headers),
+            cookies=cookies,
+            timeout=timeout if timeout is not None else _get_timeout(),
+            verify=_get_verify() if verify is None else verify,
+            follow_redirects=allow_redirects,
+            proxy=proxy_arg,
+        )
+
+    session = curl_requests.Session(  # type: ignore[union-attr]
         headers=_default_headers(headers),
         cookies=cookies,
         timeout=timeout if timeout is not None else _get_timeout(),

@@ -1,6 +1,6 @@
 # Android Consolidation & Dependency Migration Plan
 
-- **Status:** Draft
+- **Status:** Draft — Android v1 slice implemented (see §12)
 - **Date:** 2026-11-26
 - **Owner:** maintainers
 - **Goal:** replace the fragile external-binary stack with a single Python engine that runs on desktop and can be packaged as an Android app.
@@ -408,3 +408,39 @@ Acceptance
 - [ ] Torrent/MEGA are desktop-only and cleanly disabled on Android.
 - [ ] Engine has no UI imports and no import-time network.
 - [ ] Test suite covers the new backends, decryption, music, manga, and the resilience layer.
+
+---
+
+## 12. Implementation status — Android v1 (2026-11-27)
+
+The first Android slice is implemented on top of the existing `core/` package
+(there is no `engine/` package; the plan's `engine/` name was aspirational).
+It targets the two clear-HLS services that already use `yt-dlp`:
+**StreamingCommunity** and **Altadefinizione**.
+
+### Delivered
+
+- `android/` Kivy shell (plain Kivy, no KivyMD in v1) with search, series
+  seasons/episodes, download, progress and cancel.
+- `android/buildozer.spec` with `source.dir = ..` so the APK packages
+  `StreamingCommunity/` and `Conf/`.
+- `StreamingCommunity/mobile/bootstrap.py`: sets `STREAMINGCOMMUNITY_HOME` /
+  `STREAMINGCOMMUNITY_OUTPUT` before `ConfigManager` loads, seeds `Conf/` from
+  the bundled copy and fixes the working directory.
+- `StreamingCommunity/mobile/api.py`: headless `search`, `get_details`,
+  `download`, `download_state`, `cancel`, `history`.
+- `setup/system.py` is now lazy: importing `StreamingCommunity.setup` performs
+  **no** binary downloads and **no** network calls.
+- `utils/http_client.py` falls back to `httpx2` when `curl_cffi` is missing;
+  `tmdb_client`, `animeunity` and `torrent.muxer` no longer hard-require
+  `curl_cffi` exceptions.
+- `ConfigManager` honours `STREAMINGCOMMUNITY_HOME` and can seed `Conf/`.
+- `SiteConstant.ROOT_PATH` honours `STREAMINGCOMMUNITY_OUTPUT`.
+
+### Deferred (still open in Phases 3–8)
+
+- Foreground service, SAF export, bundled arm64 ffmpeg.
+- DRM services (`crunchyroll`, `mediasetinfinity`, `discovery*`, `raiplay`).
+- Bundled CDM files and `pywidevine`/`pyplayready` on-device validation.
+- Torrent/MEGA gating and the remaining Android UI screens.
+

@@ -8,7 +8,10 @@ from difflib import SequenceMatcher
 
 
 # External libraries
-from curl_cffi.requests.exceptions import RequestException
+try:
+    from curl_cffi.requests.exceptions import RequestException
+except Exception:  # Android: curl_cffi is not shipped
+    from httpx2 import HTTPError as RequestException  # type: ignore[assignment]
 
 # Internal utilities
 from StreamingCommunity.utils import config_manager
